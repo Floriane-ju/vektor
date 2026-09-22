@@ -243,6 +243,29 @@ fieldset legend {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---- Pile de modificateurs ---- */
+
+.modifier-block {
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-field);
+}
+
+.modifier-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+/* Les champs du bloc sont masqués selon le type : le dernier visible ne doit
+   pas rajouter de marge au bas du bloc. */
+.modifier-block .field:last-child,
+.modifier-block .field-row:last-child { margin-bottom: 0; }
+
 /* ---- Panneau calques ---- */
 
 .layer-list {

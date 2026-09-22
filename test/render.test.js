@@ -19,7 +19,7 @@ const repeatLayer = (overrides = {}) =>
   createLayer({
     center: { x: 0, y: 0 },
     elements: [createElement('circle', 100, 0)],
-    modifier: { type: 'step', n: 5, stepX: -50, stepY: 0, angleStep: 0.4, radiusStep: 12 },
+    modifiers: [{ type: 'step', n: 5, stepX: -50, stepY: 0, angleStep: 0.4, radiusStep: 12 }],
     propertyRanges: { opacity: [1, 0], scale: [1, 1] },
     ...overrides,
   });
@@ -48,7 +48,7 @@ describe('renderer SVG', () => {
 
   it('multiplie le rayon par l’échelle interpolée', () => {
     const layer = repeatLayer({
-      modifier: { type: 'step', n: 3, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 },
+      modifiers: [{ type: 'step', n: 3, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
       propertyRanges: { opacity: [1, 1], scale: [1, 2] },
     });
     render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
@@ -60,8 +60,8 @@ describe('renderer SVG', () => {
   });
 
   it('un groupe par calque, dans l’ordre du tableau (z-order)', () => {
-    const back = repeatLayer({ modifier: { type: 'none', n: 1 } });
-    const front = repeatLayer({ modifier: { type: 'none', n: 1 } });
+    const back = repeatLayer({ modifiers: [{ type: 'none', n: 1 }] });
+    const front = repeatLayer({ modifiers: [{ type: 'none', n: 1 }] });
     render({ layers: [back, front], activeLayerId: null, activeElementId: null }, svg);
     expect([...svg.querySelectorAll('g')].map((g) => g.dataset.layerId)).toEqual([
       back.id,
@@ -89,7 +89,7 @@ describe('repères du modificateur', () => {
     const svg = stage();
     const layer = repeatLayer({
       center: { x: 400, y: 300 },
-      modifier: { type: 'mirrorH', n: 5, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 },
+      modifiers: [{ type: 'mirrorH', n: 5, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
     });
     render(scene(layer), svg);
     const guides = svg.querySelector('[data-guides]');
@@ -107,7 +107,7 @@ describe('repères du modificateur', () => {
     const svg = stage();
     const layer = repeatLayer({
       center: { x: 400, y: 300 },
-      modifier: { type: 'spiral', n: 3, angleStep: 0.4, radiusStep: 12 },
+      modifiers: [{ type: 'spiral', n: 3, angleStep: 0.4, radiusStep: 12 }],
     });
     render(scene(layer), svg);
     const mark = svg.querySelector('[data-guides] circle');
@@ -117,7 +117,7 @@ describe('repères du modificateur', () => {
   it('ne trace rien pour `none` ni pour un pas, ni sans calque actif', () => {
     const svg = stage();
     for (const type of ['none', 'step']) {
-      render(scene(repeatLayer({ modifier: { type, n: 6, stepX: 50, stepY: 0 } })), svg);
+      render(scene(repeatLayer({ modifiers: [{ type, n: 6, stepX: 50, stepY: 0 }] })), svg);
       expect(svg.querySelector('[data-guides]')).toBeNull();
     }
 
@@ -125,9 +125,26 @@ describe('repères du modificateur', () => {
     expect(svg.querySelector('[data-guides]')).toBeNull();
   });
 
+  it('trace les repères de chaque modificateur de la pile', () => {
+    const svg = stage();
+    const layer = repeatLayer({
+      center: { x: 400, y: 300 },
+      modifiers: [
+        { type: 'mirrorH', n: 2 },
+        { type: 'spiral', n: 3, angleStep: 0.4, radiusStep: 12 },
+      ],
+    });
+    render(scene(layer), svg);
+    const guides = svg.querySelector('[data-guides]');
+    expect(guides.dataset.guides).toBe('mirrorH spiral');
+    /* L'axe du miroir, plus la croix et l'anneau du centre de la spirale. */
+    expect(guides.querySelectorAll('line')).toHaveLength(3);
+    expect(guides.querySelectorAll('circle')).toHaveLength(1);
+  });
+
   it('laisse les repères hors de l’export', () => {
     const svg = stage();
-    render(scene(repeatLayer({ modifier: { type: 'mirrorH', n: 2 } })), svg);
+    render(scene(repeatLayer({ modifiers: [{ type: 'mirrorH', n: 2 }] })), svg);
     expect(svg.querySelector('[data-guides]')).not.toBeNull();
     expect(toSvgDocument(svg)).not.toContain('data-guides');
   });
@@ -329,7 +346,7 @@ describe('rendu des formes', () => {
       strokeWidth: 7,
       center: { x: 0, y: 0 },
       elements: [createElement('circle', 10, 10), createElement('rect', 50, 50)],
-      modifier: { type: 'step', n: 2, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 },
+      modifiers: [{ type: 'step', n: 2, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 }],
     });
     render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
     const widths = [...svg.querySelectorAll('circle, rect')].map((node) =>
@@ -344,7 +361,7 @@ describe('rendu des formes', () => {
       createLayer({
         center: { x: 0, y: 0 },
         elements: [createElement(type, 100, 50, { rx: 40, ry: 20, ...extra })],
-        modifier: { type: 'none', n: 1, angleStep: 0, radiusStep: 0 },
+        modifiers: [{ type: 'none', n: 1, angleStep: 0, radiusStep: 0 }],
       });
 
     render({ layers: [shaped('circle'), shaped('point'), shaped('rect')], activeElementId: null }, svg);
@@ -385,7 +402,7 @@ describe('rendu des formes', () => {
     const svg = stage();
     const layer = createLayer({
       elements: [createElement('line', 100, 0, { rx: 40, ry: 0 })],
-      modifier: { type: 'mirrorH', n: 2, angleStep: 0, radiusStep: 0 },
+      modifiers: [{ type: 'mirrorH', n: 2, angleStep: 0, radiusStep: 0 }],
       center: { x: 100, y: 0 },
       propertyRanges: { opacity: [1, 1], scale: [1, 2] },
     });
@@ -403,7 +420,7 @@ describe('rendu des formes', () => {
     const layer = createLayer({
       center: { x: 0, y: 0 },
       elements: [createElement('rect', 0, 0, { rx: 10, ry: 5 })],
-      modifier: { type: 'step', n: 3, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 },
+      modifiers: [{ type: 'step', n: 3, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
       propertyRanges: { opacity: [1, 1], scale: [1, 3] },
     });
     render({ layers: [layer], activeElementId: null }, svg);

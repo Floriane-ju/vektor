@@ -1,4 +1,4 @@
-import { MODIFIERS } from './modifiers.js';
+import { createModifier, MODIFIERS } from './modifiers.js';
 import { clampCount } from './interpolate.js';
 import {
   clampExtent,
@@ -15,16 +15,18 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@4';
+export const FORMAT = 'illu/scene@5';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
    - `@1` et `@2` n'avaient qu'une forme par calque, dans `baseElement` ;
-   - `@1` à `@3` portaient l'épaisseur sur chaque forme, pas sur le calque. */
+   - `@1` à `@3` portaient l'épaisseur sur chaque forme, pas sur le calque ;
+   - `@1` à `@4` n'avaient qu'un modificateur par calque, dans `modifier`. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
   'illu/scene@3',
+  'illu/scene@4',
   FORMAT,
 ]);
 
@@ -94,16 +96,23 @@ const readElement = (input) => {
   });
 };
 
-const readModifier = (raw) => {
-  const type = Object.hasOwn(MODIFIERS, raw?.type) ? raw.type : 'none';
-  return {
-    type,
+const readModifier = (raw) =>
+  createModifier({
+    type: Object.hasOwn(MODIFIERS, raw?.type) ? raw.type : 'none',
     n: clampCount(raw?.n),
     stepX: num(raw?.stepX, 60),
     stepY: num(raw?.stepY, 0),
     angleStep: num(raw?.angleStep, 0.4),
     radiusStep: num(raw?.radiusStep, 12),
-  };
+  });
+
+/**
+ * Avant `@5` un calque portait un modificateur unique dans `modifier` : il se
+ * relit comme une pile d'un seul élément, ce qui rend le même dessin.
+ */
+const readModifiers = (raw) => {
+  if (Array.isArray(raw.modifiers)) return raw.modifiers.map(readModifier);
+  return raw.modifier == null ? [] : [readModifier(raw.modifier)];
 };
 
 /**
@@ -146,7 +155,7 @@ const readLayer = (raw, index) => {
     },
     strokeWidth: readStrokeWidth(raw),
     elements: readElements(raw),
-    modifier: readModifier(raw.modifier),
+    modifiers: readModifiers(raw),
     propertyRanges: {
       opacity: readRange(raw.propertyRanges, 'opacity'),
       scale: readRange(raw.propertyRanges, 'scale'),

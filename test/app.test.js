@@ -60,4 +60,25 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
 
   expect(stage.querySelectorAll('circle')).toHaveLength(2);
   expect(document.querySelectorAll('#property-panel .layer-row')).toHaveLength(2);
+
+  /* Deux modificateurs empilés sur le calque : leurs copies se multiplient. */
+  const addModifier = [...document.querySelectorAll('#property-panel button')].find(
+    (node) => node.textContent.includes('Ajouter un modificateur'),
+  );
+  addModifier.click();
+  addModifier.click();
+
+  const blocks = document.querySelectorAll('#property-panel .modifier-block');
+  expect(blocks).toHaveLength(2);
+  /* Deux « Pas » de 6 copies sur un calque de deux formes. */
+  expect(stage.querySelectorAll('circle')).toHaveLength(6 * 6 * 2);
+
+  const [type] = blocks[1].querySelectorAll('select');
+  type.value = 'mirrorH';
+  type.dispatchEvent(new Event('change'));
+  expect(stage.querySelectorAll('circle')).toHaveLength(6 * 2 * 2);
+
+  blocks[0].querySelector('.icon-btn.is-danger').click();
+  expect(document.querySelectorAll('#property-panel .modifier-block')).toHaveLength(1);
+  expect(stage.querySelectorAll('circle')).toHaveLength(2 * 2);
 });

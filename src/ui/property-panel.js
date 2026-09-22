@@ -1,9 +1,12 @@
 import {
+  addModifier,
   clampExtent,
   DEFAULT_SHAPE,
   getActiveElement,
   getActiveLayer,
+  moveModifier,
   RANGE_BOUNDS,
+  removeModifier,
   setLayerStrokeWidth,
   SHAPES,
   updateElement,
@@ -11,6 +14,7 @@ import {
   updateRange,
 } from '../scene.js';
 import { mountShapeList } from './shape-list.js';
+import { iconButton, rebuildWithFocus } from './list.js';
 import { FIXED_COPIES, MODIFIER_LABELS } from '../modifiers.js';
 
 /**
@@ -56,13 +60,18 @@ export const mountPropertyPanel = ({
    * forme, le calque actif pour l'épaisseur, le modificateur et
    * l'interpolation. Le contrôle ne s'écrit pas quand son sujet est absent.
    */
-  const bind = (node, read, write, { event = 'input', parse = Number, subject = 'element' } = {}) => {
+  const bind = (
+    node,
+    read,
+    write,
+    { event = 'input', parse = Number, subject = 'element', into = controls } = {},
+  ) => {
     node.addEventListener(event, () => {
       const scene = store.get();
       const target = subject === 'element' ? getActiveElement(scene) : getActiveLayer(scene);
       if (target) write(target, parse(node.value));
     });
-    controls.push({ node, read, subject });
+    into.push({ node, read, subject });
     return node;
   };
 
@@ -173,66 +182,159 @@ export const mountPropertyPanel = ({
   );
   layerSet.append(field('Épaisseur', strokeWidth));
 
-  /* ---- Modificateur ---- */
+  /* ---- Modificateurs ---- */
 
+  /**
+   * Un calque porte une pile : chaque bloc est un modificateur, appliqué dans
+   * l'ordre affiché, et les copies se multiplient d'un étage à l'autre.
+   *
+   * Seule section reconstruite du panneau, et seulement quand la longueur de la
+   * pile change : reconstruire à chaque notification arracherait le curseur des
+   * champs, comme ailleurs dans ce panneau.
+   */
   const modifierSet = document.createElement('fieldset');
   const modifierLegend = document.createElement('legend');
-  modifierLegend.textContent = 'Modificateur';
-  modifierSet.append(modifierLegend);
+  modifierLegend.textContent = 'Modificateurs';
+  const modifierHost = document.createElement('div');
+  const addModifierButton = document.createElement('button');
+  addModifierButton.type = 'button';
+  addModifierButton.textContent = '+ Ajouter un modificateur';
+  addModifierButton.dataset.focusKey = 'add-modifier';
+  addModifierButton.addEventListener('click', () => {
+    const layer = getActiveLayer(store.get());
+    if (layer) store.apply(addModifier, layer.id);
+  });
+  modifierSet.append(modifierLegend, modifierHost, addModifierButton);
 
-  const type = document.createElement('select');
-  type.id = `prop-${++uid}`;
-  for (const [value, label] of Object.entries(MODIFIER_LABELS)) {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = label;
-    type.append(option);
-  }
-  bind(
-    type,
-    (layer) => layer.modifier.type,
-    (layer, value) => store.apply(updateModifier, layer.id, { type: value }),
-    { event: 'change', parse: String, subject: 'layer' },
-  );
+  let blocks = [];
 
-  const count = bind(
-    input('number', { min: '1', step: '1' }),
-    (layer) => layer.modifier.n,
-    (layer, value) => store.apply(updateModifier, layer.id, { n: value }),
-    { event: 'change', subject: 'layer' },
-  );
-  const stepX = bind(
-    input('number', { step: '1' }),
-    (layer) => layer.modifier.stepX,
-    (layer, value) => store.apply(updateModifier, layer.id, { stepX: value }),
-    { subject: 'layer' },
-  );
-  const stepY = bind(
-    input('number', { step: '1' }),
-    (layer) => layer.modifier.stepY,
-    (layer, value) => store.apply(updateModifier, layer.id, { stepY: value }),
-    { subject: 'layer' },
-  );
-  const angleStep = bind(
-    input('number', { step: '0.05' }),
-    (layer) => layer.modifier.angleStep,
-    (layer, value) => store.apply(updateModifier, layer.id, { angleStep: value }),
-    { subject: 'layer' },
-  );
-  const radiusStep = bind(
-    input('number', { step: '1' }),
-    (layer) => layer.modifier.radiusStep,
-    (layer, value) => store.apply(updateModifier, layer.id, { radiusStep: value }),
-    { subject: 'layer' },
-  );
+  const modifierBlock = (index, stackSize) => {
+    const blockControls = [];
+    /* Tout contrôle du bloc écrit le même modificateur : son rang dans la pile. */
+    const bindModifier = (node, read, toPatch, options = {}) =>
+      bind(
+        node,
+        read,
+        (layer, value) => store.apply(updateModifier, layer.id, index, toPatch(value)),
+        { subject: 'layer', into: blockControls, ...options },
+      );
 
-  const countField = field('Nombre (N)', count);
-  const stepRow = document.createElement('div');
-  stepRow.className = 'field-row';
-  stepRow.append(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
-  const angleField = field('Pas angulaire (rad)', angleStep);
-  const radiusStepField = field('Pas radial (px)', radiusStep);
-  modifierSet.append(field('Type', type), countField, stepRow, angleField, radiusStepField);
+    const rank = index + 1;
+    const type = document.createElement('select');
+    type.id = `prop-${++uid}`;
+    type.setAttribute('aria-label', `Type du modificateur ${rank}`);
+    for (const [value, label] of Object.entries(MODIFIER_LABELS)) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      type.append(option);
+    }
+    bindModifier(type, (layer) => layer.modifiers[index].type, (value) => ({ type: value }), {
+      event: 'change',
+      parse: String,
+    });
+
+    const count = bindModifier(
+      input('number', { min: '1', step: '1' }),
+      (layer) => layer.modifiers[index].n,
+      (value) => ({ n: value }),
+      { event: 'change' },
+    );
+    const stepX = bindModifier(
+      input('number', { step: '1' }),
+      (layer) => layer.modifiers[index].stepX,
+      (value) => ({ stepX: value }),
+    );
+    const stepY = bindModifier(
+      input('number', { step: '1' }),
+      (layer) => layer.modifiers[index].stepY,
+      (value) => ({ stepY: value }),
+    );
+    const angleStep = bindModifier(
+      input('number', { step: '0.05' }),
+      (layer) => layer.modifiers[index].angleStep,
+      (value) => ({ angleStep: value }),
+    );
+    const radiusStep = bindModifier(
+      input('number', { step: '1' }),
+      (layer) => layer.modifiers[index].radiusStep,
+      (value) => ({ radiusStep: value }),
+    );
+
+    const apply = (transition, ...args) => {
+      const layer = getActiveLayer(store.get());
+      if (layer) store.apply(transition, layer.id, ...args);
+    };
+
+    const head = document.createElement('div');
+    head.className = 'modifier-head';
+    head.append(
+      type,
+      /* L'ordre de la pile change le dessin : un pas puis un miroir donne deux
+         rangées face à face, l'inverse une seule rangée doublée. */
+      iconButton({
+        label: `Monter le modificateur ${rank}`,
+        text: '↑',
+        focusKey: `up-modifier${index}`,
+        disabled: index === 0,
+        onClick: () => apply(moveModifier, index, -1),
+      }),
+      iconButton({
+        label: `Descendre le modificateur ${rank}`,
+        text: '↓',
+        focusKey: `down-modifier${index}`,
+        disabled: index === stackSize - 1,
+        onClick: () => apply(moveModifier, index, 1),
+      }),
+      iconButton({
+        label: `Supprimer le modificateur ${rank}`,
+        text: '×',
+        focusKey: `delete-modifier${index}`,
+        danger: true,
+        onClick: () => apply(removeModifier, index),
+      }),
+    );
+
+    const countField = field('Nombre (N)', count);
+    const stepRow = document.createElement('div');
+    stepRow.className = 'field-row';
+    stepRow.append(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
+    const angleField = field('Pas angulaire (rad)', angleStep);
+    const radiusStepField = field('Pas radial (px)', radiusStep);
+
+    const root = document.createElement('div');
+    root.className = 'modifier-block';
+    root.append(head, countField, stepRow, angleField, radiusStepField);
+
+    const sync = (layer) => {
+      const modifier = layer.modifiers[index];
+      if (!modifier) return;
+      for (const { node, read } of blockControls) {
+        if (document.activeElement !== node) node.value = read(layer);
+      }
+      /* `none` et les miroirs décident eux-mêmes de leur nombre de copies : leur
+         proposer un « Nombre » promettrait un réglage sans effet. */
+      countField.hidden = Object.hasOwn(FIXED_COPIES, modifier.type);
+      stepRow.hidden = modifier.type !== 'step';
+      angleField.hidden = modifier.type !== 'spiral';
+      radiusStepField.hidden = modifier.type !== 'spiral';
+    };
+
+    return { root, sync };
+  };
+
+  const rebuildModifiers = (stack) =>
+    rebuildWithFocus(modifierHost, () => {
+      blocks = stack.map((_, index) => modifierBlock(index, stack.length));
+      if (blocks.length === 0) {
+        const note = document.createElement('p');
+        note.className = 'empty-note';
+        note.textContent = 'Aucun : le calque se rend tel quel.';
+        modifierHost.append(note);
+      }
+      modifierHost.append(...blocks.map((block) => block.root));
+      return addModifierButton;
+    });
 
   /* ---- Interpolation ---- */
 
@@ -328,15 +430,12 @@ export const mountPropertyPanel = ({
     widthField.querySelector('label').textContent = widthLabel;
     heightField.querySelector('label').textContent = heightLabel;
 
-    if (!layer) return;
-    const { type: modifierType } = layer.modifier;
-    const isSpiral = modifierType === 'spiral';
-    /* `none` et les miroirs décident eux-mêmes de leur nombre de copies : leur
-       proposer un « Nombre » promettrait un réglage sans effet. */
-    countField.hidden = Object.hasOwn(FIXED_COPIES, modifierType);
-    stepRow.hidden = modifierType !== 'step';
-    angleField.hidden = !isSpiral;
-    radiusStepField.hidden = !isSpiral;
+    /* Seule la longueur de la pile impose une reconstruction : un changement de
+       type ne fait que masquer ou montrer des champs du bloc concerné. */
+    const stack = layer?.modifiers ?? [];
+    if (stack.length !== blocks.length) rebuildModifiers(stack);
+    addModifierButton.disabled = !layer;
+    if (layer) for (const block of blocks) block.sync(layer);
   };
 
   store.subscribe(sync);

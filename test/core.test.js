@@ -123,7 +123,7 @@ describe('composition', () => {
     createLayer({
       center,
       elements: [createElement('circle', 100, 0)],
-      modifier: { type: 'step', n: 5, stepX: -50, stepY: 0, angleStep: 0.4, radiusStep: 12 },
+      modifiers: [{ type: 'step', n: 5, stepX: -50, stepY: 0, angleStep: 0.4, radiusStep: 12 }],
       propertyRanges: { opacity: [1, 0], scale: [1, 1] },
       ...overrides,
     });
@@ -140,13 +140,13 @@ describe('composition', () => {
   });
 
   it('`none` ignore N et ne rend que les formes du calque', () => {
-    const single = layer({ modifier: { type: 'none', n: 9, angleStep: 0, radiusStep: 0 } });
+    const single = layer({ modifiers: [{ type: 'none', n: 9, angleStep: 0, radiusStep: 0 }] });
     expect(getRenderedChildren(single)).toHaveLength(1);
   });
 
   it('un miroir rend deux copies, quel que soit N', () => {
     const mirrored = layer({
-      modifier: { type: 'mirrorH', n: 9, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 },
+      modifiers: [{ type: 'mirrorH', n: 9, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
     });
     expect(getRenderedChildren(mirrored).map((c) => c.x)).toEqual([100, -100]);
   });
@@ -156,7 +156,7 @@ describe('composition', () => {
   it('le modificateur transforme le groupe, pas chaque forme isolément', () => {
     const group = layer({
       elements: [createElement('circle', 100, 0), createElement('point', 140, 0)],
-      modifier: { type: 'axial', n: 4, angleStep: 0, radiusStep: 0 },
+      modifiers: [{ type: 'axial', n: 4, angleStep: 0, radiusStep: 0 }],
       propertyRanges: { opacity: [1, 0], scale: [1, 1] },
     });
     const children = getRenderedChildren(group);
@@ -172,10 +172,58 @@ describe('composition', () => {
     }
   });
 
+  /* Empiler multiplie : c'est ce qui distingue une pile d'une simple liste de
+     gestes juxtaposés. */
+  it('empile deux modificateurs : les copies se multiplient', () => {
+    const stacked = layer({
+      modifiers: [
+        { type: 'step', n: 3, stepX: 10, stepY: 0 },
+        { type: 'mirrorH', n: 9 },
+      ],
+    });
+    const children = getRenderedChildren(stacked);
+    expect(children.map((c) => c.x)).toEqual([100, -100, 110, -110, 120, -120]);
+  });
+
+  it('l’ordre de la pile change le dessin', () => {
+    const mirrorFirst = layer({
+      modifiers: [
+        { type: 'mirrorH', n: 9 },
+        { type: 'step', n: 3, stepX: 10, stepY: 0 },
+      ],
+    });
+    /* Le miroir passe avant le pas : la rangée reflétée avance dans le même
+       sens que l'originale, au lieu de lui faire face. */
+    expect(getRenderedChildren(mirrorFirst).map((c) => c.x)).toEqual([
+      100, 110, 120, -100, -90, -80,
+    ]);
+  });
+
+  it('la rampe d’interpolation court sur le total des copies empilées', () => {
+    const stacked = layer({
+      modifiers: [
+        { type: 'step', n: 3, stepX: 10, stepY: 0 },
+        { type: 'mirrorH', n: 2 },
+      ],
+      propertyRanges: { opacity: [1, 0], scale: [1, 1] },
+    });
+    const opacities = getRenderedChildren(stacked).map((c) => c.opacity);
+    [1, 0.8, 0.6, 0.4, 0.2, 0].forEach((expected, i) =>
+      expect(opacities[i]).toBeCloseTo(expected),
+    );
+  });
+
+  it('une pile vide rend le calque tel quel', () => {
+    const bare = layer({ modifiers: [] });
+    const children = getRenderedChildren(bare);
+    expect(children).toHaveLength(1);
+    expect([children[0].x, children[0].y]).toEqual([100, 0]);
+  });
+
   it('rend n × formes, groupées par copie', () => {
     const group = layer({
       elements: [createElement('circle', 10, 0), createElement('rect', 20, 0)],
-      modifier: { type: 'step', n: 3, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 },
+      modifiers: [{ type: 'step', n: 3, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 }],
     });
     expect(getRenderedChildren(group).map((c) => c.type)).toEqual([
       'circle',
@@ -284,7 +332,10 @@ describe('persistance', () => {
         createElement('circle', 120, 340, { rx: 42, ry: 42, stroke: '#ff0000' }),
         createElement('rect', 200, 100, { rx: 30, ry: 15 }),
       ],
-      modifier: { type: 'spiral', n: 12, stepX: 25, stepY: -10, angleStep: 0.3, radiusStep: 8 },
+      modifiers: [
+        { type: 'spiral', n: 12, stepX: 25, stepY: -10, angleStep: 0.3, radiusStep: 8 },
+        { type: 'mirrorV', n: 2, stepX: 60, stepY: 0, angleStep: 0.4, radiusStep: 12 },
+      ],
       propertyRanges: { opacity: [1, 0.2], scale: [0.5, 2] },
     });
     const scene = {
@@ -319,13 +370,28 @@ describe('persistance', () => {
     expect(() => deserialize('{"format":"illu/scene@3"}')).toThrow(/tableau/);
   });
 
+  it('relit un calque d’avant la pile : un modificateur unique devient une pile d’un', () => {
+    const raw = JSON.stringify({
+      format: 'illu/scene@4',
+      layers: [{ id: 'L1', modifier: { type: 'mirrorH', n: 2 } }],
+      activeLayerId: 'L1',
+    });
+    expect(deserialize(raw).layers[0].modifiers).toHaveLength(1);
+    expect(deserialize(raw).layers[0].modifiers[0]).toMatchObject({ type: 'mirrorH' });
+  });
+
+  it('un calque sans modificateur se relit comme une pile vide', () => {
+    const raw = '{"format":"illu/scene@4","layers":[{"id":"L1"}],"activeLayerId":"L1"}';
+    expect(deserialize(raw).layers[0].modifiers).toEqual([]);
+  });
+
   it('clampe un N hors bornes au lieu de le propager', () => {
     const raw = JSON.stringify({
       format: 'illu/scene@3',
       layers: [{ id: 'L1', modifier: { type: 'axial', n: -4 } }],
       activeLayerId: 'L1',
     });
-    expect(deserialize(raw).layers[0].modifier.n).toBe(1);
+    expect(deserialize(raw).layers[0].modifiers[0].n).toBe(1);
   });
 
   it('replie une plage absente sur la valeur neutre, pas sur une borne', () => {

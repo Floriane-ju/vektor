@@ -67,18 +67,21 @@ const GUIDES = {
 };
 
 /**
- * Repères du modificateur du calque actif.
+ * Repères de la pile de modificateurs du calque actif : chaque modificateur qui
+ * a un lieu à montrer y pose le sien, dans l'ordre de la pile.
  *
  * Ils vivent dans le `<svg>` de la scène : même viewBox, donc ils restent
  * alignés sous le zoom sans qu'aucune coordonnée soit recalculée. `toSvgDocument`
  * les retire — ce sont des repères d'écran, pas du dessin.
  */
 const createGuides = (layer) => {
-  const build = layer?.visible ? GUIDES[layer.modifier.type] : null;
-  if (!build) return null;
+  const marked = layer?.visible
+    ? layer.modifiers.filter((modifier) => Object.hasOwn(GUIDES, modifier.type))
+    : [];
+  if (marked.length === 0) return null;
 
   const group = document.createElementNS(SVG_NS, 'g');
-  group.dataset.guides = layer.modifier.type;
+  group.dataset.guides = marked.map((modifier) => modifier.type).join(' ');
   group.setAttribute('fill', 'none');
   group.setAttribute('stroke', '#7dd3c0');
   group.setAttribute('stroke-width', '1');
@@ -89,7 +92,7 @@ const createGuides = (layer) => {
   group.setAttribute('vector-effect', 'non-scaling-stroke');
   /* Un glissement sur un repère dessine comme ailleurs. */
   group.setAttribute('pointer-events', 'none');
-  group.append(...build(layer));
+  group.append(...marked.flatMap((modifier) => GUIDES[modifier.type](layer, modifier)));
   return group;
 };
 

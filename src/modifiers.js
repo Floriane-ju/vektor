@@ -4,6 +4,10 @@ import { clampCount } from './interpolate.js';
  * Un modificateur est une transformation de point paramétrée par l'indice de
  * copie : `(point, i, n, center, options) -> {x, y}`.
  *
+ * Un calque en porte une pile : les copies sont toutes les combinaisons
+ * d'indices, un par modificateur. Empiler multiplie donc les copies au lieu de
+ * les juxtaposer — une rangée de cinq passée au miroir en fait dix, pas sept.
+ *
  * Il s'applique au calque entier, pas forme par forme. La copie `i` déplace
  * toutes les formes du calque du même geste, donc leurs positions relatives
  * sont conservées : un motif composé de trois cercles tourne comme un motif,
@@ -98,3 +102,51 @@ export const FIXED_COPIES = { none: 1, mirrorH: 2, mirrorV: 2 };
 
 export const effectiveCount = (modifier) =>
   FIXED_COPIES[modifier.type] ?? clampCount(modifier.n);
+
+/**
+ * Modificateur neuf. `step` plutôt que `none` : on empile pour ajouter un
+ * geste, pas pour en ajouter un qui ne fait rien.
+ */
+export const createModifier = (overrides = {}) => ({
+  type: 'step',
+  n: 6,
+  stepX: 60,
+  stepY: 0,
+  angleStep: 0.4,
+  radiusStep: 12,
+  ...overrides,
+});
+
+/**
+ * Indices de copie d'une pile : un tableau par copie, un indice par
+ * modificateur. Le dernier modificateur varie le plus vite, donc une pile d'un
+ * seul élément redonne exactement `[[0], [1], …]`.
+ *
+ * Une pile vide rend une copie sans transformation — le calque tel quel.
+ */
+export const stackCopies = (modifiers) =>
+  modifiers.reduce(
+    (rows, modifier) => {
+      const count = effectiveCount(modifier);
+      return rows.flatMap((row) => Array.from({ length: count }, (_, i) => [...row, i]));
+    },
+    [[]],
+  );
+
+/**
+ * Applique la pile à un point, dans l'ordre : le modificateur suivant travaille
+ * sur le résultat du précédent. L'ordre compte — un pas puis un miroir donne
+ * deux rangées face à face, un miroir puis un pas une seule rangée doublée.
+ */
+export const applyStack = (point, modifiers, indices, center) =>
+  modifiers.reduce(
+    (current, modifier, k) =>
+      (MODIFIERS[modifier.type] ?? MODIFIERS.none)(
+        current,
+        indices[k],
+        effectiveCount(modifier),
+        center,
+        modifier,
+      ),
+    point,
+  );

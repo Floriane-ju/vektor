@@ -1,4 +1,4 @@
-import { effectiveCount, MODIFIERS } from './modifiers.js';
+import { applyStack, createModifier, stackCopies } from './modifiers.js';
 import { clampCount, interpolateProps } from './interpolate.js';
 
 export const STAGE = { width: 900, height: 900 };
@@ -119,7 +119,8 @@ export const createLayer = (overrides = {}) => ({
   center: { x: STAGE.width / 2, y: STAGE.height / 2 },
   strokeWidth: DEFAULT_STROKE_WIDTH,
   elements: [],
-  modifier: { type: 'none', n: 6, stepX: 60, stepY: 0, angleStep: 0.4, radiusStep: 12 },
+  /* Pile vide : le calque se rend tel quel. On empile ensuite les gestes. */
+  modifiers: [],
   propertyRanges: { opacity: [1, 1], scale: [1, 1] },
   ...overrides,
 });
@@ -155,37 +156,40 @@ export const getActiveElement = (scene) =>
   null;
 
 /**
- * Formes effectivement dessinées d'un calque : `n` copies du calque entier, la
- * copie `i` portant le déplacement du modificateur et les propriétés
- * interpolées de l'indice `i`.
+ * Formes effectivement dessinées d'un calque : une copie du calque entier par
+ * combinaison d'indices de la pile de modificateurs, portant le déplacement
+ * cumulé de la pile et les propriétés interpolées de son rang.
  *
- * Le modificateur s'applique au groupe, pas forme par forme : toutes les formes
- * d'une même copie subissent le même déplacement et partagent la même opacité
- * et la même échelle. C'est ce qui fait tourner un motif comme un motif.
+ * Les modificateurs s'appliquent au groupe, pas forme par forme : toutes les
+ * formes d'une même copie subissent le même déplacement et partagent la même
+ * opacité et la même échelle. C'est ce qui fait tourner un motif comme un motif.
  *
- * Le résultat compte donc `n × elements.length` formes, groupées par copie —
- * ce qui fixe aussi l'ordre de dessin à l'intérieur du calque.
+ * Empiler multiplie : deux modificateurs de 5 et 2 copies en font 10. La rampe
+ * d'interpolation court sur ce total, pas sur chaque modificateur — sinon deux
+ * copies voisines de la pile intérieure auraient la même opacité.
+ *
+ * Le résultat est groupé par copie, ce qui fixe aussi l'ordre de dessin à
+ * l'intérieur du calque.
  *
  * ponytail: pas de mémoïsation. Il n'y a pas de boucle de rendu — le renderer
  * n'est rappelé que sur notification du store. Mesurer avant d'en ajouter.
  */
 export const getRenderedChildren = (layer) => {
   if (layer.elements.length === 0) return [];
-  const count = effectiveCount(layer.modifier);
-  const transform = MODIFIERS[layer.modifier.type] ?? MODIFIERS.none;
+  const copies = stackCopies(layer.modifiers);
 
   const children = [];
-  for (let i = 0; i < count; i += 1) {
-    const properties = interpolateProps(layer.propertyRanges, i, count);
+  copies.forEach((indices, i) => {
+    const properties = interpolateProps(layer.propertyRanges, i, copies.length);
     for (const element of layer.elements) {
       children.push({
         ...element,
         strokeWidth: layer.strokeWidth,
-        ...transform(element, i, count, layer.center, layer.modifier),
+        ...applyStack(element, layer.modifiers, indices, layer.center),
         ...properties,
       });
     }
-  }
+  });
   return children;
 };
 
@@ -295,11 +299,36 @@ export const moveElement = (scene, elementId, delta) => {
   });
 };
 
-export const updateModifier = (scene, id, patch) =>
+/* ---- Pile de modificateurs ---- */
+
+export const addModifier = (scene, id) =>
+  mapLayer(scene, id, (layer) => ({ ...layer, modifiers: [...layer.modifiers, createModifier()] }));
+
+export const removeModifier = (scene, id, index) =>
+  mapLayer(scene, id, (layer) => ({
+    ...layer,
+    modifiers: layer.modifiers.filter((_, i) => i !== index),
+  }));
+
+/** `delta` = -1 vers le début de la pile, +1 vers la fin. L'ordre change le dessin. */
+export const moveModifier = (scene, id, index, delta) =>
   mapLayer(scene, id, (layer) => {
-    const modifier = { ...layer.modifier, ...patch };
-    return { ...layer, modifier: { ...modifier, n: clampCount(modifier.n) } };
+    const to = index + delta;
+    if (to < 0 || to >= layer.modifiers.length) return layer;
+    const modifiers = [...layer.modifiers];
+    [modifiers[index], modifiers[to]] = [modifiers[to], modifiers[index]];
+    return { ...layer, modifiers };
   });
+
+export const updateModifier = (scene, id, index, patch) =>
+  mapLayer(scene, id, (layer) => ({
+    ...layer,
+    modifiers: layer.modifiers.map((current, i) => {
+      if (i !== index) return current;
+      const modifier = { ...current, ...patch };
+      return { ...modifier, n: clampCount(modifier.n) };
+    }),
+  }));
 
 export const updateRange = (scene, id, property, index, value) =>
   mapLayer(scene, id, (layer) => {
