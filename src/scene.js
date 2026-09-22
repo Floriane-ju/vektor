@@ -20,7 +20,7 @@ export const RANGE_BOUNDS = {
  *
  * `geometry` est le nœud SVG émis. « dot » n'est pas un cercle : c'est un trait
  * de longueur nulle à bout rond, donc sans taille propre — son diamètre est
- * l'épaisseur du contour, et sa couleur celle du contour.
+ * l'épaisseur du calque, et sa couleur celle du contour.
  *
  * `uniform` décide de la lecture du glissement : une forme uniforme reste
  * circulaire quelle que soit la direction du geste, un rectangle prend ses deux
@@ -39,19 +39,19 @@ export const SHAPES = {
     label: 'Cercle',
     geometry: 'circle',
     uniform: true,
-    defaults: { rx: 60, ry: 60, fill: 'none', stroke: '#7dd3c0', strokeWidth: 1.5 },
+    defaults: { rx: 60, ry: 60, fill: 'none', stroke: '#7dd3c0' },
   },
   point: {
     label: 'Point',
     geometry: 'dot',
     uniform: true,
-    defaults: { rx: 0, ry: 0, fill: 'none', stroke: '#7dd3c0', strokeWidth: 10 },
+    defaults: { rx: 0, ry: 0, fill: 'none', stroke: '#7dd3c0' },
   },
   rect: {
     label: 'Rectangle',
     geometry: 'rect',
     uniform: false,
-    defaults: { rx: 70, ry: 45, fill: 'none', stroke: '#7dd3c0', strokeWidth: 1.5 },
+    defaults: { rx: 70, ry: 45, fill: 'none', stroke: '#7dd3c0' },
   },
   line: {
     label: 'Ligne',
@@ -59,11 +59,18 @@ export const SHAPES = {
     uniform: false,
     signed: true,
     /* Sans contour, une ligne n'a rien à montrer : `fill` ne la peint pas. */
-    defaults: { rx: 60, ry: 0, fill: 'none', stroke: '#7dd3c0', strokeWidth: 1.5 },
+    defaults: { rx: 60, ry: 0, fill: 'none', stroke: '#7dd3c0' },
   },
 };
 
 export const DEFAULT_SHAPE = 'circle';
+
+/**
+ * L'épaisseur du trait appartient au calque, pas à la forme : un calque est un
+ * coup de crayon, toutes ses formes sortent du même outil. C'est aussi ce qui
+ * donne son diamètre au point, faute d'étendue propre.
+ */
+export const DEFAULT_STROKE_WIDTH = 1.5;
 
 const counters = { L: 0, E: 0 };
 const nextId = (prefix) => `${prefix}${++counters[prefix]}`;
@@ -110,6 +117,7 @@ export const createLayer = (overrides = {}) => ({
   name: `Calque ${counters.L}`,
   visible: true,
   center: { x: STAGE.width / 2, y: STAGE.height / 2 },
+  strokeWidth: DEFAULT_STROKE_WIDTH,
   elements: [],
   modifier: { type: 'none', n: 6, stepX: 60, stepY: 0, angleStep: 0.4, radiusStep: 12 },
   propertyRanges: { opacity: [1, 1], scale: [1, 1] },
@@ -172,6 +180,7 @@ export const getRenderedChildren = (layer) => {
     for (const element of layer.elements) {
       children.push({
         ...element,
+        strokeWidth: layer.strokeWidth,
         ...transform(element, i, count, layer.center, layer.modifier),
         ...properties,
       });
@@ -212,6 +221,9 @@ export const toggleVisibility = (scene, id) =>
 export const renameLayer = (scene, id, name) =>
   mapLayer(scene, id, (layer) => ({ ...layer, name }));
 
+export const setLayerStrokeWidth = (scene, id, strokeWidth) =>
+  mapLayer(scene, id, (layer) => ({ ...layer, strokeWidth: Math.max(0, strokeWidth) }));
+
 /** `delta` = -1 vers l'arrière-plan, +1 vers le premier plan. */
 export const moveLayer = (scene, id, delta) => {
   const from = scene.layers.findIndex((layer) => layer.id === id);
@@ -227,18 +239,13 @@ export const moveLayer = (scene, id, delta) => {
 /**
  * Ajoute une forme au calque et la rend active.
  *
- * La nouvelle forme reprend le style de la forme active quand elle est du même
- * type — dessiner dix cercles rouges d'affilée ne doit pas demander de régler
- * la couleur dix fois. Un type différent repart de ses propres valeurs par
- * défaut, sans quoi un point hériterait de l'épaisseur fine d'un cercle et
- * serait à peine visible.
+ * La nouvelle forme reprend les couleurs de la forme active, quel que soit son
+ * type — dessiner dix formes rouges d'affilée ne doit pas demander de régler la
+ * couleur dix fois. L'épaisseur n'en fait pas partie : elle vit sur le calque.
  */
 export const addElement = (scene, layerId, type, x, y, overrides = {}) => {
   const previous = getActiveElement(scene);
-  const style =
-    previous?.type === type
-      ? { fill: previous.fill, stroke: previous.stroke, strokeWidth: previous.strokeWidth }
-      : {};
+  const style = previous ? { fill: previous.fill, stroke: previous.stroke } : {};
   const element = createElement(type, x, y, { ...style, ...overrides });
   return {
     ...mapLayer(scene, layerId, (layer) => ({ ...layer, elements: [...layer.elements, element] })),

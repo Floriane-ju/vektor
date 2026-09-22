@@ -4,6 +4,7 @@ import {
   clampExtent,
   createElement,
   createLayer,
+  DEFAULT_STROKE_WIDTH,
   RANGE_BOUNDS,
   reserveIds,
   SHAPES,
@@ -14,12 +15,18 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@3';
+export const FORMAT = 'illu/scene@4';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
-   - `@1` et `@2` n'avaient qu'une forme par calque, dans `baseElement`. */
-const READABLE_FORMATS = new Set(['illu/scene@1', 'illu/scene@2', FORMAT]);
+   - `@1` et `@2` n'avaient qu'une forme par calque, dans `baseElement` ;
+   - `@1` à `@3` portaient l'épaisseur sur chaque forme, pas sur le calque. */
+const READABLE_FORMATS = new Set([
+  'illu/scene@1',
+  'illu/scene@2',
+  'illu/scene@3',
+  FORMAT,
+]);
 
 export const serialize = (scene) =>
   JSON.stringify(
@@ -55,8 +62,9 @@ const readRange = (ranges, key) => {
   return [clamp(raw[0], bounds), clamp(raw[1], bounds)];
 };
 
-/* Ancien point : un disque plein sans contour. Son diamètre devient
-   l'épaisseur, sa couleur de remplissage celle du contour. */
+/* Ancien point : un disque plein sans contour. Sa couleur de remplissage
+   devient celle du contour, et son diamètre l'épaisseur — reprise par le calque,
+   qui porte désormais cette valeur. */
 const upgradeLegacyPoint = (raw) =>
   raw.type === 'point' && (raw.stroke === 'none' || !(num(raw.strokeWidth, 0) > 0))
     ? {
@@ -83,7 +91,6 @@ const readElement = (input) => {
     ry: clampExtent(raw.type, num(raw.ry, legacyRadius ?? defaults.ry)),
     fill: typeof raw.fill === 'string' ? raw.fill : defaults.fill,
     stroke: typeof raw.stroke === 'string' ? raw.stroke : defaults.stroke,
-    strokeWidth: Math.max(0, num(raw.strokeWidth, defaults.strokeWidth)),
   });
 };
 
@@ -103,9 +110,27 @@ const readModifier = (raw) => {
  * Les formats `@1` et `@2` portaient une forme unique dans `baseElement` ; `@3`
  * porte une liste. Un ancien fichier se relit donc comme un calque à une forme.
  */
-const readElements = (raw) => {
-  if (Array.isArray(raw.elements)) return raw.elements.map(readElement);
-  return raw.baseElement == null ? [] : [readElement(raw.baseElement)];
+const rawElements = (raw) => {
+  if (Array.isArray(raw.elements)) return raw.elements;
+  return raw.baseElement == null ? [] : [raw.baseElement];
+};
+
+const readElements = (raw) => rawElements(raw).map(readElement);
+
+/**
+ * Épaisseur du calque. Avant `@4` elle vivait sur chaque forme : un ancien
+ * fichier se replie sur celle de sa première forme, quitte à aplatir un calque
+ * qui en mélangeait plusieurs — c'est le sens même de la bascule.
+ */
+const readStrokeWidth = (raw) => {
+  if (raw.strokeWidth !== undefined) {
+    return Math.max(0, num(raw.strokeWidth, DEFAULT_STROKE_WIDTH));
+  }
+  const legacy = rawElements(raw)
+    .filter((element) => element != null && typeof element === 'object')
+    .map(upgradeLegacyPoint)
+    .find((element) => element.strokeWidth !== undefined);
+  return Math.max(0, num(legacy?.strokeWidth, DEFAULT_STROKE_WIDTH));
 };
 
 const readLayer = (raw, index) => {
@@ -119,6 +144,7 @@ const readLayer = (raw, index) => {
       x: num(raw.center?.x, STAGE.width / 2),
       y: num(raw.center?.y, STAGE.height / 2),
     },
+    strokeWidth: readStrokeWidth(raw),
     elements: readElements(raw),
     modifier: readModifier(raw.modifier),
     propertyRanges: {

@@ -296,17 +296,20 @@ describe('dessin au glisser', () => {
     expect(store.get().layers[0].elements.at(-1)).toMatchObject({ rx: 60, ry: 0 });
   });
 
-  it('changer de type reprend les défauts du nouveau, pas le style de l’ancien', () => {
+  it('changer de type garde les couleurs et prend la géométrie du nouveau', () => {
     const { store, svg, shapes } = withLayer();
     pointer(svg, 'pointerdown', 100, 100);
     pointer(svg, 'pointerup', 100, 160);
-    expect(store.get().layers[0].elements.at(-1).strokeWidth).toBe(1.5);
+    const circle = store.get().layers[0].elements.at(-1);
 
     pick(shapes, 'point');
     pointer(svg, 'pointerdown', 100, 100);
     pointer(svg, 'pointerup', 100, 160);
-    /* Sans cette reprise, le point héritait de l'épaisseur fine du cercle. */
-    expect(store.get().layers[0].elements.at(-1).strokeWidth).toBe(10);
+    const point = store.get().layers[0].elements.at(-1);
+    expect(point.stroke).toBe(circle.stroke);
+    expect(point.rx).toBe(0);
+    /* L'épaisseur ne suit plus la forme : elle est réglée sur le calque. */
+    expect(point.strokeWidth).toBeUndefined();
   });
 
   it('refuse sans calque actif et le signale', () => {
@@ -320,6 +323,21 @@ describe('dessin au glisser', () => {
 });
 
 describe('rendu des formes', () => {
+  it('toutes les formes d’un calque portent l’épaisseur du calque', () => {
+    const svg = stage();
+    const layer = createLayer({
+      strokeWidth: 7,
+      center: { x: 0, y: 0 },
+      elements: [createElement('circle', 10, 10), createElement('rect', 50, 50)],
+      modifier: { type: 'step', n: 2, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 },
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const widths = [...svg.querySelectorAll('circle, rect')].map((node) =>
+      node.getAttribute('stroke-width'),
+    );
+    expect(widths).toEqual(['7', '7', '7', '7']);
+  });
+
   it('émet le nœud SVG correspondant à la géométrie', () => {
     const svg = stage();
     const shaped = (type, extra = {}) =>

@@ -10,6 +10,8 @@ import {
   moveLayer,
   removeElement,
   removeLayer,
+  setLayerStrokeWidth,
+  updateElement,
 } from '../src/scene.js';
 import { deserialize, serialize } from '../src/persistence.js';
 
@@ -219,7 +221,7 @@ describe('formes d’un calque', () => {
     expect(scene.activeElementId).toBe(scene.layers[0].elements[1].id);
   });
 
-  it('une forme du même type reprend le style de la forme active', () => {
+  it('une nouvelle forme reprend les couleurs de la forme active', () => {
     let scene = withTwo();
     const active = scene.activeElementId;
     scene = {
@@ -235,12 +237,22 @@ describe('formes d’un calque', () => {
     expect(scene.layers[0].elements.at(-1).stroke).toBe('#ff0000');
   });
 
-  it('un type différent repart de ses propres défauts', () => {
-    const base = withTwo();
-    const scene = addElement(base, base.layers[0].id, 'point', 30, 30);
+  it('un type différent reprend les couleurs mais sa propre géométrie', () => {
+    let scene = withTwo();
+    scene = updateElement(scene, scene.activeElementId, { stroke: '#ff0000' });
+    scene = addElement(scene, scene.layers[0].id, 'point', 30, 30);
     const point = scene.layers[0].elements.at(-1);
-    expect(point.strokeWidth).toBe(10);
+    expect(point.stroke).toBe('#ff0000');
     expect(point.rx).toBe(0);
+    /* L'épaisseur n'est plus sur la forme : elle appartient au calque. */
+    expect(point.strokeWidth).toBeUndefined();
+  });
+
+  it('l’épaisseur du calque borne à zéro et ne mute pas', () => {
+    const scene = withTwo();
+    expect(setLayerStrokeWidth(scene, scene.layers[0].id, 4).layers[0].strokeWidth).toBe(4);
+    expect(setLayerStrokeWidth(scene, scene.layers[0].id, -3).layers[0].strokeWidth).toBe(0);
+    expect(scene.layers[0].strokeWidth).toBe(1.5);
   });
 
   it('supprimer la forme active en réactive une autre', () => {
@@ -337,7 +349,7 @@ describe('persistance', () => {
     expect(read('oui')).toBe(true);
   });
 
-  it('relit un ancien point plein comme un point dimensionné par son épaisseur', () => {
+  it('relit un ancien point plein : son diamètre devient l’épaisseur du calque', () => {
     const text = JSON.stringify({
       format: 'illu/scene@3',
       layers: [
@@ -349,8 +361,9 @@ describe('persistance', () => {
         },
       ],
     });
-    const [point] = deserialize(text).layers[0].elements;
-    expect(point).toMatchObject({ stroke: '#abcdef', strokeWidth: 10, fill: 'none', rx: 0 });
+    const [layer] = deserialize(text).layers;
+    expect(layer.strokeWidth).toBe(10);
+    expect(layer.elements[0]).toMatchObject({ stroke: '#abcdef', fill: 'none', rx: 0 });
   });
 
   it('relit un projet v1 : `radius` converti, forme unique devenue liste', () => {

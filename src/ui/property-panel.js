@@ -4,6 +4,7 @@ import {
   getActiveElement,
   getActiveLayer,
   RANGE_BOUNDS,
+  setLayerStrokeWidth,
   SHAPES,
   updateElement,
   updateModifier,
@@ -52,8 +53,8 @@ export const mountPropertyPanel = ({
    * Relie un `input` à une transition de scène.
    *
    * `subject` dit ce que le contrôle édite : la forme active pour les champs de
-   * forme, le calque actif pour le modificateur et l'interpolation. Le contrôle
-   * ne s'écrit pas quand son sujet est absent.
+   * forme, le calque actif pour l'épaisseur, le modificateur et
+   * l'interpolation. Le contrôle ne s'écrit pas quand son sujet est absent.
    */
   const bind = (node, read, write, { event = 'input', parse = Number, subject = 'element' } = {}) => {
     node.addEventListener(event, () => {
@@ -117,11 +118,6 @@ export const mountPropertyPanel = ({
     (element, value) =>
       store.apply(updateElement, element.id, { ry: clampExtent(element.type, value) / 2 }),
   );
-  const strokeWidth = bind(
-    input('number', { min: '0', step: '0.5' }),
-    (element) => element.strokeWidth,
-    (element, value) => store.apply(updateElement, element.id, { strokeWidth: Math.max(0, value) }),
-  );
   const stroke = bind(
     input('color'),
     (element) => (element.stroke === 'none' ? '#000000' : element.stroke),
@@ -154,11 +150,28 @@ export const mountPropertyPanel = ({
 
   const sizeRow = document.createElement('div');
   sizeRow.className = 'field-row';
-  sizeRow.append(radiusField, widthField, heightField, field('Épaisseur', strokeWidth));
+  sizeRow.append(radiusField, widthField, heightField);
 
   const filledField = field('Remplir', filled);
   const fillField = field('Remplissage', fill);
   shape.append(shapeName, positionRow, sizeRow, field('Contour', stroke), filledField, fillField);
+
+  /* ---- Calque ---- */
+
+  /* L'épaisseur appartient au calque : toutes ses formes sortent du même
+     outil, et un point y trouve son diamètre. */
+  const layerSet = document.createElement('fieldset');
+  const layerLegend = document.createElement('legend');
+  layerLegend.textContent = 'Calque';
+  layerSet.append(layerLegend);
+
+  const strokeWidth = bind(
+    input('number', { min: '0', step: '0.5' }),
+    (layer) => layer.strokeWidth,
+    (layer, value) => store.apply(setLayerStrokeWidth, layer.id, value),
+    { subject: 'layer' },
+  );
+  layerSet.append(field('Épaisseur', strokeWidth));
 
   /* ---- Modificateur ---- */
 
@@ -273,7 +286,7 @@ export const mountPropertyPanel = ({
   shapeListSet.append(shapeListHost);
   mountShapeList({ store, container: shapeListHost, getTool, status });
 
-  container.append(shapeListSet, shape, modifierSet, interpolationSet);
+  container.append(shapeListSet, shape, layerSet, modifierSet, interpolationSet);
 
   /* ---- Synchronisation ---- */
 
@@ -287,7 +300,7 @@ export const mountPropertyPanel = ({
        encore régler le modificateur du calque. */
     shape.disabled = !element;
     shape.setAttribute('aria-disabled', String(!element));
-    for (const set of [modifierSet, interpolationSet]) {
+    for (const set of [layerSet, modifierSet, interpolationSet]) {
       set.disabled = !layer;
       set.setAttribute('aria-disabled', String(!layer));
     }
@@ -302,7 +315,8 @@ export const mountPropertyPanel = ({
     }
 
     const uniform = element ? SHAPES[element.type].uniform : true;
-    /* Un point n'a ni taille ni remplissage : son épaisseur est son diamètre. */
+    /* Un point n'a ni taille ni remplissage : l'épaisseur du calque lui donne
+       son diamètre. */
     const dot = element ? SHAPES[element.type].geometry === 'dot' : false;
     radiusField.hidden = !uniform || dot;
     widthField.hidden = uniform;

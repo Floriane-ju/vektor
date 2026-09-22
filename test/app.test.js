@@ -28,8 +28,8 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   expect(hint.hidden).toBe(false);
   expect(stage.childNodes).toHaveLength(0);
   expect(document.querySelectorAll('#layer-panel .layer-row')).toHaveLength(1);
-  /* Formes du calque, Forme, Modificateur, Interpolation. */
-  expect(document.querySelectorAll('#property-panel fieldset')).toHaveLength(4);
+  /* Formes du calque, Forme, Calque, Modificateur, Interpolation. */
+  expect(document.querySelectorAll('#property-panel fieldset')).toHaveLength(5);
   expect(document.querySelectorAll('#toolbar-shapes input[type="radio"]')).toHaveLength(
     Object.keys(SHAPES).length,
   );
