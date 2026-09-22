@@ -8,14 +8,15 @@ import {
   SHAPES,
 } from '../scene.js';
 import { clearHover, renderedNodes, showHover } from '../renderer-svg.js';
-import { iconButton, rebuildWithFocus } from './list.js';
+import { iconButton, rebuildWithFocus, whenChanged } from './list.js';
 
 /**
  * Liste des formes du calque actif.
  *
  * Un calque porte maintenant plusieurs formes et le modificateur s'applique au
  * groupe : il faut donc pouvoir désigner celle qu'on édite, la réordonner dans
- * le calque et la supprimer.
+ * le calque et la supprimer. La card de la forme sélectionnée loge `detail`,
+ * ses réglages.
  */
 export const mountShapeList = ({
   store,
@@ -23,6 +24,7 @@ export const mountShapeList = ({
   svgRoot,
   getTool = () => DEFAULT_SHAPE,
   status,
+  detail = null,
 }) => {
   /* Forme dont la ligne est survolée. Gardée ici parce que chaque rendu du
      stage efface le surlignage : un clic sur la ligne le ferait disparaître
@@ -36,9 +38,19 @@ export const mountShapeList = ({
     else clearHover(svgRoot);
   };
 
-  const render = (scene) => {
-    if (hoveredId) highlight(hoveredId);
-    return rebuildWithFocus(container, () => {
+  /* Les formes du calque actif, leur type et la sélection : ce que montrent
+     les cards. Position et taille se règlent sur place, sans reconstruire. */
+  const signature = (scene) => {
+    const layer = getActiveLayer(scene);
+    return JSON.stringify([
+      layer?.id ?? null,
+      scene.activeElementId,
+      layer?.elements.map((element) => [element.id, element.type]) ?? [],
+    ]);
+  };
+
+  const rebuild = whenChanged(signature, (scene) =>
+    rebuildWithFocus(container, () => {
       const layer = getActiveLayer(scene);
 
       const add = document.createElement('button');
@@ -73,20 +85,29 @@ export const mountShapeList = ({
 
       container.append(list, add);
       return add;
-    });
+    }),
+  );
+
+  const render = (scene) => {
+    if (hoveredId) highlight(hoveredId);
+    rebuild(scene);
   };
 
   const shapeRow = (layer, element, activeElementId) => {
     const index = layer.elements.indexOf(element);
     const isActive = element.id === activeElementId;
 
-    const row = document.createElement('li');
+    const card = document.createElement('li');
+    card.className = 'layer-card';
+    card.dataset.active = String(isActive);
+    card.addEventListener('pointerenter', () => highlight(element.id));
+    card.addEventListener('pointerleave', () => highlight(null));
     /* Même ligne que le panneau calques, sans la bascule de visibilité : une
        forme se masque en la supprimant ou en masquant son calque. */
+    const row = document.createElement('div');
     row.className = 'layer-row is-shape';
-    row.dataset.active = String(isActive);
-    row.addEventListener('pointerenter', () => highlight(element.id));
-    row.addEventListener('pointerleave', () => highlight(null));
+    card.append(row);
+    if (isActive && detail) card.append(detail);
 
     const name = document.createElement('button');
     name.type = 'button';
@@ -127,7 +148,7 @@ export const mountShapeList = ({
       }),
     );
 
-    return row;
+    return card;
   };
 
   /* Pas de confirmation ici, contrairement au calque : une forme se redessine

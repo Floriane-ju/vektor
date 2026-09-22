@@ -64,3 +64,20 @@ export const rebuildWithFocus = (container, build) => {
   const fallback = build();
   if (focusKey) restoreFocus(container, focusKey, fallback);
 };
+
+/**
+ * Ne relance `render` que si la structure de la liste a changé.
+ *
+ * La card sélectionnée loge les réglages : reconstruire la liste à chaque
+ * notification les détacherait, et le curseur en cours de glissement perdrait
+ * le focus. `signature` résume ce que la liste affiche, pas les valeurs réglées.
+ */
+export const whenChanged = (signature, render) => {
+  let last = null;
+  return (scene) => {
+    const next = signature(scene);
+    if (next === last) return;
+    last = next;
+    render(scene);
+  };
+};

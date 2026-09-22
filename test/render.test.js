@@ -683,7 +683,7 @@ describe('accessibilité au clavier', () => {
       activeElementId: null,
     });
     const panel = document.createElement('div');
-    mountPropertyPanel({ store, container: panel, status: { show: () => {} } });
+    panel.append(mountPropertyPanel({ store }).layerDetail);
 
     store.apply(addModifier, layer.id);
     store.apply(addModifier, layer.id);
@@ -722,10 +722,9 @@ describe('accessibilité au clavier', () => {
       activeLayerId: layer.id,
       activeElementId: null,
     });
-    const panel = document.createElement('div');
     const shapeList = document.createElement('div');
-    mountShapeList({ store, container: shapeList, status: { show: () => {} } });
-    mountPropertyPanel({ store, container: panel, status: { show: () => {} } });
+    const { shapeDetail } = mountPropertyPanel({ store });
+    mountShapeList({ store, container: shapeList, status: { show: () => {} }, detail: shapeDetail });
 
     expect(store.get().layers[0].elements).toHaveLength(0);
 
@@ -734,12 +733,43 @@ describe('accessibilité au clavier', () => {
     shapeList.querySelector('[data-focus-key="add-shape"]').click();
     expect(store.get().layers[0].elements).toHaveLength(1);
 
-    const [x, y] = panel.querySelectorAll('input[type="number"]');
+    /* La forme ajoutée est sélectionnée : sa card s'ouvre sur ses réglages. */
+    const [x, y] = shapeList.querySelectorAll('input[type="number"]');
     x.value = '210';
     x.dispatchEvent(new Event('change'));
     y.value = '340';
     y.dispatchEvent(new Event('change'));
 
     expect(store.get().layers[0].elements[0]).toMatchObject({ x: 210, y: 340 });
+  });
+
+  it('les réglages suivent la card sélectionnée, sans reconstruire la liste', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
+    const { createLayer, setActiveLayer } = await import('../src/scene.js');
+    const [bottom, top] = [createLayer(), createLayer()];
+    const store = createStore({ layers: [bottom, top], activeLayerId: bottom.id, activeElementId: null });
+    const panel = document.createElement('div');
+    document.body.append(panel);
+    const { layerDetail } = mountPropertyPanel({ store });
+    mountLayerPanel({ store, container: panel, status: { show: () => {} }, detail: layerDetail });
+
+    const cardOf = (layer) =>
+      panel.querySelector(`[data-focus-key="name-${layer.id}"]`).closest('li');
+    expect(cardOf(bottom).contains(layerDetail)).toBe(true);
+    expect(cardOf(top).querySelector('fieldset')).toBeNull();
+
+    /* Un curseur réglé en plein glissement reste en place, focus compris. */
+    const slider = layerDetail.querySelector('input[type="range"]');
+    slider.focus();
+    slider.value = '0.4';
+    slider.dispatchEvent(new Event('input'));
+    expect(document.activeElement).toBe(slider);
+    expect(cardOf(bottom).contains(slider)).toBe(true);
+
+    store.apply(setActiveLayer, top.id);
+    expect(cardOf(top).contains(layerDetail)).toBe(true);
+    expect(cardOf(bottom).querySelector('fieldset')).toBeNull();
+    panel.remove();
   });
 });

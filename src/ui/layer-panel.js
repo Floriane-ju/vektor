@@ -1,4 +1,4 @@
-import { iconButton, rebuildWithFocus } from './list.js';
+import { iconButton, rebuildWithFocus, whenChanged } from './list.js';
 import {
   addLayer,
   moveLayer,
@@ -8,12 +8,26 @@ import {
   toggleVisibility,
 } from '../scene.js';
 
-export const mountLayerPanel = ({ store, container, status }) => {
+/**
+ * `detail` : les réglages du calque actif, logés dans sa card. Ils sont
+ * construits ailleurs, une seule fois ; la liste ne fait que les déplacer.
+ */
+export const mountLayerPanel = ({ store, container, status, detail = null }) => {
   /* Hors de la scène : c'est un état d'interface, pas une donnée du projet —
      il ne doit ni partir à l'export ni survivre à un rechargement. */
   let pendingDeleteId = null;
 
-  const render = (scene) =>
+  /* Le nom, la visibilité, l'ordre et la sélection : tout ce que montrent les
+     cards. Les réglages du calque n'y figurent pas, ils se mettent à jour sur
+     place. */
+  const signature = (scene) =>
+    JSON.stringify([
+      scene.activeLayerId,
+      pendingDeleteId,
+      scene.layers.map((layer) => [layer.id, layer.name, layer.visible]),
+    ]);
+
+  const render = whenChanged(signature, (scene) =>
     rebuildWithFocus(container, () => {
       const list = document.createElement('ul');
       list.className = 'layer-list';
@@ -39,16 +53,21 @@ export const mountLayerPanel = ({ store, container, status }) => {
 
       container.append(list, add);
       return add;
-    });
+    }),
+  );
 
   const layerRow = (scene, layer) => {
     const index = scene.layers.indexOf(layer);
     const isActive = layer.id === scene.activeLayerId;
     const isPending = layer.id === pendingDeleteId;
 
-    const row = document.createElement('li');
+    const card = document.createElement('li');
+    card.className = 'layer-card';
+    card.dataset.active = String(isActive);
+    const row = document.createElement('div');
     row.className = 'layer-row';
-    row.dataset.active = String(isActive);
+    card.append(row);
+    if (isActive && detail) card.append(detail);
 
     const name = document.createElement('button');
     name.type = 'button';
@@ -109,7 +128,7 @@ export const mountLayerPanel = ({ store, container, status }) => {
           }),
     );
 
-    return row;
+    return card;
   };
 
   const askDelete = (layer) => {

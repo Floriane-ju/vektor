@@ -19,10 +19,11 @@ import { iconButton, rebuildWithFocus } from './list.js';
 import { FIXED_COPIES, MODIFIER_LABELS } from '../modifiers.js';
 
 /**
- * Contrairement au panneau calques, ce panneau est construit une seule fois et
- * ensuite synchronisé.
+ * Réglages de la forme et du calque actifs, construits une seule fois et
+ * ensuite synchronisés. Ils n'ont pas de panneau à eux : les listes les logent
+ * dans la card sélectionnée.
  *
- * Le reconstruire à chaque notification arracherait le focus du curseur en
+ * Les reconstruire à chaque notification arracherait le focus du curseur en
  * cours de glissement : chaque `input` notifie le store, qui redessine — et le
  * slider disparaîtrait sous la souris au premier pixel.
  */
@@ -53,7 +54,7 @@ const input = (type, attrs = {}) => {
   return node;
 };
 
-export const mountPropertyPanel = ({ store, container, status }) => {
+export const mountPropertyPanel = ({ store }) => {
   const controls = [];
 
   /**
@@ -97,14 +98,6 @@ export const mountPropertyPanel = ({ store, container, status }) => {
     (element, value) => store.apply(updateElement, element.id, { y: value }),
     { event: 'change' },
   );
-
-  const shapeName = document.createElement('p');
-  shapeName.className = 'shape-name';
-  controls.push({
-    node: shapeName,
-    subject: 'element',
-    read: (element) => SHAPES[element.type].label,
-  });
 
   /* Les champs sont en dimensions pleines côté interface — un rayon, une
      largeur — alors que le modèle stocke des demi-extensions depuis le centre.
@@ -155,7 +148,7 @@ export const mountPropertyPanel = ({ store, container, status }) => {
   sizeRow.append(radiusField, widthField, heightField);
 
   const filledField = field('Remplir', filled);
-  shape.append(shapeName, positionRow, sizeRow, filledField);
+  shape.append(positionRow, sizeRow, filledField);
 
   /* ---- Calque ---- */
 
@@ -431,7 +424,12 @@ export const mountPropertyPanel = ({ store, container, status }) => {
     resetButton,
   );
 
-  container.append(shape, layerSet, modifierSet, interpolationSet);
+  const layerDetail = document.createElement('div');
+  layerDetail.className = 'card-detail';
+  layerDetail.append(layerSet, modifierSet, interpolationSet);
+  const shapeDetail = document.createElement('div');
+  shapeDetail.className = 'card-detail';
+  shapeDetail.append(shape);
 
   /* ---- Synchronisation ---- */
 
@@ -459,7 +457,7 @@ export const mountPropertyPanel = ({ store, container, status }) => {
       if (!target) continue;
       const value = read(target);
       if (node.type === 'checkbox') node.checked = Boolean(value);
-      else if (node.tagName === 'SPAN' || node.tagName === 'P') node.textContent = value;
+      else if (node.tagName === 'SPAN') node.textContent = value;
       else if (document.activeElement !== node) node.value = value;
     }
 
@@ -486,4 +484,5 @@ export const mountPropertyPanel = ({ store, container, status }) => {
 
   store.subscribe(sync);
   sync(store.get());
+  return { layerDetail, shapeDetail };
 };

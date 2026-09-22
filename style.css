@@ -123,16 +123,11 @@ body {
 
 #stage [data-hover]:not([fill="none"]) { fill: var(--accent); }
 
-.shape-name {
-  margin: 0 0 10px;
-  color: var(--accent);
-}
-
 /* ---- Layout ---- */
 
 .workspace {
   display: grid;
-  grid-template-columns: 240px 1fr 280px;
+  grid-template-columns: 280px 1fr 240px;
   min-height: 0;
 }
 
@@ -299,20 +294,31 @@ fieldset legend {
   gap: 4px;
 }
 
+.layer-card {
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--bg-field);
+}
+
+.layer-card[data-active="true"] { border-color: var(--accent); }
+
 .layer-row {
   display: grid;
   grid-template-columns: auto 1fr auto auto auto;
   align-items: center;
   gap: 4px;
   padding: 4px;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  background: var(--bg-field);
 }
 
 .layer-row.is-shape { grid-template-columns: 1fr auto auto auto; }
 
-.layer-row[data-active="true"] { border-color: var(--accent); }
+/* Réglages de la card sélectionnée, sous sa ligne. */
+.card-detail {
+  padding: 6px 8px 8px;
+  border-top: 1px solid var(--line);
+}
+
+.card-detail fieldset:last-child { margin-bottom: 0; }
 
 .layer-name {
   overflow: hidden;
@@ -338,6 +344,3 @@ fieldset legend {
 
 .empty-note { color: var(--text-dim); margin: 0 0 10px; }
 
-/* Second titre du panneau gauche : même style que `h2`, décollé de la liste
-   des calques au-dessus. */
-.panel h2.panel-subtitle { margin-top: 24px; }

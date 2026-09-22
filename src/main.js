@@ -48,15 +48,21 @@ mountZoom({
   scroller: svgRoot.parentElement,
   container: document.getElementById('toolbar-actions'),
 });
-mountLayerPanel({ store, container: document.getElementById('layer-panel'), status });
+const { layerDetail, shapeDetail } = mountPropertyPanel({ store });
+mountLayerPanel({
+  store,
+  container: document.getElementById('layer-panel'),
+  status,
+  detail: layerDetail,
+});
 mountShapeList({
   store,
   container: document.getElementById('shape-list'),
   svgRoot,
   getTool,
   status,
+  detail: shapeDetail,
 });
-mountPropertyPanel({ store, container: document.getElementById('property-panel'), status });
 
 render(store.get(), svgRoot);
 hint.hidden = hasShapes(store.get());
