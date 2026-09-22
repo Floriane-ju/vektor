@@ -49,7 +49,13 @@ mountZoom({
   container: document.getElementById('toolbar-actions'),
 });
 mountLayerPanel({ store, container: document.getElementById('layer-panel'), status });
-mountShapeList({ store, container: document.getElementById('shape-list'), getTool, status });
+mountShapeList({
+  store,
+  container: document.getElementById('shape-list'),
+  svgRoot,
+  getTool,
+  status,
+});
 mountPropertyPanel({ store, container: document.getElementById('property-panel'), status });
 
 render(store.get(), svgRoot);

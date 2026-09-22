@@ -100,6 +100,29 @@ body {
   outline-offset: -2px;
 }
 
+/* ---- Outil curseur ---- */
+
+#stage[data-tool="cursor"] [data-element-id] { cursor: pointer; }
+
+/* Avec une sélection, tout le dessin la déplace : le curseur le dit partout. */
+#stage[data-tool="cursor"][data-has-selection],
+#stage[data-tool="cursor"][data-has-selection] * { cursor: grab; }
+
+#stage[data-tool="cursor"][data-dragging],
+#stage[data-tool="cursor"][data-dragging] * { cursor: grabbing; }
+
+/* Le CSS l'emporte sur les attributs de présentation du clone. Le halo le
+   rend visible même sur une forme déjà peinte de l'accent (couleur par
+   défaut des calques). */
+#stage [data-hover] {
+  stroke: var(--accent);
+  stroke-opacity: 1;
+  fill-opacity: 1;
+  filter: drop-shadow(0 0 3px var(--accent));
+}
+
+#stage [data-hover]:not([fill="none"]) { fill: var(--accent); }
+
 .shape-name {
   margin: 0 0 10px;
   color: var(--accent);

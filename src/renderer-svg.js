@@ -113,6 +113,7 @@ const createNode = (child) => {
   const geometry = SHAPES[child.type].geometry;
 
   const node = document.createElementNS(SVG_NS, geometry === 'dot' ? 'line' : geometry);
+  node.dataset.elementId = child.id;
   let strokeWidth = child.strokeWidth;
   if (geometry === 'dot') {
     /* Trait de longueur nulle : seul le bout rond est peint, d'un diamètre égal
@@ -150,6 +151,33 @@ const createNode = (child) => {
   return node;
 };
 
+/** Retire le surlignage de survol, où qu'il ait été posé. */
+export const clearHover = (svgRoot) => {
+  for (const node of svgRoot.querySelectorAll('[data-hover]')) node.remove();
+};
+
+/**
+ * Surligne des nœuds déjà rendus : un clone de chacun par-dessus la scène,
+ * repeint en accent par le CSS.
+ *
+ * Le survol est un état d'écran, pas de scène : le prochain rendu l'efface,
+ * et c'est à l'appelant de le reposer.
+ */
+export const showHover = (svgRoot, nodes) => {
+  clearHover(svgRoot);
+  for (const node of nodes) {
+    const overlay = node.cloneNode();
+    delete overlay.dataset.elementId;
+    overlay.dataset.hover = '';
+    overlay.setAttribute('pointer-events', 'none');
+    svgRoot.append(overlay);
+  }
+};
+
+/** Toutes les copies dessinées d'une forme : elles portent l'id de leur source. */
+export const renderedNodes = (svgRoot, elementId) =>
+  svgRoot.querySelectorAll(`[data-element-id="${CSS.escape(elementId)}"]`);
+
 const round = (value) => String(Math.round(value * 1000) / 1000);
 
 /**
@@ -158,11 +186,12 @@ const round = (value) => String(Math.round(value * 1000) / 1000);
  * Le `<svg>` du DOM est cloné avant d'y poser les attributs de document : la
  * racine vivante garde ses attributs d'interface (id, role, aria-label) et le
  * fichier n'embarque que ce qui a un sens hors de la page — les repères du
- * modificateur en sont donc retirés.
+ * modificateur et le survol du curseur en sont donc retirés.
  */
 export const toSvgDocument = (svgRoot) => {
   const clone = svgRoot.cloneNode(true);
   clone.querySelector('[data-guides]')?.remove();
+  clearHover(clone);
   clone.removeAttribute('id');
   clone.removeAttribute('role');
   clone.removeAttribute('aria-label');

@@ -7,6 +7,7 @@ import {
   setActiveElement,
   SHAPES,
 } from '../scene.js';
+import { clearHover, renderedNodes, showHover } from '../renderer-svg.js';
 import { iconButton, rebuildWithFocus } from './list.js';
 
 /**
@@ -16,9 +17,28 @@ import { iconButton, rebuildWithFocus } from './list.js';
  * groupe : il faut donc pouvoir désigner celle qu'on édite, la réordonner dans
  * le calque et la supprimer.
  */
-export const mountShapeList = ({ store, container, getTool = () => DEFAULT_SHAPE, status }) => {
-  const render = (scene) =>
-    rebuildWithFocus(container, () => {
+export const mountShapeList = ({
+  store,
+  container,
+  svgRoot,
+  getTool = () => DEFAULT_SHAPE,
+  status,
+}) => {
+  /* Forme dont la ligne est survolée. Gardée ici parce que chaque rendu du
+     stage efface le surlignage : un clic sur la ligne le ferait disparaître
+     sous le pointeur. Ce module s'abonne après le renderer, il le repose. */
+  let hoveredId = null;
+
+  const highlight = (elementId) => {
+    hoveredId = elementId;
+    if (!svgRoot) return;
+    if (elementId) showHover(svgRoot, renderedNodes(svgRoot, elementId));
+    else clearHover(svgRoot);
+  };
+
+  const render = (scene) => {
+    if (hoveredId) highlight(hoveredId);
+    return rebuildWithFocus(container, () => {
       const layer = getActiveLayer(scene);
 
       const add = document.createElement('button');
@@ -54,6 +74,7 @@ export const mountShapeList = ({ store, container, getTool = () => DEFAULT_SHAPE
       container.append(list, add);
       return add;
     });
+  };
 
   const shapeRow = (layer, element, activeElementId) => {
     const index = layer.elements.indexOf(element);
@@ -64,6 +85,8 @@ export const mountShapeList = ({ store, container, getTool = () => DEFAULT_SHAPE
        forme se masque en la supprimant ou en masquant son calque. */
     row.className = 'layer-row is-shape';
     row.dataset.active = String(isActive);
+    row.addEventListener('pointerenter', () => highlight(element.id));
+    row.addEventListener('pointerleave', () => highlight(null));
 
     const name = document.createElement('button');
     name.type = 'button';

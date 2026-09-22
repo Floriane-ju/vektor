@@ -2,12 +2,18 @@ import {
   addElement,
   DEFAULT_SHAPE,
   dragPatch,
+  getActiveElement,
   getActiveLayer,
+  setActiveElement,
+  setActiveLayer,
   SHAPES,
   updateElement,
 } from '../scene.js';
-import { toSvgDocument } from '../renderer-svg.js';
+import { clearHover, renderedNodes, showHover, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
+
+/** Outil de sélection : partage le groupe radio des formes, sans en être une. */
+const CURSOR = 'cursor';
 
 /** En deçà, le geste est lu comme un clic : la forme prend sa taille par défaut. */
 const DRAG_THRESHOLD = 3;
@@ -44,10 +50,11 @@ const mountShapePicker = (container, onChange) => {
   const group = document.createElement('fieldset');
   group.className = 'shape-picker';
   const legend = document.createElement('legend');
-  legend.textContent = 'Forme';
+  legend.textContent = 'Outil';
   group.append(legend);
 
-  for (const [type, shape] of Object.entries(SHAPES)) {
+  const tools = [[CURSOR, { label: 'Curseur' }], ...Object.entries(SHAPES)];
+  for (const [type, shape] of tools) {
     const id = `shape-${type}`;
     const radio = document.createElement('input');
     radio.type = 'radio';
@@ -68,13 +75,19 @@ const mountShapePicker = (container, onChange) => {
 };
 
 export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status }) => {
+  /* `tool` reste la dernière forme choisie même sous le curseur : « + Ajouter
+     une forme » en a toujours besoin. */
   let tool = DEFAULT_SHAPE;
+  let selecting = false;
   /* Glissement en cours : le point de départ du geste, et la forme créée à ce
      moment-là, que les mouvements suivants se contentent de redimensionner. */
   let stroke = null;
 
   mountShapePicker(shapeContainer ?? container, (type) => {
-    tool = type;
+    selecting = type === CURSOR;
+    if (!selecting) tool = type;
+    svgRoot.dataset.tool = selecting ? CURSOR : 'draw';
+    clearHover(svgRoot);
   });
 
   const fileInput = document.createElement('input');
@@ -115,6 +128,72 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
 
   container.append(exportSvg, exportJson, importJson, fileInput);
 
+  /* ---- Sélection au curseur ---- */
+
+  /* Toutes les copies d'un modificateur portent l'id de leur forme source :
+     survoler ou cliquer n'importe laquelle désigne cette forme. */
+  const shapeAt = (event) => event.target.closest?.('[data-element-id]') ?? null;
+
+  const select = (node) => {
+    if (!node) {
+      store.apply(setActiveElement, null);
+      return;
+    }
+    const { layerId } = node.closest('[data-layer-id]').dataset;
+    store.apply(
+      (scene) => setActiveElement(setActiveLayer(scene, layerId), node.dataset.elementId),
+    );
+  };
+
+  /* Déplacement en cours : point de départ du geste et position d'origine de
+     la forme. Le geste part de n'importe où dans le dessin — sur une autre
+     forme, il la sélectionne d'abord et c'est elle qui bouge. */
+  let drag = null;
+
+  const startDrag = (event) => {
+    const node = shapeAt(event);
+    if (node) select(node);
+    const element = getActiveElement(store.get());
+    if (!element) return;
+    const point = toStagePoint(svgRoot, event);
+    drag = { point, origin: element, onEmpty: !node, moved: false };
+    svgRoot.toggleAttribute('data-dragging', true);
+    svgRoot.setPointerCapture?.(event.pointerId);
+  };
+
+  const moveDrag = (event) => {
+    const { x, y } = toStagePoint(svgRoot, event);
+    const dx = x - drag.point.x;
+    const dy = y - drag.point.y;
+    /* Sans seuil, le tremblement d'un clic décalerait la forme d'un pixel. */
+    if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    drag.moved = true;
+    store.apply(updateElement, drag.origin.id, { x: drag.origin.x + dx, y: drag.origin.y + dy });
+  };
+
+  const endDrag = (event) => {
+    moveDrag(event);
+    if (drag.onEmpty && !drag.moved) select(null);
+    svgRoot.releasePointerCapture?.(event.pointerId);
+    svgRoot.toggleAttribute('data-dragging', false);
+    drag = null;
+  };
+
+  svgRoot.addEventListener('pointermove', (event) => {
+    if (!selecting) return;
+    if (drag) moveDrag(event);
+    /* Sous le curseur, la forme sélectionnée ressort toujours, où que soit le
+       pointeur ; celle survolée s'y ajoute. Pendant un glissement, seule la
+       sélection compte. */
+    const { activeElementId } = store.get();
+    svgRoot.toggleAttribute('data-has-selection', Boolean(activeElementId));
+    const selected = activeElementId ? [...renderedNodes(svgRoot, activeElementId)] : [];
+    const node = drag ? null : shapeAt(event);
+    const hovered = node && node.dataset.elementId !== activeElementId ? [node] : [];
+    showHover(svgRoot, [...selected, ...hovered]);
+  });
+  svgRoot.addEventListener('pointerleave', () => clearHover(svgRoot));
+
   /* ---- Dessin au glisser ---- */
 
   /* Le `pointerdown` ajoute la forme, les mouvements ne font plus que la
@@ -127,6 +206,10 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
 
   svgRoot.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
+    if (selecting) {
+      startDrag(event);
+      return;
+    }
     const layer = getActiveLayer(store.get());
     if (!layer) {
       status.show('Sélectionner un calque avant de dessiner.', 'error');
@@ -146,6 +229,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   });
 
   svgRoot.addEventListener('pointerup', (event) => {
+    if (drag) endDrag(event);
     if (!stroke) return;
     const patch = patchAt(event);
     /* Les extensions d'une forme orientée sont signées : c'est leur distance à
@@ -163,6 +247,8 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
      les champs du panneau ou la supprime. */
   svgRoot.addEventListener('pointercancel', () => {
     stroke = null;
+    drag = null;
+    svgRoot.toggleAttribute('data-dragging', false);
   });
 
   return { getTool: () => tool };

@@ -353,6 +353,140 @@ describe('dessin au glisser', () => {
   });
 });
 
+describe('outil curseur', () => {
+  const mountWithShape = () => {
+    const layer = createLayer({ elements: [createElement('circle', 100, 100, { filled: true })] });
+    const other = createLayer();
+    const store = createStore({ layers: [layer, other], activeLayerId: other.id, activeElementId: null });
+    const svg = stage();
+    globalThis.DOMPoint = class {
+      constructor(x, y) {
+        Object.assign(this, { x, y });
+      }
+      matrixTransform() {
+        return { x: this.x, y: this.y };
+      }
+    };
+    svg.getScreenCTM = () => ({ inverse: () => ({}) });
+    const shapes = document.createElement('div');
+    render(store.get(), svg);
+    store.subscribe((next) => render(next, svg));
+    mountToolbar({
+      store,
+      svgRoot: svg,
+      container: document.createElement('div'),
+      shapeContainer: shapes,
+      status: { show: () => {} },
+    });
+    const radio = shapes.querySelector('#shape-cursor');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
+    return { store, svg, layer };
+  };
+
+  const on = (node, type, x = 0, y = 0) =>
+    node.dispatchEvent(new MouseEvent(type, { button: 0, bubbles: true, clientX: x, clientY: y }));
+
+  it('glisser une forme la déplace du même écart que le pointeur', () => {
+    const { store, svg } = mountWithShape();
+    on(svg.querySelector('circle'), 'pointerdown', 100, 100);
+    on(svg, 'pointermove', 130, 90);
+    on(svg, 'pointerup', 150, 80);
+
+    expect(store.get().layers[0].elements).toHaveLength(1);
+    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 150, y: 80, rx: 60 });
+  });
+
+  it('glisser ailleurs dans le dessin déplace la forme sélectionnée', () => {
+    const { store, svg, layer } = mountWithShape();
+    on(svg.querySelector('circle'), 'pointerdown', 100, 100);
+    on(svg, 'pointerup', 100, 100);
+
+    on(svg, 'pointermove', 600, 600);
+    /* Tout le dessin déplace la sélection : il prend le curseur de saisie. */
+    expect(svg.hasAttribute('data-has-selection')).toBe(true);
+    on(svg, 'pointerdown', 600, 600);
+    on(svg, 'pointermove', 640, 610);
+    expect(svg.hasAttribute('data-dragging')).toBe(true);
+    on(svg, 'pointerup', 640, 610);
+    expect(svg.hasAttribute('data-dragging')).toBe(false);
+
+    expect(store.get().activeElementId).toBe(layer.elements[0].id);
+    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 140, y: 110 });
+  });
+
+  it('le survol pose une copie de la forme par-dessus, sans la dessiner', () => {
+    const { svg } = mountWithShape();
+    const circle = svg.querySelector('circle');
+    on(circle, 'pointermove');
+
+    const overlay = svg.querySelector('[data-hover]');
+    expect(overlay.tagName.toLowerCase()).toBe('circle');
+    expect(overlay.getAttribute('r')).toBe(circle.getAttribute('r'));
+    expect(svg.lastElementChild).toBe(overlay);
+    expect(toSvgDocument(svg)).not.toContain('data-hover');
+
+    on(svg, 'pointermove');
+    expect(svg.querySelector('[data-hover]')).toBeNull();
+  });
+
+  it('la forme sélectionnée reste surlignée quand le pointeur survole le reste du dessin', () => {
+    const { store, svg, layer } = mountWithShape();
+    on(svg.querySelector('circle'), 'pointerdown', 100, 100);
+    on(svg, 'pointerup', 100, 100);
+    on(svg, 'pointermove', 600, 600);
+
+    const overlays = svg.querySelectorAll('[data-hover]');
+    expect(overlays.length).toBeGreaterThan(0);
+    expect(store.get().activeElementId).toBe(layer.elements[0].id);
+    expect([...overlays].every((node) => node.tagName.toLowerCase() === 'circle')).toBe(true);
+  });
+
+  it('un clic sélectionne la forme et son calque, sans en créer', () => {
+    const { store, svg, layer } = mountWithShape();
+    on(svg.querySelector('circle'), 'pointerdown');
+
+    expect(store.get()).toMatchObject({
+      activeLayerId: layer.id,
+      activeElementId: layer.elements[0].id,
+    });
+    expect(store.get().layers[0].elements).toHaveLength(1);
+
+    on(svg, 'pointerup');
+    /* Un clic dans le vide, sans glissement, désélectionne. */
+    on(svg, 'pointerdown');
+    on(svg, 'pointerup');
+    expect(store.get().activeElementId).toBeNull();
+    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 100, y: 100 });
+  });
+});
+
+describe('survol depuis la liste des formes', () => {
+  it('surligne toutes les copies de la forme survolée, puis les retire', async () => {
+    const { mountShapeList } = await import('../src/ui/shape-list.js');
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      elements: [createElement('circle', 10, 10), createElement('rect', 50, 50)],
+      modifiers: [{ type: 'step', n: 3, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 }],
+    });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const svg = stage();
+    render(store.get(), svg);
+    const list = document.createElement('div');
+    mountShapeList({ store, container: list, svgRoot: svg, status: { show: () => {} } });
+
+    const row = list.querySelector(`[data-focus-key="name-${layer.elements[0].id}"]`).closest('li');
+    row.dispatchEvent(new MouseEvent('pointerenter'));
+    const overlays = svg.querySelectorAll('[data-hover]');
+    expect(overlays).toHaveLength(3);
+    expect([...overlays].every((node) => node.tagName.toLowerCase() === 'circle')).toBe(true);
+    expect(toSvgDocument(svg)).not.toContain('data-hover');
+
+    row.dispatchEvent(new MouseEvent('pointerleave'));
+    expect(svg.querySelectorAll('[data-hover]')).toHaveLength(0);
+  });
+});
+
 describe('rendu des formes', () => {
   it('toutes les formes d’un calque portent l’épaisseur du calque', () => {
     const svg = stage();
