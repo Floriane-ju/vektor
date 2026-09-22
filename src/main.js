@@ -5,6 +5,7 @@ import { debounce, loadLocal, saveLocal } from './persistence.js';
 import { mountToolbar } from './ui/toolbar.js';
 import { mountLayerPanel } from './ui/layer-panel.js';
 import { mountPropertyPanel } from './ui/property-panel.js';
+import { mountZoom } from './ui/zoom.js';
 
 const svgRoot = document.getElementById('stage');
 const hint = document.getElementById('stage-hint');
@@ -40,6 +41,11 @@ const { getTool } = mountToolbar({
   container: document.getElementById('toolbar-actions'),
   shapeContainer: document.getElementById('toolbar-shapes'),
   status,
+});
+mountZoom({
+  svgRoot,
+  scroller: svgRoot.parentElement,
+  container: document.getElementById('toolbar-actions'),
 });
 mountLayerPanel({ store, container: document.getElementById('layer-panel'), status });
 mountPropertyPanel({

@@ -48,6 +48,9 @@ body {
 
 .topbar-actions { display: flex; gap: 8px; }
 
+.zoom-controls { display: flex; align-items: center; gap: 4px; }
+.zoom-level { min-width: 4.5ch; text-align: center; font-variant-numeric: tabular-nums; }
+
 /* Sélecteur de forme : des radios natifs, masqués visuellement mais toujours
    focalisables — c'est le navigateur qui fournit la navigation aux flèches et
    l'exclusivité du groupe. */
@@ -145,6 +148,10 @@ body {
   border: 1px solid var(--line);
   cursor: crosshair;
   max-width: 100%;
+  /* Centré par marges auto plutôt que par `place-items` : zoomé plus grand que
+     le conteneur, les marges tombent à 0 et tout le stage reste défilable. */
+  place-self: start;
+  margin: auto;
   height: auto;
   /* Un glissement sur le stage dessine : il ne doit pas aussi faire défiler la
      page ou sélectionner du texte. */
