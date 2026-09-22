@@ -10,7 +10,7 @@ import {
   updateRange,
 } from '../scene.js';
 import { mountShapeList } from './shape-list.js';
-import { MODIFIER_LABELS } from '../modifiers.js';
+import { FIXED_COPIES, MODIFIER_LABELS } from '../modifiers.js';
 
 /**
  * Contrairement au panneau calques, ce panneau est construit une seule fois et
@@ -188,6 +188,18 @@ export const mountPropertyPanel = ({
     (layer, value) => store.apply(updateModifier, layer.id, { n: value }),
     { event: 'change', subject: 'layer' },
   );
+  const stepX = bind(
+    input('number', { step: '1' }),
+    (layer) => layer.modifier.stepX,
+    (layer, value) => store.apply(updateModifier, layer.id, { stepX: value }),
+    { subject: 'layer' },
+  );
+  const stepY = bind(
+    input('number', { step: '1' }),
+    (layer) => layer.modifier.stepY,
+    (layer, value) => store.apply(updateModifier, layer.id, { stepY: value }),
+    { subject: 'layer' },
+  );
   const angleStep = bind(
     input('number', { step: '0.05' }),
     (layer) => layer.modifier.angleStep,
@@ -202,9 +214,12 @@ export const mountPropertyPanel = ({
   );
 
   const countField = field('Nombre (N)', count);
+  const stepRow = document.createElement('div');
+  stepRow.className = 'field-row';
+  stepRow.append(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
   const angleField = field('Pas angulaire (rad)', angleStep);
   const radiusStepField = field('Pas radial (px)', radiusStep);
-  modifierSet.append(field('Type', type), countField, angleField, radiusStepField);
+  modifierSet.append(field('Type', type), countField, stepRow, angleField, radiusStepField);
 
   /* ---- Interpolation ---- */
 
@@ -300,9 +315,12 @@ export const mountPropertyPanel = ({
     heightField.querySelector('label').textContent = heightLabel;
 
     if (!layer) return;
-    const isSpiral = layer.modifier.type === 'spiral';
-    const duplicates = layer.modifier.type !== 'none';
-    countField.hidden = !duplicates;
+    const { type: modifierType } = layer.modifier;
+    const isSpiral = modifierType === 'spiral';
+    /* `none` et les miroirs décident eux-mêmes de leur nombre de copies : leur
+       proposer un « Nombre » promettrait un réglage sans effet. */
+    countField.hidden = Object.hasOwn(FIXED_COPIES, modifierType);
+    stepRow.hidden = modifierType !== 'step';
     angleField.hidden = !isSpiral;
     radiusStepField.hidden = !isSpiral;
   };

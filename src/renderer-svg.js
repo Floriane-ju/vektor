@@ -40,21 +40,28 @@ const guideNode = (geometry, attrs) => {
 const guideLine = (x1, y1, x2, y2) => guideNode('line', { x1, y1, x2, y2 });
 
 /** Marque un centre de transformation : croix + anneau. */
-const guideCenter = ({ x, y }) => [
-  guideLine(x - GUIDE_MARK, y, x + GUIDE_MARK, y),
-  guideLine(x, y - GUIDE_MARK, x, y + GUIDE_MARK),
-  guideNode('circle', { cx: x, cy: y, r: GUIDE_MARK }),
+const guideCenter = ({ center }) => [
+  guideLine(center.x - GUIDE_MARK, center.y, center.x + GUIDE_MARK, center.y),
+  guideLine(center.x, center.y - GUIDE_MARK, center.x, center.y + GUIDE_MARK),
+  guideNode('circle', { cx: center.x, cy: center.y, r: GUIDE_MARK }),
 ];
+
+/** Axe de symétrie d'un miroir : la seule chose que `n` ne déplace plus. */
+const mirrorGuides = (axis) => (layer) =>
+  axis === 'x'
+    ? [guideLine(layer.center.x, 0, layer.center.x, STAGE.height)]
+    : [guideLine(0, layer.center.y, STAGE.width, layer.center.y)];
 
 /**
  * Repères propres à chaque modificateur : l'axe pour un miroir, le centre de
  * rotation pour l'axial et la spirale.
  *
- * `none` n'y figure pas : sans duplication, il n'y a rien à situer.
+ * `none` et `step` n'y figurent pas : le premier ne duplique rien, le second
+ * translate sans pivot ni axe — il n'a pas de lieu à montrer.
  */
 const GUIDES = {
-  mirrorH: (center) => [guideLine(center.x, 0, center.x, STAGE.height)],
-  mirrorV: (center) => [guideLine(0, center.y, STAGE.width, center.y)],
+  mirrorH: mirrorGuides('x'),
+  mirrorV: mirrorGuides('y'),
   axial: guideCenter,
   spiral: guideCenter,
 };
@@ -82,7 +89,7 @@ const createGuides = (layer) => {
   group.setAttribute('vector-effect', 'non-scaling-stroke');
   /* Un glissement sur un repère dessine comme ailleurs. */
   group.setAttribute('pointer-events', 'none');
-  group.append(...build(layer.center));
+  group.append(...build(layer));
   return group;
 };
 

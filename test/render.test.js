@@ -15,11 +15,11 @@ const stage = () => {
   return node;
 };
 
-const mirrorLayer = (overrides = {}) =>
+const repeatLayer = (overrides = {}) =>
   createLayer({
     center: { x: 0, y: 0 },
     elements: [createElement('circle', 100, 0)],
-    modifier: { type: 'mirrorH', n: 5, angleStep: 0.4, radiusStep: 12 },
+    modifier: { type: 'step', n: 5, stepX: -50, stepY: 0, angleStep: 0.4, radiusStep: 12 },
     propertyRanges: { opacity: [1, 0], scale: [1, 1] },
     ...overrides,
   });
@@ -31,7 +31,7 @@ describe('renderer SVG', () => {
   });
 
   it('rend les opacités interpolées sur les enfants', () => {
-    render({ layers: [mirrorLayer()], activeLayerId: null, activeElementId: null }, svg);
+    render({ layers: [repeatLayer()], activeLayerId: null, activeElementId: null }, svg);
     const circles = [...svg.querySelectorAll('circle')];
     expect(circles).toHaveLength(5);
     expect(circles.map((c) => c.getAttribute('fill-opacity'))).toEqual([
@@ -47,8 +47,8 @@ describe('renderer SVG', () => {
   });
 
   it('multiplie le rayon par l’échelle interpolée', () => {
-    const layer = mirrorLayer({
-      modifier: { type: 'mirrorH', n: 3, angleStep: 0, radiusStep: 0 },
+    const layer = repeatLayer({
+      modifier: { type: 'step', n: 3, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 },
       propertyRanges: { opacity: [1, 1], scale: [1, 2] },
     });
     render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
@@ -60,8 +60,8 @@ describe('renderer SVG', () => {
   });
 
   it('un groupe par calque, dans l’ordre du tableau (z-order)', () => {
-    const back = mirrorLayer({ modifier: { type: 'none', n: 1 } });
-    const front = mirrorLayer({ modifier: { type: 'none', n: 1 } });
+    const back = repeatLayer({ modifier: { type: 'none', n: 1 } });
+    const front = repeatLayer({ modifier: { type: 'none', n: 1 } });
     render({ layers: [back, front], activeLayerId: null, activeElementId: null }, svg);
     expect([...svg.querySelectorAll('g')].map((g) => g.dataset.layerId)).toEqual([
       back.id,
@@ -70,12 +70,12 @@ describe('renderer SVG', () => {
   });
 
   it('un calque masqué n’émet aucun nœud', () => {
-    render({ layers: [mirrorLayer({ visible: false })], activeLayerId: null, activeElementId: null }, svg);
+    render({ layers: [repeatLayer({ visible: false })], activeLayerId: null, activeElementId: null }, svg);
     expect(svg.childNodes).toHaveLength(0);
   });
 
   it('un re-rendu remplace le contenu au lieu de l’empiler', () => {
-    const scene = { layers: [mirrorLayer()], activeLayerId: null, activeElementId: null };
+    const scene = { layers: [repeatLayer()], activeLayerId: null, activeElementId: null };
     render(scene, svg);
     render(scene, svg);
     expect(svg.querySelectorAll('circle')).toHaveLength(5);
@@ -85,14 +85,19 @@ describe('renderer SVG', () => {
 describe('repères du modificateur', () => {
   const scene = (layer) => ({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
 
-  it('trace l’axe du miroir du calque actif', () => {
+  it('trace l’axe du miroir, et lui seul', () => {
     const svg = stage();
-    render(scene(mirrorLayer({ center: { x: 400, y: 300 } })), svg);
+    const layer = repeatLayer({
+      center: { x: 400, y: 300 },
+      modifier: { type: 'mirrorH', n: 5, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 },
+    });
+    render(scene(layer), svg);
     const guides = svg.querySelector('[data-guides]');
     expect(guides.dataset.guides).toBe('mirrorH');
-    const axis = guides.querySelector('line');
-    expect([axis.getAttribute('x1'), axis.getAttribute('x2')]).toEqual(['400', '400']);
-    expect([axis.getAttribute('y1'), axis.getAttribute('y2')]).toEqual([
+    const lines = [...guides.querySelectorAll('line')];
+    expect(lines).toHaveLength(1);
+    expect([lines[0].getAttribute('x1'), lines[0].getAttribute('x2')]).toEqual(['400', '400']);
+    expect([lines[0].getAttribute('y1'), lines[0].getAttribute('y2')]).toEqual([
       '0',
       String(STAGE.height),
     ]);
@@ -100,7 +105,7 @@ describe('repères du modificateur', () => {
 
   it('marque le centre de la spirale', () => {
     const svg = stage();
-    const layer = mirrorLayer({
+    const layer = repeatLayer({
       center: { x: 400, y: 300 },
       modifier: { type: 'spiral', n: 3, angleStep: 0.4, radiusStep: 12 },
     });
@@ -109,19 +114,20 @@ describe('repères du modificateur', () => {
     expect([mark.getAttribute('cx'), mark.getAttribute('cy')]).toEqual(['400', '300']);
   });
 
-  it('ne trace rien sans modificateur, ni sans calque actif', () => {
+  it('ne trace rien pour `none` ni pour un pas, ni sans calque actif', () => {
     const svg = stage();
-    const plain = mirrorLayer({ modifier: { type: 'none', n: 6, angleStep: 0, radiusStep: 0 } });
-    render(scene(plain), svg);
-    expect(svg.querySelector('[data-guides]')).toBeNull();
+    for (const type of ['none', 'step']) {
+      render(scene(repeatLayer({ modifier: { type, n: 6, stepX: 50, stepY: 0 } })), svg);
+      expect(svg.querySelector('[data-guides]')).toBeNull();
+    }
 
-    render({ layers: [mirrorLayer()], activeLayerId: null, activeElementId: null }, svg);
+    render({ layers: [repeatLayer()], activeLayerId: null, activeElementId: null }, svg);
     expect(svg.querySelector('[data-guides]')).toBeNull();
   });
 
   it('laisse les repères hors de l’export', () => {
     const svg = stage();
-    render(scene(mirrorLayer({ center: { x: 400, y: 300 } })), svg);
+    render(scene(repeatLayer({ modifier: { type: 'mirrorH', n: 2 } })), svg);
     expect(svg.querySelector('[data-guides]')).not.toBeNull();
     expect(toSvgDocument(svg)).not.toContain('data-guides');
   });
@@ -130,7 +136,7 @@ describe('repères du modificateur', () => {
 describe('export SVG', () => {
   it('reprend exactement les nœuds affichés', () => {
     const svg = stage();
-    render({ layers: [mirrorLayer()], activeLayerId: null, activeElementId: null }, svg);
+    render({ layers: [repeatLayer()], activeLayerId: null, activeElementId: null }, svg);
     const document_ = toSvgDocument(svg);
 
     const preview = [...svg.querySelectorAll('circle')].map((c) => [
@@ -146,7 +152,7 @@ describe('export SVG', () => {
 
   it('porte les attributs de document et laisse ceux de l’interface', () => {
     const svg = stage();
-    render({ layers: [mirrorLayer()], activeLayerId: null, activeElementId: null }, svg);
+    render({ layers: [repeatLayer()], activeLayerId: null, activeElementId: null }, svg);
     const document_ = toSvgDocument(svg);
 
     expect(document_).toContain(`xmlns="${SVG_NS}"`);
@@ -379,7 +385,7 @@ describe('rendu des formes', () => {
     const layer = createLayer({
       center: { x: 0, y: 0 },
       elements: [createElement('rect', 0, 0, { rx: 10, ry: 5 })],
-      modifier: { type: 'mirrorH', n: 3, angleStep: 0, radiusStep: 0 },
+      modifier: { type: 'step', n: 3, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 },
       propertyRanges: { opacity: [1, 1], scale: [1, 3] },
     });
     render({ layers: [layer], activeElementId: null }, svg);
@@ -410,7 +416,7 @@ describe('sauvegarde locale', () => {
     expect(corrupted.scene).toBeNull();
     expect(corrupted.error).toMatch(/JSON valide/);
 
-    saveLocal({ layers: [mirrorLayer()], activeLayerId: null, activeElementId: null });
+    saveLocal({ layers: [repeatLayer()], activeLayerId: null, activeElementId: null });
     expect(loadLocal().error).toBeNull();
     expect(loadLocal().scene.layers).toHaveLength(1);
     localStorage.removeItem(KEY);
@@ -420,7 +426,7 @@ describe('sauvegarde locale', () => {
 describe('accessibilité au clavier', () => {
   it('le bouton icône garde le focus après reconstruction du panneau', async () => {
     const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
-    const [bottom, middle, top] = [mirrorLayer(), mirrorLayer(), mirrorLayer()];
+    const [bottom, middle, top] = [repeatLayer(), repeatLayer(), repeatLayer()];
     const store = createStore({ layers: [bottom, middle, top], activeLayerId: bottom.id, activeElementId: null });
     const panel = document.createElement('div');
     document.body.append(panel);
@@ -442,7 +448,7 @@ describe('accessibilité au clavier', () => {
 
   it('la suppression confirmée rend le focus au bouton d’ajout', async () => {
     const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
-    const layer = mirrorLayer();
+    const layer = repeatLayer();
     const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
     const panel = document.createElement('div');
     document.body.append(panel);

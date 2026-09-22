@@ -55,21 +55,45 @@ describe('modificateurs', () => {
     }
   });
 
-  it('mirrorH à N=2 rend l’original et son reflet', () => {
+  it('mirrorH rend l’original et son reflet', () => {
     const [original, reflected] = copies('mirrorH', { x: 30, y: 7 }, 2);
     expect(original.x).toBeCloseTo(30);
     expect(reflected.x).toBeCloseTo(-30);
     expect(reflected.y).toBeCloseTo(7);
   });
 
-  it('mirrorH à N=5 répartit cinq copies sur l’axe', () => {
-    expect(copies('mirrorH', { x: 100, y: 0 }, 5).map((c) => c.x)).toEqual([100, 50, 0, -50, -100]);
+  it('mirrorV agit sur y et laisse x intact', () => {
+    const children = copies('mirrorV', { x: 9, y: 100 }, 2);
+    expect(children.map((c) => c.y)).toEqual([100, -100]);
+    expect(children.every((c) => c.x === 9)).toBe(true);
   });
 
-  it('mirrorV agit sur y et laisse x intact', () => {
-    const children = copies('mirrorV', { x: 9, y: 100 }, 3);
-    expect(children.map((c) => c.y)).toEqual([100, 0, -100]);
-    expect(children.every((c) => c.x === 9)).toBe(true);
+  it('step translate chaque copie d’un pas constant', () => {
+    const children = copies('step', { x: 10, y: 5 }, 4, { stepX: 30, stepY: -20 });
+    expect(children.map((c) => c.x)).toEqual([10, 40, 70, 100]);
+    expect(children.map((c) => c.y)).toEqual([5, -15, -35, -55]);
+  });
+
+  /* Un modificateur déplace le calque entier : deux formes gardent leur écart
+     d'une copie à l'autre, quelle que soit leur distance au centre. */
+  it('les miroirs et le pas sont des isométries', () => {
+    const near = { x: 20, y: 12 };
+    const far = { x: 300, y: -140 };
+    const gap = Math.hypot(far.x - near.x, far.y - near.y);
+
+    for (const [type, options] of [
+      ['mirrorH', {}],
+      ['mirrorV', {}],
+      ['step', { stepX: 40, stepY: 25 }],
+      ['axial', {}],
+    ]) {
+      const n = 4;
+      const a = copies(type, near, n, options);
+      const b = copies(type, far, n, options);
+      for (let i = 0; i < a.length; i += 1) {
+        expect(Math.hypot(b[i].x - a[i].x, b[i].y - a[i].y)).toBeCloseTo(gap);
+      }
+    }
   });
 
   it('spiral accroît rayon et angle par pas constants', () => {
@@ -83,7 +107,7 @@ describe('modificateurs', () => {
   });
 
   it('N=1 ne rend qu’une copie, à la position de départ', () => {
-    for (const type of ['mirrorH', 'mirrorV', 'axial', 'spiral']) {
+    for (const type of ['step', 'axial', 'spiral']) {
       const [only, ...rest] = copies(type, { x: 40, y: 20 }, 1);
       expect(rest).toHaveLength(0);
       expect(only.x).toBeCloseTo(40);
@@ -97,7 +121,7 @@ describe('composition', () => {
     createLayer({
       center,
       elements: [createElement('circle', 100, 0)],
-      modifier: { type: 'mirrorH', n: 5, angleStep: 0.4, radiusStep: 12 },
+      modifier: { type: 'step', n: 5, stepX: -50, stepY: 0, angleStep: 0.4, radiusStep: 12 },
       propertyRanges: { opacity: [1, 0], scale: [1, 1] },
       ...overrides,
     });
@@ -105,6 +129,7 @@ describe('composition', () => {
   it('applique position puis propriétés interpolées en une passe', () => {
     const children = getRenderedChildren(layer());
     expect(children.map((c) => c.x)).toEqual([100, 50, 0, -50, -100]);
+    expect(children.map((c) => c.y)).toEqual([0, 0, 0, 0, 0]);
     expect(children.map((c) => c.opacity)).toEqual([1, 0.75, 0.5, 0.25, 0]);
   });
 
@@ -115,6 +140,13 @@ describe('composition', () => {
   it('`none` ignore N et ne rend que les formes du calque', () => {
     const single = layer({ modifier: { type: 'none', n: 9, angleStep: 0, radiusStep: 0 } });
     expect(getRenderedChildren(single)).toHaveLength(1);
+  });
+
+  it('un miroir rend deux copies, quel que soit N', () => {
+    const mirrored = layer({
+      modifier: { type: 'mirrorH', n: 9, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 },
+    });
+    expect(getRenderedChildren(mirrored).map((c) => c.x)).toEqual([100, -100]);
   });
 
   /* Le cœur du modèle : le modificateur déplace le calque entier, pas chaque
@@ -141,7 +173,7 @@ describe('composition', () => {
   it('rend n × formes, groupées par copie', () => {
     const group = layer({
       elements: [createElement('circle', 10, 0), createElement('rect', 20, 0)],
-      modifier: { type: 'mirrorH', n: 3, angleStep: 0, radiusStep: 0 },
+      modifier: { type: 'step', n: 3, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 },
     });
     expect(getRenderedChildren(group).map((c) => c.type)).toEqual([
       'circle',
@@ -240,7 +272,7 @@ describe('persistance', () => {
         createElement('circle', 120, 340, { rx: 42, ry: 42, stroke: '#ff0000' }),
         createElement('rect', 200, 100, { rx: 30, ry: 15 }),
       ],
-      modifier: { type: 'spiral', n: 12, angleStep: 0.3, radiusStep: 8 },
+      modifier: { type: 'spiral', n: 12, stepX: 25, stepY: -10, angleStep: 0.3, radiusStep: 8 },
       propertyRanges: { opacity: [1, 0.2], scale: [0.5, 2] },
     });
     const scene = {

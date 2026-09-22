@@ -220,7 +220,7 @@ input[type="range"] { padding: 0; border: 0; background: none; width: 100%; }
 /* Largeur intrinsèque des input (~20 caractères) : sans ça, ils élargissent
    les colonnes et le panneau défile horizontalement. */
 .field :is(input:not([type="checkbox"]), select) { min-width: 0; width: 100%; }
-.field[hidden] { display: none; }
+.field[hidden], .field-row[hidden] { display: none; }
 
 fieldset {
   min-width: 0; /* défaut navigateur : min-content, qui déborde du panneau */

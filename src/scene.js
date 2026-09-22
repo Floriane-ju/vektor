@@ -111,7 +111,7 @@ export const createLayer = (overrides = {}) => ({
   visible: true,
   center: { x: STAGE.width / 2, y: STAGE.height / 2 },
   elements: [],
-  modifier: { type: 'none', n: 6, angleStep: 0.4, radiusStep: 12 },
+  modifier: { type: 'none', n: 6, stepX: 60, stepY: 0, angleStep: 0.4, radiusStep: 12 },
   propertyRanges: { opacity: [1, 1], scale: [1, 1] },
   ...overrides,
 });

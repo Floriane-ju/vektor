@@ -1,4 +1,4 @@
-import { clampCount, lerp, t } from './interpolate.js';
+import { clampCount } from './interpolate.js';
 
 /**
  * Un modificateur est une transformation de point paramétrée par l'indice de
@@ -8,6 +8,11 @@ import { clampCount, lerp, t } from './interpolate.js';
  * toutes les formes du calque du même geste, donc leurs positions relatives
  * sont conservées : un motif composé de trois cercles tourne comme un motif,
  * pas comme trois cercles indépendants.
+ *
+ * Chaque transformation est donc une isométrie — translation, rotation,
+ * réflexion — et ne dépend de la forme que par le point transformé. Une
+ * transformation qui lirait la position d'une forme pour décider du
+ * déplacement des autres déformerait le motif copie après copie.
  *
  * Travailler sur un point plutôt que sur un élément est ce qui rend cela
  * possible — la transformation ne sait rien de la forme qu'elle déplace, et
@@ -26,23 +31,27 @@ const rotateAround = (point, center, angle) => {
   return { x: center.x + dx * cos - dy * sin, y: center.y + dx * sin + dy * cos };
 };
 
-/**
- * Répartit les copies entre le point et son reflet par rapport à l'axe vertical
- * passant par `center.x`.
- *
- * `n = 2` rend le miroir classique (original + reflet) ; `n = 5` rend cinq
- * copies régulièrement espacées sur le segment.
- */
-const mirrorH = (point, i, n, center) => ({
-  x: lerp(point.x, 2 * center.x - point.x, t(i, n)),
-  y: point.y,
+/** Tableau : la copie `i` est le calque translaté de `i` pas. */
+const step = (point, i, n, center, { stepX = 60, stepY = 0 } = {}) => ({
+  x: point.x + i * stepX,
+  y: point.y + i * stepY,
 });
 
+/**
+ * Miroir : l'original et son reflet par rapport à l'axe vertical passant par
+ * `center.x`, et rien d'autre.
+ *
+ * Deux copies exactement. Répartir `n` copies entre le point et son reflet
+ * rapprocherait les formes d'un même calque les unes des autres — chacune
+ * parcourant sa propre distance à l'axe — et le motif se serait affaissé d'une
+ * copie à l'autre. Répéter est le travail de `step`.
+ */
+const mirrorH = (point, i, n, center) =>
+  i === 0 ? { x: point.x, y: point.y } : { x: 2 * center.x - point.x, y: point.y };
+
 /** Idem sur l'axe horizontal passant par `center.y`. */
-const mirrorV = (point, i, n, center) => ({
-  x: point.x,
-  y: lerp(point.y, 2 * center.y - point.y, t(i, n)),
-});
+const mirrorV = (point, i, n, center) =>
+  i === 0 ? { x: point.x, y: point.y } : { x: point.x, y: 2 * center.y - point.y };
 
 /** Copies réparties sur un tour complet autour de `center`. */
 const axial = (point, i, n, center) => rotateAround(point, center, (i * Math.PI * 2) / n);
@@ -50,6 +59,11 @@ const axial = (point, i, n, center) => rotateAround(point, center, (i * Math.PI 
 /**
  * Spirale : la copie `i` est à `(r0 + i * radiusStep, θ0 + i * angleStep)` en
  * coordonnées polaires autour de `center`.
+ *
+ * ponytail: seule transformation non isométrique du lot — le pas radial
+ * s'ajoute au rayon de chaque point, donc le motif s'étire en s'éloignant du
+ * centre. C'est l'effet recherché ; une spirale rigide translaterait le groupe
+ * entier au lieu de l'ouvrir.
  */
 const spiral = (point, i, n, center, { angleStep = 0.4, radiusStep = 12 } = {}) => {
   const dx = point.x - center.x;
@@ -61,16 +75,26 @@ const spiral = (point, i, n, center, { angleStep = 0.4, radiusStep = 12 } = {}) 
 
 const none = (point) => ({ x: point.x, y: point.y });
 
-export const MODIFIERS = { none, mirrorH, mirrorV, axial, spiral };
+export const MODIFIERS = { none, step, mirrorH, mirrorV, axial, spiral };
 
 export const MODIFIER_LABELS = {
   none: 'Aucun',
+  step: 'Pas',
   mirrorH: 'Miroir horizontal',
   mirrorV: 'Miroir vertical',
   axial: 'Miroir axial',
   spiral: 'Spirale',
 };
 
-/** `none` ne duplique rien : son nombre effectif de copies vaut toujours 1. */
+/**
+ * Modificateurs dont le nombre de copies est imposé par la transformation :
+ * `none` ne duplique rien, un miroir n'a que l'original et son reflet. Ailleurs
+ * `n` est libre.
+ *
+ * Source unique : le rendu compte les copies avec, le panneau y lit s'il faut
+ * proposer le champ « Nombre ».
+ */
+export const FIXED_COPIES = { none: 1, mirrorH: 2, mirrorV: 2 };
+
 export const effectiveCount = (modifier) =>
-  modifier.type === 'none' ? 1 : clampCount(modifier.n);
+  FIXED_COPIES[modifier.type] ?? clampCount(modifier.n);

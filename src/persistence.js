@@ -92,6 +92,8 @@ const readModifier = (raw) => {
   return {
     type,
     n: clampCount(raw?.n),
+    stepX: num(raw?.stepX, 60),
+    stepY: num(raw?.stepY, 0),
     angleStep: num(raw?.angleStep, 0.4),
     radiusStep: num(raw?.radiusStep, 12),
   };
