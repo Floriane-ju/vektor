@@ -1,7 +1,6 @@
 import {
   addModifier,
   clampExtent,
-  DEFAULT_SHAPE,
   getActiveElement,
   getActiveLayer,
   moveModifier,
@@ -14,7 +13,6 @@ import {
   updateModifier,
   updateRange,
 } from '../scene.js';
-import { mountShapeList } from './shape-list.js';
 import { iconButton, rebuildWithFocus } from './list.js';
 import { FIXED_COPIES, MODIFIER_LABELS } from '../modifiers.js';
 
@@ -46,12 +44,7 @@ const input = (type, attrs = {}) => {
   return node;
 };
 
-export const mountPropertyPanel = ({
-  store,
-  container,
-  status,
-  getTool = () => DEFAULT_SHAPE,
-}) => {
+export const mountPropertyPanel = ({ store, container, status }) => {
   const controls = [];
 
   /**
@@ -376,15 +369,7 @@ export const mountPropertyPanel = ({
 
   interpolationSet.append(opacityRow, scaleRow);
 
-  const shapeListSet = document.createElement('fieldset');
-  const shapeListLegend = document.createElement('legend');
-  shapeListLegend.textContent = 'Formes du calque';
-  shapeListSet.append(shapeListLegend);
-  const shapeListHost = document.createElement('div');
-  shapeListSet.append(shapeListHost);
-  mountShapeList({ store, container: shapeListHost, getTool, status });
-
-  container.append(shapeListSet, shape, layerSet, modifierSet, interpolationSet);
+  container.append(shape, layerSet, modifierSet, interpolationSet);
 
   /* ---- Synchronisation ---- */
 

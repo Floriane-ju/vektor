@@ -17,6 +17,7 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
     <svg id="stage" viewBox="0 0 900 900"></svg>
     <p class="stage-hint" id="stage-hint">Glisser depuis le centre pour dessiner</p>
     <div id="layer-panel"></div>
+    <div id="shape-list"></div>
     <div id="property-panel"></div>
     <p id="status"></p>`;
 
@@ -28,8 +29,8 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   expect(hint.hidden).toBe(false);
   expect(stage.childNodes).toHaveLength(0);
   expect(document.querySelectorAll('#layer-panel .layer-row')).toHaveLength(1);
-  /* Formes du calque, Forme, Calque, Modificateur, Interpolation. */
-  expect(document.querySelectorAll('#property-panel fieldset')).toHaveLength(5);
+  /* Forme, Calque, Modificateur, Interpolation. */
+  expect(document.querySelectorAll('#property-panel fieldset')).toHaveLength(4);
   expect(document.querySelectorAll('#toolbar-shapes input[type="radio"]')).toHaveLength(
     Object.keys(SHAPES).length,
   );
@@ -54,12 +55,12 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   expect(hint.hidden).toBe(true);
 
   /* Un second geste ajoute une forme au même calque au lieu de remplacer la
-     première, et la liste des formes du panneau les montre toutes les deux. */
+     première, et la liste des formes du panneau gauche les montre toutes les deux. */
   pointer('pointerdown', 200, 200);
   pointer('pointerup', 230, 200);
 
   expect(stage.querySelectorAll('circle')).toHaveLength(2);
-  expect(document.querySelectorAll('#property-panel .layer-row')).toHaveLength(2);
+  expect(document.querySelectorAll('#shape-list .layer-row')).toHaveLength(2);
 
   /* Deux modificateurs empilés sur le calque : leurs copies se multiplient. */
   const addModifier = [...document.querySelectorAll('#property-panel button')].find(

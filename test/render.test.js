@@ -541,6 +541,7 @@ describe('accessibilité au clavier', () => {
 
   it('la forme s’ajoute et se positionne sans souris', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const { mountShapeList } = await import('../src/ui/shape-list.js');
     const { createLayer } = await import('../src/scene.js');
     const layer = createLayer();
     const store = createStore({
@@ -549,13 +550,15 @@ describe('accessibilité au clavier', () => {
       activeElementId: null,
     });
     const panel = document.createElement('div');
+    const shapeList = document.createElement('div');
+    mountShapeList({ store, container: shapeList, status: { show: () => {} } });
     mountPropertyPanel({ store, container: panel, status: { show: () => {} } });
 
     expect(store.get().layers[0].elements).toHaveLength(0);
 
     /* Le glissement sur le plan de travail n'a pas d'équivalent clavier : ce
        bouton est le seul chemin vers la création d'une forme sans souris. */
-    panel.querySelector('[data-focus-key="add-shape"]').click();
+    shapeList.querySelector('[data-focus-key="add-shape"]').click();
     expect(store.get().layers[0].elements).toHaveLength(1);
 
     const [x, y] = panel.querySelectorAll('input[type="number"]');

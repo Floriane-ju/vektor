@@ -314,3 +314,7 @@ fieldset legend {
 .icon-btn.is-danger { color: var(--danger); }
 
 .empty-note { color: var(--text-dim); margin: 0 0 10px; }
+
+/* Second titre du panneau gauche : même style que `h2`, décollé de la liste
+   des calques au-dessus. */
+.panel h2.panel-subtitle { margin-top: 24px; }
