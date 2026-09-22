@@ -112,14 +112,12 @@ body {
 #stage[data-tool="cursor"][data-dragging] * { cursor: grabbing; }
 
 /* Le clone est repeint d'une nuance de la couleur de sa forme (voir
-   `highlightColor`), opaque même sur une forme translucide. Le halo ne vient
-   qu'au survol, plus fort que la sélection qui reste affichée. */
+   `highlightColor`), opaque même sur une forme translucide. */
 #stage [data-hover] {
   stroke-opacity: 1;
   fill-opacity: 1;
+  filter: drop-shadow(0 0 3px var(--highlight));
 }
-
-#stage [data-hover="hover"] { filter: drop-shadow(0 0 3px var(--highlight)); }
 
 /* ---- Layout ---- */
 

@@ -469,34 +469,13 @@ describe('couleur du surlignage', () => {
   const luminance = (hex) => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16);
 
   it('éclaircit une couleur foncée et assombrit une couleur claire', () => {
-    expect(luminance(highlightColor('#1a1a40', 'hover'))).toBeGreaterThan(luminance('#1a1a40'));
-    expect(luminance(highlightColor('#7dd3c0', 'hover'))).toBeLessThan(luminance('#7dd3c0'));
-    expect(luminance(highlightColor('#fff', 'hover'))).toBeLessThan(luminance('#ffffff'));
-  });
-
-  it('la sélection s’écarte moins de la couleur que le survol', () => {
-    const base = luminance('#7dd3c0');
-    const hover = base - luminance(highlightColor('#7dd3c0', 'hover'));
-    const selected = base - luminance(highlightColor('#7dd3c0', 'selected'));
-    expect(selected).toBeGreaterThan(0);
-    expect(selected).toBeLessThan(hover);
+    expect(luminance(highlightColor('#1a1a40'))).toBeGreaterThan(luminance('#1a1a40'));
+    expect(luminance(highlightColor('#7dd3c0'))).toBeLessThan(luminance('#7dd3c0'));
+    expect(luminance(highlightColor('#fff'))).toBeLessThan(luminance('#ffffff'));
   });
 
   it('laisse intact ce qui n’est pas une couleur hexadécimale', () => {
-    expect(highlightColor('none', 'hover')).toBe('none');
-  });
-});
-
-describe('surlignage de la sélection', () => {
-  it('le rendu surligne la forme sélectionnée, sans l’exporter', () => {
-    const layer = createLayer({ elements: [createElement('circle', 10, 10)] });
-    const svg = stage();
-    render({ layers: [layer], activeLayerId: layer.id, activeElementId: layer.elements[0].id }, svg);
-
-    const overlay = svg.querySelector('[data-hover="selected"]');
-    expect(overlay.tagName.toLowerCase()).toBe('circle');
-    expect(overlay.getAttribute('stroke')).not.toBe(layer.stroke);
-    expect(toSvgDocument(svg)).not.toContain('data-hover');
+    expect(highlightColor('none')).toBe('none');
   });
 });
 
@@ -525,22 +504,6 @@ describe('survol depuis la liste des formes', () => {
     expect(svg.querySelectorAll('[data-hover]')).toHaveLength(0);
   });
 
-  it('quitter la card garde le surlignage de la forme sélectionnée', async () => {
-    const { mountShapeList } = await import('../src/ui/shape-list.js');
-    const layer = createLayer({ elements: [createElement('circle', 10, 10)] });
-    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: layer.elements[0].id });
-    const svg = stage();
-    render(store.get(), svg);
-    const list = document.createElement('div');
-    mountShapeList({ store, container: list, svgRoot: svg, status: { show: () => {} } });
-
-    const row = list.querySelector('li');
-    row.dispatchEvent(new MouseEvent('pointerenter'));
-    expect(svg.querySelectorAll('[data-hover="hover"]')).toHaveLength(1);
-    row.dispatchEvent(new MouseEvent('pointerleave'));
-    expect(svg.querySelectorAll('[data-hover="hover"]')).toHaveLength(0);
-    expect(svg.querySelectorAll('[data-hover="selected"]')).toHaveLength(1);
-  });
 });
 
 describe('rendu des formes', () => {

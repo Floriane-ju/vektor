@@ -23,12 +23,6 @@ export const render = (scene, svgRoot) => {
     svgRoot.append(group);
   }
 
-  /* La sélection reste marquée hors survol : elle fait partie de l'écran à
-     chaque rendu, sous le survol que les panneaux reposent ensuite. */
-  if (scene.activeElementId) {
-    appendOverlays(svgRoot, renderedNodes(svgRoot, scene.activeElementId), 'selected');
-  }
-
   const guides = createGuides(getActiveLayer(scene));
   if (guides) svgRoot.append(guides);
 };
@@ -157,9 +151,8 @@ const createNode = (child) => {
   return node;
 };
 
-/* Part de noir ou de blanc mêlée à la couleur de la forme, selon l'état : le
-   survol ressort plus que la sélection, qui reste affichée en permanence. */
-const HIGHLIGHT_MIX = { hover: 0.55, selected: 0.35 };
+/* Part de noir ou de blanc mêlée à la couleur de la forme survolée. */
+const HIGHLIGHT_MIX = 0.55;
 
 /* Au-delà, une couleur est jugée claire et s'assombrit pour ressortir. */
 const LIGHT_LUMINANCE = 0.45;
@@ -185,33 +178,18 @@ const luminance = (rgb) => {
  * foncée, assombrie si elle est claire, pour garder du contraste avec la forme.
  * Ce qui n'est pas un hexadécimal (`none`…) passe tel quel.
  */
-export const highlightColor = (color, level) => {
+export const highlightColor = (color) => {
   const rgb = parseHex(color);
   if (!rgb) return color;
   const target = luminance(rgb) > LIGHT_LUMINANCE ? 0 : 255;
-  const mix = HIGHLIGHT_MIX[level];
   return `#${rgb
-    .map((channel) => Math.round(channel + (target - channel) * mix).toString(16).padStart(2, '0'))
+    .map((channel) => Math.round(channel + (target - channel) * HIGHLIGHT_MIX).toString(16).padStart(2, '0'))
     .join('')}`;
 };
 
-const appendOverlays = (svgRoot, nodes, level) => {
-  for (const node of nodes) {
-    const overlay = node.cloneNode();
-    delete overlay.dataset.elementId;
-    overlay.dataset.hover = level;
-    overlay.setAttribute('pointer-events', 'none');
-    overlay.setAttribute('fill', highlightColor(node.getAttribute('fill'), level));
-    const stroke = highlightColor(node.getAttribute('stroke'), level);
-    overlay.setAttribute('stroke', stroke);
-    overlay.style.setProperty('--highlight', stroke);
-    svgRoot.append(overlay);
-  }
-};
-
-/** Retire le surlignage de survol ; celui de la sélection reste. */
+/** Retire le surlignage de survol, où qu'il ait été posé. */
 export const clearHover = (svgRoot) => {
-  for (const node of svgRoot.querySelectorAll('[data-hover="hover"]')) node.remove();
+  for (const node of svgRoot.querySelectorAll('[data-hover]')) node.remove();
 };
 
 /**
@@ -223,7 +201,17 @@ export const clearHover = (svgRoot) => {
  */
 export const showHover = (svgRoot, nodes) => {
   clearHover(svgRoot);
-  appendOverlays(svgRoot, nodes, 'hover');
+  for (const node of nodes) {
+    const overlay = node.cloneNode();
+    delete overlay.dataset.elementId;
+    overlay.dataset.hover = '';
+    overlay.setAttribute('pointer-events', 'none');
+    overlay.setAttribute('fill', highlightColor(node.getAttribute('fill')));
+    const stroke = highlightColor(node.getAttribute('stroke'));
+    overlay.setAttribute('stroke', stroke);
+    overlay.style.setProperty('--highlight', stroke);
+    svgRoot.append(overlay);
+  }
 };
 
 /** Toutes les copies dessinées d'une forme : elles portent l'id de leur source. */
@@ -238,12 +226,12 @@ const round = (value) => String(Math.round(value * 1000) / 1000);
  * Le `<svg>` du DOM est cloné avant d'y poser les attributs de document : la
  * racine vivante garde ses attributs d'interface (id, role, aria-label) et le
  * fichier n'embarque que ce qui a un sens hors de la page — les repères du
- * modificateur et les surlignages de survol et de sélection en sont donc retirés.
+ * modificateur et le survol du curseur en sont donc retirés.
  */
 export const toSvgDocument = (svgRoot) => {
   const clone = svgRoot.cloneNode(true);
   clone.querySelector('[data-guides]')?.remove();
-  for (const node of clone.querySelectorAll('[data-hover]')) node.remove();
+  clearHover(clone);
   clone.removeAttribute('id');
   clone.removeAttribute('role');
   clone.removeAttribute('aria-label');
