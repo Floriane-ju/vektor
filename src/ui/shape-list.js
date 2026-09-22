@@ -30,6 +30,8 @@ export const mountShapeList = ({
      stage efface le surlignage : un clic sur la ligne le ferait disparaître
      sous le pointeur. Ce module s'abonne après le renderer, il le repose. */
   let hoveredId = null;
+  /* Forme dont la card est repliée, tant qu'elle reste sélectionnée. */
+  let collapsedId = null;
 
   const highlight = (elementId) => {
     hoveredId = elementId;
@@ -45,6 +47,7 @@ export const mountShapeList = ({
     return JSON.stringify([
       layer?.id ?? null,
       scene.activeElementId,
+      collapsedId,
       layer?.elements.map((element) => [element.id, element.type]) ?? [],
     ]);
   };
@@ -90,6 +93,7 @@ export const mountShapeList = ({
 
   const render = (scene) => {
     if (hoveredId) highlight(hoveredId);
+    if (collapsedId !== scene.activeElementId) collapsedId = null;
     rebuild(scene);
   };
 
@@ -107,7 +111,8 @@ export const mountShapeList = ({
     const row = document.createElement('div');
     row.className = 'layer-row is-shape';
     card.append(row);
-    if (isActive && detail) card.append(detail);
+    const isOpen = isActive && collapsedId !== element.id;
+    if (isOpen && detail) card.append(detail);
 
     const name = document.createElement('button');
     name.type = 'button';
@@ -115,7 +120,13 @@ export const mountShapeList = ({
     name.textContent = `${SHAPES[element.type].label} ${index + 1}`;
     name.dataset.focusKey = `name-${element.id}`;
     name.setAttribute('aria-pressed', String(isActive));
-    name.addEventListener('click', () => store.apply(setActiveElement, element.id));
+    name.setAttribute('aria-expanded', String(isOpen));
+    /* Sur la card active, l'entête replie ou rouvre les réglages. */
+    name.addEventListener('click', () => {
+      collapsedId = isOpen ? element.id : null;
+      if (isActive) render(store.get());
+      else store.apply(setActiveElement, element.id);
+    });
     name.addEventListener('keydown', (event) => {
       if (event.key === 'Delete') {
         event.preventDefault();

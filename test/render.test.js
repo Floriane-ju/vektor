@@ -772,4 +772,35 @@ describe('accessibilité au clavier', () => {
     expect(cardOf(bottom).querySelector('fieldset')).toBeNull();
     panel.remove();
   });
+  it('un clic sur l’entête de la card sélectionnée la replie, sans la désélectionner', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
+    const { mountShapeList } = await import('../src/ui/shape-list.js');
+    const { addElement, createLayer } = await import('../src/scene.js');
+    const layer = createLayer();
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null, interpolations: [] });
+    store.apply(addElement, layer.id, 'rect', 10, 10);
+    const panel = document.createElement('div');
+    const shapeList = document.createElement('div');
+    const { layerDetail, shapeDetail } = mountPropertyPanel({ store });
+    mountLayerPanel({ store, container: panel, status: { show: () => {} }, detail: layerDetail });
+    mountShapeList({ store, container: shapeList, status: { show: () => {} }, detail: shapeDetail });
+
+    for (const [container, detail, id, activeKey] of [
+      [panel, layerDetail, layer.id, 'activeLayerId'],
+      [shapeList, shapeDetail, store.get().activeElementId, 'activeElementId'],
+    ]) {
+      const header = () => container.querySelector(`[data-focus-key="name-${id}"]`);
+      expect(header().closest('li').contains(detail)).toBe(true);
+      expect(header().getAttribute('aria-expanded')).toBe('true');
+
+      header().click();
+      expect(store.get()[activeKey]).toBe(id);
+      expect(header().closest('li').contains(detail)).toBe(false);
+      expect(header().getAttribute('aria-expanded')).toBe('false');
+
+      header().click();
+      expect(header().closest('li').contains(detail)).toBe(true);
+    }
+  });
 });

@@ -16,6 +16,9 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
   /* Hors de la scène : c'est un état d'interface, pas une donnée du projet —
      il ne doit ni partir à l'export ni survivre à un rechargement. */
   let pendingDeleteId = null;
+  /* Calque dont la card est repliée. Ne vaut que tant qu'il reste actif :
+     en sélectionner un autre puis y revenir la rouvre. */
+  let collapsedId = null;
 
   /* Le nom, la visibilité, l'ordre et la sélection : tout ce que montrent les
      cards. Les réglages du calque n'y figurent pas, ils se mettent à jour sur
@@ -24,10 +27,11 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
     JSON.stringify([
       scene.activeLayerId,
       pendingDeleteId,
+      collapsedId,
       scene.layers.map((layer) => [layer.id, layer.name, layer.visible]),
     ]);
 
-  const render = whenChanged(signature, (scene) =>
+  const rebuild = whenChanged(signature, (scene) =>
     rebuildWithFocus(container, () => {
       const list = document.createElement('ul');
       list.className = 'layer-list';
@@ -56,6 +60,11 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
     }),
   );
 
+  const render = (scene) => {
+    if (collapsedId !== scene.activeLayerId) collapsedId = null;
+    rebuild(scene);
+  };
+
   const layerRow = (scene, layer) => {
     const index = scene.layers.indexOf(layer);
     const isActive = layer.id === scene.activeLayerId;
@@ -67,7 +76,8 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
     const row = document.createElement('div');
     row.className = 'layer-row';
     card.append(row);
-    if (isActive && detail) card.append(detail);
+    const isOpen = isActive && collapsedId !== layer.id;
+    if (isOpen && detail) card.append(detail);
 
     const name = document.createElement('button');
     name.type = 'button';
@@ -75,7 +85,13 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
     name.textContent = layer.name;
     name.dataset.focusKey = `name-${layer.id}`;
     name.setAttribute('aria-pressed', String(isActive));
-    name.addEventListener('click', () => store.apply(setActiveLayer, layer.id));
+    name.setAttribute('aria-expanded', String(isOpen));
+    /* Sur la card active, l'entête replie ou rouvre les réglages. */
+    name.addEventListener('click', () => {
+      collapsedId = isOpen ? layer.id : null;
+      if (isActive) render(store.get());
+      else store.apply(setActiveLayer, layer.id);
+    });
     name.addEventListener('dblclick', () => {
       const next = prompt('Nom du calque', layer.name);
       if (next?.trim()) store.apply(renameLayer, layer.id, next.trim());
