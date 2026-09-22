@@ -7,6 +7,7 @@ import {
   moveModifier,
   RANGE_BOUNDS,
   removeModifier,
+  setLayerStroke,
   setLayerStrokeWidth,
   SHAPES,
   updateElement,
@@ -127,23 +128,12 @@ export const mountPropertyPanel = ({
     (element, value) =>
       store.apply(updateElement, element.id, { ry: clampExtent(element.type, value) / 2 }),
   );
-  /* Le remplissage n'a pas de couleur propre : rempli, une forme se peint de
-     son contour. Un seul choix de couleur, donc, et le contour l'emporte. */
-  const stroke = bind(
-    input('color'),
-    (element) => (element.stroke === 'none' ? '#000000' : element.stroke),
-    (element, value) =>
-      store.apply(updateElement, element.id, {
-        stroke: value,
-        ...(element.fill === 'none' ? {} : { fill: value }),
-      }),
-    { parse: String },
-  );
+  /* La couleur est réglée sur le calque : ici on ne dit que rempli ou non, et
+     le remplissage reprend cette couleur. */
   const filled = bind(
     input('checkbox'),
-    (element) => element.fill !== 'none',
-    (element, value) =>
-      store.apply(updateElement, element.id, { fill: value ? element.stroke : 'none' }),
+    (element) => element.filled,
+    (element, value) => store.apply(updateElement, element.id, { filled: value }),
     { event: 'change', parse: () => filled.checked },
   );
 
@@ -163,12 +153,12 @@ export const mountPropertyPanel = ({
   sizeRow.append(radiusField, widthField, heightField);
 
   const filledField = field('Remplir', filled);
-  shape.append(shapeName, positionRow, sizeRow, field('Contour', stroke), filledField);
+  shape.append(shapeName, positionRow, sizeRow, filledField);
 
   /* ---- Calque ---- */
 
-  /* L'épaisseur appartient au calque : toutes ses formes sortent du même
-     outil, et un point y trouve son diamètre. */
+  /* L'épaisseur et la couleur appartiennent au calque : toutes ses formes
+     sortent du même outil, et un point y trouve son diamètre. */
   const layerSet = document.createElement('fieldset');
   const layerLegend = document.createElement('legend');
   layerLegend.textContent = 'Calque';
@@ -180,7 +170,13 @@ export const mountPropertyPanel = ({
     (layer, value) => store.apply(setLayerStrokeWidth, layer.id, value),
     { subject: 'layer' },
   );
-  layerSet.append(field('Épaisseur', strokeWidth));
+  const stroke = bind(
+    input('color'),
+    (layer) => layer.stroke,
+    (layer, value) => store.apply(setLayerStroke, layer.id, value),
+    { subject: 'layer', parse: String },
+  );
+  layerSet.append(field('Épaisseur', strokeWidth), field('Couleur', stroke));
 
   /* ---- Modificateurs ---- */
 

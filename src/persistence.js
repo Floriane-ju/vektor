@@ -4,6 +4,7 @@ import {
   clampExtent,
   createElement,
   createLayer,
+  DEFAULT_STROKE,
   DEFAULT_STROKE_WIDTH,
   RANGE_BOUNDS,
   reserveIds,
@@ -15,18 +16,20 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@5';
+export const FORMAT = 'illu/scene@6';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
    - `@1` et `@2` n'avaient qu'une forme par calque, dans `baseElement` ;
    - `@1` à `@3` portaient l'épaisseur sur chaque forme, pas sur le calque ;
-   - `@1` à `@4` n'avaient qu'un modificateur par calque, dans `modifier`. */
+   - `@1` à `@4` n'avaient qu'un modificateur par calque, dans `modifier` ;
+   - `@1` à `@5` portaient la couleur sur chaque forme, pas sur le calque. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
   'illu/scene@3',
   'illu/scene@4',
+  'illu/scene@5',
   FORMAT,
 ]);
 
@@ -79,6 +82,9 @@ const upgradeLegacyPoint = (raw) =>
       }
     : raw;
 
+/** Une couleur absente ou explicitement « none » ne peint rien. */
+const isPainted = (value) => typeof value === 'string' && value !== '' && value !== 'none';
+
 const readElement = (input) => {
   if (input == null || typeof input !== 'object') fail('Une forme doit être un objet.');
   const raw = upgradeLegacyPoint(input);
@@ -91,8 +97,8 @@ const readElement = (input) => {
     ...(typeof raw.id === 'string' && raw.id !== '' ? { id: raw.id } : {}),
     rx: clampExtent(raw.type, num(raw.rx, legacyRadius ?? defaults.rx)),
     ry: clampExtent(raw.type, num(raw.ry, legacyRadius ?? defaults.ry)),
-    fill: typeof raw.fill === 'string' ? raw.fill : defaults.fill,
-    stroke: typeof raw.stroke === 'string' ? raw.stroke : defaults.stroke,
+    /* Avant `@6` le remplissage était une couleur : n'en reste que sa présence. */
+    filled: typeof raw.filled === 'boolean' ? raw.filled : isPainted(raw.fill),
   });
 };
 
@@ -142,6 +148,21 @@ const readStrokeWidth = (raw) => {
   return Math.max(0, num(legacy?.strokeWidth, DEFAULT_STROKE_WIDTH));
 };
 
+/**
+ * Couleur du calque. Avant `@6` elle vivait sur chaque forme : un ancien
+ * fichier se replie sur le contour de sa première forme peinte, quitte à
+ * aplatir un calque qui en mélangeait plusieurs — c'est le sens de la bascule.
+ */
+const readStroke = (raw) => {
+  if (isPainted(raw.stroke)) return raw.stroke;
+  const legacy = rawElements(raw)
+    .filter((element) => element != null && typeof element === 'object')
+    .map(upgradeLegacyPoint)
+    .find((element) => isPainted(element.stroke) || isPainted(element.fill));
+  if (!legacy) return DEFAULT_STROKE;
+  return isPainted(legacy.stroke) ? legacy.stroke : legacy.fill;
+};
+
 const readLayer = (raw, index) => {
   if (raw == null || typeof raw !== 'object') fail(`Calque ${index} : objet attendu.`);
   if (typeof raw.id !== 'string' || raw.id === '') fail(`Calque ${index} : \`id\` manquant.`);
@@ -154,6 +175,7 @@ const readLayer = (raw, index) => {
       y: num(raw.center?.y, STAGE.height / 2),
     },
     strokeWidth: readStrokeWidth(raw),
+    stroke: readStroke(raw),
     elements: readElements(raw),
     modifiers: readModifiers(raw),
     propertyRanges: {

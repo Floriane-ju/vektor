@@ -313,7 +313,7 @@ describe('dessin au glisser', () => {
     expect(store.get().layers[0].elements.at(-1)).toMatchObject({ rx: 60, ry: 0 });
   });
 
-  it('changer de type garde les couleurs et prend la géométrie du nouveau', () => {
+  it('changer de type garde le remplissage et prend la géométrie du nouveau', () => {
     const { store, svg, shapes } = withLayer();
     pointer(svg, 'pointerdown', 100, 100);
     pointer(svg, 'pointerup', 100, 160);
@@ -323,10 +323,12 @@ describe('dessin au glisser', () => {
     pointer(svg, 'pointerdown', 100, 100);
     pointer(svg, 'pointerup', 100, 160);
     const point = store.get().layers[0].elements.at(-1);
-    expect(point.stroke).toBe(circle.stroke);
+    expect(point.filled).toBe(circle.filled);
     expect(point.rx).toBe(0);
-    /* L'épaisseur ne suit plus la forme : elle est réglée sur le calque. */
+    /* Ni l'épaisseur ni la couleur ne suivent la forme : elles sont réglées
+       sur le calque. */
     expect(point.strokeWidth).toBeUndefined();
+    expect(point.stroke).toBeUndefined();
   });
 
   it('refuse sans calque actif et le signale', () => {
@@ -353,6 +355,28 @@ describe('rendu des formes', () => {
       node.getAttribute('stroke-width'),
     );
     expect(widths).toEqual(['7', '7', '7', '7']);
+  });
+
+  it('toutes les formes d’un calque portent sa couleur, remplissage compris', () => {
+    const svg = stage();
+    const layer = createLayer({
+      stroke: '#ff0000',
+      center: { x: 0, y: 0 },
+      elements: [
+        createElement('circle', 10, 10),
+        createElement('rect', 50, 50, { filled: true }),
+      ],
+      modifiers: [{ type: 'none', n: 1, angleStep: 0, radiusStep: 0 }],
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const [circle, rect] = svg.querySelectorAll('circle, rect');
+    expect([circle, rect].map((node) => node.getAttribute('stroke'))).toEqual([
+      '#ff0000',
+      '#ff0000',
+    ]);
+    /* Rempli, une forme se peint de la couleur du calque ; sinon rien. */
+    expect(circle.getAttribute('fill')).toBe('none');
+    expect(rect.getAttribute('fill')).toBe('#ff0000');
   });
 
   it('émet le nœud SVG correspondant à la géométrie', () => {

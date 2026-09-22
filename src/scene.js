@@ -20,7 +20,9 @@ export const RANGE_BOUNDS = {
  *
  * `geometry` est le nœud SVG émis. « dot » n'est pas un cercle : c'est un trait
  * de longueur nulle à bout rond, donc sans taille propre — son diamètre est
- * l'épaisseur du calque, et sa couleur celle du contour.
+ * l'épaisseur du calque, et sa couleur celle du calque.
+ *
+ * `filled` ne dit que rempli ou non : la couleur, elle, vient du calque.
  *
  * `uniform` décide de la lecture du glissement : une forme uniforme reste
  * circulaire quelle que soit la direction du geste, un rectangle prend ses deux
@@ -39,27 +41,27 @@ export const SHAPES = {
     label: 'Cercle',
     geometry: 'circle',
     uniform: true,
-    defaults: { rx: 60, ry: 60, fill: 'none', stroke: '#7dd3c0' },
+    defaults: { rx: 60, ry: 60, filled: false },
   },
   point: {
     label: 'Point',
     geometry: 'dot',
     uniform: true,
-    defaults: { rx: 0, ry: 0, fill: 'none', stroke: '#7dd3c0' },
+    defaults: { rx: 0, ry: 0, filled: false },
   },
   rect: {
     label: 'Rectangle',
     geometry: 'rect',
     uniform: false,
-    defaults: { rx: 70, ry: 45, fill: 'none', stroke: '#7dd3c0' },
+    defaults: { rx: 70, ry: 45, filled: false },
   },
   line: {
     label: 'Ligne',
     geometry: 'line',
     uniform: false,
     signed: true,
-    /* Sans contour, une ligne n'a rien à montrer : `fill` ne la peint pas. */
-    defaults: { rx: 60, ry: 0, fill: 'none', stroke: '#7dd3c0' },
+    /* Sans contour, une ligne n'a rien à montrer : le remplissage ne la peint pas. */
+    defaults: { rx: 60, ry: 0, filled: false },
   },
 };
 
@@ -71,6 +73,14 @@ export const DEFAULT_SHAPE = 'circle';
  * donne son diamètre au point, faute d'étendue propre.
  */
 export const DEFAULT_STROKE_WIDTH = 1.5;
+
+/**
+ * La couleur appartient au calque pour la même raison que l'épaisseur : un
+ * calque est un coup de crayon, toutes ses formes sortent du même outil. Le
+ * remplissage n'a pas de teinte propre — rempli, une forme se peint de son
+ * contour.
+ */
+export const DEFAULT_STROKE = '#7dd3c0';
 
 const counters = { L: 0, E: 0 };
 const nextId = (prefix) => `${prefix}${++counters[prefix]}`;
@@ -118,6 +128,7 @@ export const createLayer = (overrides = {}) => ({
   visible: true,
   center: { x: STAGE.width / 2, y: STAGE.height / 2 },
   strokeWidth: DEFAULT_STROKE_WIDTH,
+  stroke: DEFAULT_STROKE,
   elements: [],
   /* Pile vide : le calque se rend tel quel. On empile ensuite les gestes. */
   modifiers: [],
@@ -185,6 +196,8 @@ export const getRenderedChildren = (layer) => {
       children.push({
         ...element,
         strokeWidth: layer.strokeWidth,
+        stroke: layer.stroke,
+        fill: element.filled ? layer.stroke : 'none',
         ...applyStack(element, layer.modifiers, indices, layer.center),
         ...properties,
       });
@@ -228,6 +241,9 @@ export const renameLayer = (scene, id, name) =>
 export const setLayerStrokeWidth = (scene, id, strokeWidth) =>
   mapLayer(scene, id, (layer) => ({ ...layer, strokeWidth: Math.max(0, strokeWidth) }));
 
+export const setLayerStroke = (scene, id, stroke) =>
+  mapLayer(scene, id, (layer) => ({ ...layer, stroke }));
+
 /** `delta` = -1 vers l'arrière-plan, +1 vers le premier plan. */
 export const moveLayer = (scene, id, delta) => {
   const from = scene.layers.findIndex((layer) => layer.id === id);
@@ -243,13 +259,14 @@ export const moveLayer = (scene, id, delta) => {
 /**
  * Ajoute une forme au calque et la rend active.
  *
- * La nouvelle forme reprend les couleurs de la forme active, quel que soit son
- * type — dessiner dix formes rouges d'affilée ne doit pas demander de régler la
- * couleur dix fois. L'épaisseur n'en fait pas partie : elle vit sur le calque.
+ * La nouvelle forme reprend le remplissage de la forme active, quel que soit
+ * son type — dessiner dix formes pleines d'affilée ne doit pas demander de
+ * cocher dix fois. La couleur et l'épaisseur n'en font pas partie : elles
+ * vivent sur le calque.
  */
 export const addElement = (scene, layerId, type, x, y, overrides = {}) => {
   const previous = getActiveElement(scene);
-  const style = previous ? { fill: previous.fill, stroke: previous.stroke } : {};
+  const style = previous ? { filled: previous.filled } : {};
   const element = createElement(type, x, y, { ...style, ...overrides });
   return {
     ...mapLayer(scene, layerId, (layer) => ({ ...layer, elements: [...layer.elements, element] })),

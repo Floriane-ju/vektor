@@ -10,6 +10,7 @@ import {
   moveLayer,
   removeElement,
   removeLayer,
+  setLayerStroke,
   setLayerStrokeWidth,
   updateElement,
 } from '../src/scene.js';
@@ -269,31 +270,30 @@ describe('formes d’un calque', () => {
     expect(scene.activeElementId).toBe(scene.layers[0].elements[1].id);
   });
 
-  it('une nouvelle forme reprend les couleurs de la forme active', () => {
+  it('une nouvelle forme reprend le remplissage de la forme active', () => {
     let scene = withTwo();
-    const active = scene.activeElementId;
-    scene = {
-      ...scene,
-      layers: scene.layers.map((layer) => ({
-        ...layer,
-        elements: layer.elements.map((element) =>
-          element.id === active ? { ...element, stroke: '#ff0000' } : element,
-        ),
-      })),
-    };
+    scene = updateElement(scene, scene.activeElementId, { filled: true });
     scene = addElement(scene, scene.layers[0].id, 'circle', 30, 30);
-    expect(scene.layers[0].elements.at(-1).stroke).toBe('#ff0000');
+    expect(scene.layers[0].elements.at(-1).filled).toBe(true);
   });
 
-  it('un type différent reprend les couleurs mais sa propre géométrie', () => {
+  it('un type différent reprend le remplissage mais sa propre géométrie', () => {
     let scene = withTwo();
-    scene = updateElement(scene, scene.activeElementId, { stroke: '#ff0000' });
+    scene = updateElement(scene, scene.activeElementId, { filled: true });
     scene = addElement(scene, scene.layers[0].id, 'point', 30, 30);
     const point = scene.layers[0].elements.at(-1);
-    expect(point.stroke).toBe('#ff0000');
+    expect(point.filled).toBe(true);
     expect(point.rx).toBe(0);
-    /* L'épaisseur n'est plus sur la forme : elle appartient au calque. */
+    /* Ni l'épaisseur ni la couleur ne sont sur la forme : elles appartiennent
+       au calque. */
     expect(point.strokeWidth).toBeUndefined();
+    expect(point.stroke).toBeUndefined();
+  });
+
+  it('la couleur du calque borne rien et ne mute pas', () => {
+    const scene = withTwo();
+    expect(setLayerStroke(scene, scene.layers[0].id, '#ff0000').layers[0].stroke).toBe('#ff0000');
+    expect(scene.layers[0].stroke).toBe('#7dd3c0');
   });
 
   it('l’épaisseur du calque borne à zéro et ne mute pas', () => {
@@ -329,7 +329,7 @@ describe('persistance', () => {
   it('un aller-retour JSON reconstruit une scène identique', () => {
     const layer = createLayer({
       elements: [
-        createElement('circle', 120, 340, { rx: 42, ry: 42, stroke: '#ff0000' }),
+        createElement('circle', 120, 340, { rx: 42, ry: 42, filled: true }),
         createElement('rect', 200, 100, { rx: 30, ry: 15 }),
       ],
       modifiers: [
@@ -429,7 +429,9 @@ describe('persistance', () => {
     });
     const [layer] = deserialize(text).layers;
     expect(layer.strokeWidth).toBe(10);
-    expect(layer.elements[0]).toMatchObject({ stroke: '#abcdef', fill: 'none', rx: 0 });
+    /* La couleur du disque remonte sur le calque, qui la porte désormais. */
+    expect(layer.stroke).toBe('#abcdef');
+    expect(layer.elements[0]).toMatchObject({ filled: false, rx: 0 });
   });
 
   it('relit un projet v1 : `radius` converti, forme unique devenue liste', () => {
@@ -445,10 +447,11 @@ describe('persistance', () => {
       ],
       activeLayerId: 'L1',
     });
-    const { elements } = deserialize(v1).layers[0];
+    const [layer] = deserialize(v1).layers;
+    const { elements } = layer;
     expect(elements).toHaveLength(1);
     expect(elements[0]).toMatchObject({ type: 'circle', x: 10, y: 20, rx: 33, ry: 33 });
-    expect(elements[0].stroke).toBe('#abcdef');
+    expect(layer.stroke).toBe('#abcdef');
     expect(elements[0].radius).toBeUndefined();
   });
 
