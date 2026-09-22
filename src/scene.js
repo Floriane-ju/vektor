@@ -26,6 +26,10 @@ export const RANGE_BOUNDS = {
  * circulaire quelle que soit la direction du geste, un rectangle prend ses deux
  * dimensions indépendamment.
  *
+ * `signed` marque les formes orientées : une ligne qui monte n'est pas la même
+ * qu'une ligne qui descend, donc ses demi-extensions gardent leur signe au lieu
+ * d'être ramenées à une valeur absolue.
+ *
  * `rx` et `ry` sont des demi-extensions depuis le centre — ce qui fait du point
  * de départ du glissement le centre de la forme, donc le pivot naturel des
  * modificateurs axial et spirale.
@@ -49,6 +53,14 @@ export const SHAPES = {
     uniform: false,
     defaults: { rx: 70, ry: 45, fill: 'none', stroke: '#7dd3c0', strokeWidth: 1.5 },
   },
+  line: {
+    label: 'Ligne',
+    geometry: 'line',
+    uniform: false,
+    signed: true,
+    /* Sans contour, une ligne n'a rien à montrer : `fill` ne la peint pas. */
+    defaults: { rx: 60, ry: 0, fill: 'none', stroke: '#7dd3c0', strokeWidth: 1.5 },
+  },
 };
 
 export const DEFAULT_SHAPE = 'circle';
@@ -65,8 +77,27 @@ export const createElement = (type, x, y, overrides = {}) => ({
   ...overrides,
 });
 
-/** Demi-extensions produites par un glissement de (dx, dy) depuis le centre. */
-export const dragExtent = (type, dx, dy) => {
+/**
+ * Demi-extension admissible pour un type : négative seulement sur une forme
+ * orientée. Seul endroit où cette borne est décidée, pour que le renderer,
+ * l'import et le panneau propriétés n'en donnent pas trois lectures.
+ */
+export const clampExtent = (type, value) => (SHAPES[type].signed ? value : Math.max(0, value));
+
+/**
+ * Modifications produites par un glissement de (dx, dy) depuis `origin`.
+ *
+ * Une forme symétrique naît centrée sur le point de départ, qui ne bouge plus :
+ * seules ses extensions grandissent. Une ligne se trace d'un bout à l'autre du
+ * geste ; comme `x, y` doit rester le milieu de la forme — c'est ce que le
+ * modèle suppose partout ailleurs, de l'échelle aux modificateurs — le centre
+ * suit le curseur à mi-chemin et les demi-extensions valent la moitié du
+ * déplacement.
+ */
+export const dragPatch = (type, origin, dx, dy) => {
+  if (SHAPES[type].signed) {
+    return { x: origin.x + dx / 2, y: origin.y + dy / 2, rx: dx / 2, ry: dy / 2 };
+  }
   if (!SHAPES[type].uniform) return { rx: Math.abs(dx), ry: Math.abs(dy) };
   const radius = Math.hypot(dx, dy);
   return { rx: radius, ry: radius };

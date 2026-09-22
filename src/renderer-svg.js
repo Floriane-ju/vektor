@@ -1,4 +1,4 @@
-import { getRenderedChildren, SHAPES, STAGE } from './scene.js';
+import { clampExtent, getRenderedChildren, SHAPES, STAGE } from './scene.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -26,12 +26,20 @@ export const render = (scene, svgRoot) => {
 
 const createNode = (child) => {
   const scale = child.scale ?? 1;
-  const rx = Math.max(0, child.rx * scale);
-  const ry = Math.max(0, child.ry * scale);
+  const rx = clampExtent(child.type, child.rx * scale);
+  const ry = clampExtent(child.type, child.ry * scale);
   const geometry = SHAPES[child.type].geometry;
 
   const node = document.createElementNS(SVG_NS, geometry);
-  if (geometry === 'rect') {
+  if (geometry === 'line') {
+    /* Mêmes demi-extensions que les autres formes, mais signées : la ligne va
+       d'un bout à l'autre en passant par son centre, donc l'échelle l'étire
+       depuis son milieu et le modificateur la déplace d'un seul point. */
+    node.setAttribute('x1', round(child.x - rx));
+    node.setAttribute('y1', round(child.y - ry));
+    node.setAttribute('x2', round(child.x + rx));
+    node.setAttribute('y2', round(child.y + ry));
+  } else if (geometry === 'rect') {
     /* `rx`/`ry` sont des demi-extensions depuis le centre ; `<rect>` se place
        par son coin, d'où la translation. */
     node.setAttribute('x', round(child.x - rx));

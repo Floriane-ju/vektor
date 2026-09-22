@@ -221,6 +221,31 @@ describe('dessin au glisser', () => {
     expect(element.fill).not.toBe('none');
   });
 
+  it('la ligne se trace d’un bout à l’autre du geste, centrée en son milieu', () => {
+    const { store, svg, shapes } = withLayer();
+    pick(shapes, 'line');
+    pointer(svg, 'pointerdown', 100, 200);
+    pointer(svg, 'pointerup', 300, 100);
+
+    /* Le geste monte : `ry` reste négatif, sans quoi la ligne redescendrait. */
+    expect(store.get().layers[0].elements.at(-1)).toMatchObject({
+      type: 'line',
+      x: 200,
+      y: 150,
+      rx: 100,
+      ry: -50,
+    });
+  });
+
+  it('un clic sans glissement pose une ligne horizontale par défaut', () => {
+    const { store, svg, shapes } = withLayer();
+    pick(shapes, 'line');
+    pointer(svg, 'pointerdown', 400, 400);
+    pointer(svg, 'pointerup', 401, 400);
+
+    expect(store.get().layers[0].elements.at(-1)).toMatchObject({ rx: 60, ry: 0 });
+  });
+
   it('changer de type reprend les défauts du nouveau, pas le style de l’ancien', () => {
     const { store, svg, shapes } = withLayer();
     pointer(svg, 'pointerdown', 100, 100);
@@ -245,7 +270,7 @@ describe('dessin au glisser', () => {
   });
 });
 
-describe('rendu des trois formes', () => {
+describe('rendu des formes', () => {
   it('émet le nœud SVG correspondant à la géométrie', () => {
     const svg = stage();
     const shaped = (type, extra = {}) =>
@@ -266,6 +291,39 @@ describe('rendu des trois formes', () => {
       '30',
       '80',
       '40',
+    ]);
+  });
+
+  it('la ligne va d’un bout à l’autre de ses demi-extensions signées', () => {
+    const svg = stage();
+    const layer = createLayer({
+      elements: [createElement('line', 100, 100, { rx: 40, ry: -30 })],
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+
+    const line = svg.querySelector('line');
+    expect([
+      line.getAttribute('x1'),
+      line.getAttribute('y1'),
+      line.getAttribute('x2'),
+      line.getAttribute('y2'),
+    ]).toEqual(['60', '130', '140', '70']);
+  });
+
+  it('l’échelle étire la ligne depuis son milieu', () => {
+    const svg = stage();
+    const layer = createLayer({
+      elements: [createElement('line', 100, 0, { rx: 40, ry: 0 })],
+      modifier: { type: 'mirrorH', n: 2, angleStep: 0, radiusStep: 0 },
+      center: { x: 100, y: 0 },
+      propertyRanges: { opacity: [1, 1], scale: [1, 2] },
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+
+    const lines = [...svg.querySelectorAll('line')];
+    expect(lines.map((l) => [l.getAttribute('x1'), l.getAttribute('x2')])).toEqual([
+      ['60', '140'],
+      ['20', '180'],
     ]);
   });
 

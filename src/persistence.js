@@ -1,6 +1,7 @@
 import { MODIFIERS } from './modifiers.js';
 import { clampCount } from './interpolate.js';
 import {
+  clampExtent,
   createElement,
   createLayer,
   RANGE_BOUNDS,
@@ -63,8 +64,8 @@ const readElement = (raw) => {
   const legacyRadius = num(raw.radius, undefined);
   return createElement(raw.type, num(raw.x, 0), num(raw.y, 0), {
     ...(typeof raw.id === 'string' && raw.id !== '' ? { id: raw.id } : {}),
-    rx: Math.max(0, num(raw.rx, legacyRadius ?? defaults.rx)),
-    ry: Math.max(0, num(raw.ry, legacyRadius ?? defaults.ry)),
+    rx: clampExtent(raw.type, num(raw.rx, legacyRadius ?? defaults.rx)),
+    ry: clampExtent(raw.type, num(raw.ry, legacyRadius ?? defaults.ry)),
     fill: typeof raw.fill === 'string' ? raw.fill : defaults.fill,
     stroke: typeof raw.stroke === 'string' ? raw.stroke : defaults.stroke,
     strokeWidth: Math.max(0, num(raw.strokeWidth, defaults.strokeWidth)),

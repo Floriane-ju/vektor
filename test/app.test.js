@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { expect, it } from 'vitest';
+import { SHAPES } from '../src/scene.js';
 
 /**
  * Fumigation : monte l'application entière sur le DOM que sert `index.html` et
@@ -29,7 +30,9 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   expect(document.querySelectorAll('#layer-panel .layer-row')).toHaveLength(1);
   /* Formes du calque, Forme, Modificateur, Interpolation. */
   expect(document.querySelectorAll('#property-panel fieldset')).toHaveLength(4);
-  expect(document.querySelectorAll('#toolbar-shapes input[type="radio"]')).toHaveLength(3);
+  expect(document.querySelectorAll('#toolbar-shapes input[type="radio"]')).toHaveLength(
+    Object.keys(SHAPES).length,
+  );
 
   globalThis.DOMPoint = class {
     constructor(x, y) {

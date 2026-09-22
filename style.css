@@ -209,10 +209,14 @@ input[type="range"] { padding: 0; border: 0; background: none; width: 100%; }
 }
 
 .field label { color: var(--text-dim); }
-.field-row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.field-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+/* Largeur intrinsèque des input (~20 caractères) : sans ça, ils élargissent
+   les colonnes et le panneau défile horizontalement. */
+.field :is(input:not([type="checkbox"]), select) { min-width: 0; width: 100%; }
 .field[hidden] { display: none; }
 
 fieldset {
+  min-width: 0; /* défaut navigateur : min-content, qui déborde du panneau */
   margin: 0 0 14px;
   padding: 10px;
   border: 1px solid var(--line);

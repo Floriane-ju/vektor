@@ -1,4 +1,5 @@
 import {
+  clampExtent,
   DEFAULT_SHAPE,
   getActiveElement,
   getActiveLayer,
@@ -102,15 +103,19 @@ export const mountPropertyPanel = ({
     (element, value) =>
       store.apply(updateElement, element.id, { rx: Math.max(0, value), ry: Math.max(0, value) }),
   );
+  /* Pas de `min` : une ligne a des dimensions signées, et les formes qui n'en
+     veulent pas sont ramenées à zéro par `clampExtent`. */
   const width = bind(
-    input('number', { min: '0', step: '1' }),
+    input('number', { step: '1' }),
     (element) => Math.round(element.rx * 2),
-    (element, value) => store.apply(updateElement, element.id, { rx: Math.max(0, value) / 2 }),
+    (element, value) =>
+      store.apply(updateElement, element.id, { rx: clampExtent(element.type, value) / 2 }),
   );
   const height = bind(
-    input('number', { min: '0', step: '1' }),
+    input('number', { step: '1' }),
     (element) => Math.round(element.ry * 2),
-    (element, value) => store.apply(updateElement, element.id, { ry: Math.max(0, value) / 2 }),
+    (element, value) =>
+      store.apply(updateElement, element.id, { ry: clampExtent(element.type, value) / 2 }),
   );
   const strokeWidth = bind(
     input('number', { min: '0', step: '0.5' }),
@@ -143,6 +148,9 @@ export const mountPropertyPanel = ({
   const radiusField = field('Rayon', radius);
   const widthField = field('Largeur', width);
   const heightField = field('Hauteur', height);
+  /* Une ligne n'a ni largeur ni hauteur : ces deux champs y désignent l'écart
+     entre ses extrémités, signe compris. */
+  const spanLabels = { signed: ['Écart X', 'Écart Y'], default: ['Largeur', 'Hauteur'] };
 
   const sizeRow = document.createElement('div');
   sizeRow.className = 'field-row';
@@ -287,6 +295,10 @@ export const mountPropertyPanel = ({
     radiusField.hidden = !uniform;
     widthField.hidden = uniform;
     heightField.hidden = uniform;
+    const [widthLabel, heightLabel] =
+      spanLabels[element && SHAPES[element.type].signed ? 'signed' : 'default'];
+    widthField.querySelector('label').textContent = widthLabel;
+    heightField.querySelector('label').textContent = heightLabel;
 
     if (!layer) return;
     const isSpiral = layer.modifier.type === 'spiral';

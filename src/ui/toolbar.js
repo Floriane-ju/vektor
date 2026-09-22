@@ -1,7 +1,7 @@
 import {
   addElement,
   DEFAULT_SHAPE,
-  dragExtent,
+  dragPatch,
   getActiveLayer,
   SHAPES,
   updateElement,
@@ -69,7 +69,7 @@ const mountShapePicker = (container, onChange) => {
 
 export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status }) => {
   let tool = DEFAULT_SHAPE;
-  /* Glissement en cours : centre figé au `pointerdown`, et la forme créée à ce
+  /* Glissement en cours : le point de départ du geste, et la forme créée à ce
      moment-là, que les mouvements suivants se contentent de redimensionner. */
   let stroke = null;
 
@@ -120,11 +120,9 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   /* Le `pointerdown` ajoute la forme, les mouvements ne font plus que la
      redimensionner : chaque geste crée une forme de plus sur le calque au lieu
      de remplacer la précédente. */
-  const resize = (rx, ry) => store.apply(updateElement, stroke.elementId, { rx, ry });
-
-  const extentAt = (event) => {
+  const patchAt = (event) => {
     const point = toStagePoint(svgRoot, event);
-    return dragExtent(tool, point.x - stroke.x, point.y - stroke.y);
+    return dragPatch(tool, stroke, point.x - stroke.x, point.y - stroke.y);
   };
 
   svgRoot.addEventListener('pointerdown', (event) => {
@@ -144,16 +142,18 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
 
   svgRoot.addEventListener('pointermove', (event) => {
     if (!stroke) return;
-    const { rx, ry } = extentAt(event);
-    resize(rx, ry);
+    store.apply(updateElement, stroke.elementId, patchAt(event));
   });
 
   svgRoot.addEventListener('pointerup', (event) => {
     if (!stroke) return;
-    const { rx, ry } = extentAt(event);
-    const isClick = rx < DRAG_THRESHOLD && ry < DRAG_THRESHOLD;
-    const size = isClick ? SHAPES[tool].defaults : { rx, ry };
-    resize(size.rx, size.ry);
+    const patch = patchAt(event);
+    /* Les extensions d'une forme orientée sont signées : c'est leur distance à
+       zéro qui dit si le geste a bougé, pas leur valeur. */
+    const isClick =
+      Math.abs(patch.rx) < DRAG_THRESHOLD && Math.abs(patch.ry) < DRAG_THRESHOLD;
+    const { rx, ry } = isClick ? SHAPES[tool].defaults : patch;
+    store.apply(updateElement, stroke.elementId, { ...patch, rx, ry });
     svgRoot.releasePointerCapture?.(event.pointerId);
     stroke = null;
   });

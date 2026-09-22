@@ -251,6 +251,24 @@ describe('persistance', () => {
     expect(deserialize(serialize(scene))).toEqual(scene);
   });
 
+  it('garde le signe des extensions d’une ligne et le refuse aux autres formes', () => {
+    const file = JSON.stringify({
+      format: 'illu/scene@3',
+      layers: [
+        {
+          id: 'L1',
+          elements: [
+            { id: 'E1', type: 'line', x: 10, y: 20, rx: -40, ry: -30 },
+            { id: 'E2', type: 'rect', x: 0, y: 0, rx: -40, ry: 12 },
+          ],
+        },
+      ],
+    });
+    const [line, rect] = deserialize(file).layers[0].elements;
+    expect(line).toMatchObject({ rx: -40, ry: -30 });
+    expect(rect).toMatchObject({ rx: 0, ry: 12 });
+  });
+
   it('refuse un fichier illisible ou d’un autre format', () => {
     expect(() => deserialize('{')).toThrow(/JSON valide/);
     expect(() => deserialize('{"format":"autre","layers":[]}')).toThrow(/Format inattendu/);
