@@ -111,17 +111,15 @@ body {
 #stage[data-tool="cursor"][data-dragging],
 #stage[data-tool="cursor"][data-dragging] * { cursor: grabbing; }
 
-/* Le CSS l'emporte sur les attributs de présentation du clone. Le halo le
-   rend visible même sur une forme déjà peinte de l'accent (couleur par
-   défaut des calques). */
+/* Le clone est repeint d'une nuance de la couleur de sa forme (voir
+   `highlightColor`), opaque même sur une forme translucide. Le halo ne vient
+   qu'au survol, plus fort que la sélection qui reste affichée. */
 #stage [data-hover] {
-  stroke: var(--accent);
   stroke-opacity: 1;
   fill-opacity: 1;
-  filter: drop-shadow(0 0 3px var(--accent));
 }
 
-#stage [data-hover]:not([fill="none"]) { fill: var(--accent); }
+#stage [data-hover="hover"] { filter: drop-shadow(0 0 3px var(--highlight)); }
 
 /* ---- Layout ---- */
 

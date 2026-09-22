@@ -9,7 +9,7 @@ import {
   SHAPES,
   updateElement,
 } from '../scene.js';
-import { clearHover, renderedNodes, showHover, toSvgDocument } from '../renderer-svg.js';
+import { clearHover, showHover, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
 
 /** Outil de sélection : partage le groupe radio des formes, sans en être une. */
@@ -182,15 +182,12 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   svgRoot.addEventListener('pointermove', (event) => {
     if (!selecting) return;
     if (drag) moveDrag(event);
-    /* Sous le curseur, la forme sélectionnée ressort toujours, où que soit le
-       pointeur ; celle survolée s'y ajoute. Pendant un glissement, seule la
-       sélection compte. */
+    /* La sélection est surlignée par le rendu ; la forme survolée s'y ajoute,
+       sauf pendant un glissement où seule la sélection compte. */
     const { activeElementId } = store.get();
     svgRoot.toggleAttribute('data-has-selection', Boolean(activeElementId));
-    const selected = activeElementId ? [...renderedNodes(svgRoot, activeElementId)] : [];
     const node = drag ? null : shapeAt(event);
-    const hovered = node && node.dataset.elementId !== activeElementId ? [node] : [];
-    showHover(svgRoot, [...selected, ...hovered]);
+    showHover(svgRoot, node && node.dataset.elementId !== activeElementId ? [node] : []);
   });
   svgRoot.addEventListener('pointerleave', () => clearHover(svgRoot));
 

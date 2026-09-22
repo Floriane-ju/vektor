@@ -51,7 +51,7 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   pointer('pointermove', 450, 520);
   pointer('pointerup', 450, 520);
 
-  expect(stage.querySelectorAll('circle')).toHaveLength(1);
+  expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(1);
   expect(stage.querySelector('circle').getAttribute('r')).toBe('70');
   expect(hint.hidden).toBe(true);
 
@@ -60,7 +60,7 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   pointer('pointerdown', 200, 200);
   pointer('pointerup', 230, 200);
 
-  expect(stage.querySelectorAll('circle')).toHaveLength(2);
+  expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(2);
   expect(document.querySelectorAll('#shape-list .layer-row')).toHaveLength(2);
 
   /* Deux modificateurs empilés sur le calque : leurs copies se multiplient. */
@@ -73,20 +73,20 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   const blocks = document.querySelectorAll('#layer-panel .modifier-block');
   expect(blocks).toHaveLength(2);
   /* Deux « Pas » de 6 copies sur un calque de deux formes. */
-  expect(stage.querySelectorAll('circle')).toHaveLength(6 * 6 * 2);
+  expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(6 * 6 * 2);
 
   const [type] = blocks[1].querySelectorAll('select');
   type.value = 'mirrorH';
   type.dispatchEvent(new Event('change'));
-  expect(stage.querySelectorAll('circle')).toHaveLength(6 * 2 * 2);
+  expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(6 * 2 * 2);
 
   blocks[0].querySelector('.icon-btn.is-danger').click();
   expect(document.querySelectorAll('#layer-panel .modifier-block')).toHaveLength(1);
-  expect(stage.querySelectorAll('circle')).toHaveLength(2 * 2);
+  expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(2 * 2);
 
   /* Une interpolation ajoutée depuis la card du calque éteint ses copies. */
   const opacities = () =>
-    [...stage.querySelectorAll('circle')].map((node) => node.getAttribute('fill-opacity'));
+    [...stage.querySelectorAll('circle[data-element-id]')].map((node) => node.getAttribute('fill-opacity'));
   expect(opacities()).toEqual(['1', '1', '1', '1']);
 
   document.querySelector('[data-focus-key="add-interpolation"]').click();
