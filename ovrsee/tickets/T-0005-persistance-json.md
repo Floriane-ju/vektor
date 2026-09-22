@@ -2,10 +2,12 @@
 {
   "id": "T-0005",
   "titre": "Persistance JSON : autosave, export, import validé",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "s",
-  "tags": ["data"],
+  "tags": [
+    "data"
+  ],
   "cree": "2026-09-22",
   "maj": "2026-09-22",
   "plan": "2026-09-22-outil-d-illustration-vectorielle-generative.md"

@@ -2,10 +2,13 @@
 {
   "id": "T-0006",
   "titre": "Formes multiples et dessin au glisser",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "m",
-  "tags": ["ui", "core"],
+  "tags": [
+    "ui",
+    "core"
+  ],
   "cree": "2026-09-22",
   "maj": "2026-09-22",
   "plan": "2026-09-22-outil-d-illustration-vectorielle-generative.md"

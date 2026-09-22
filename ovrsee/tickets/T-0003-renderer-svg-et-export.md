@@ -2,10 +2,12 @@
 {
   "id": "T-0003",
   "titre": "Renderer SVG DOM et export de fichier",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "s",
-  "tags": ["render"],
+  "tags": [
+    "render"
+  ],
   "cree": "2026-09-22",
   "maj": "2026-09-22",
   "plan": "2026-09-22-outil-d-illustration-vectorielle-generative.md"

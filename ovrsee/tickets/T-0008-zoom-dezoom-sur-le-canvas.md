@@ -2,7 +2,7 @@
 {
   "id": "T-0008",
   "titre": "Zoom / dézoom sur le canvas",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui"],
   "cree": "2026-09-22",

@@ -2,10 +2,12 @@
 {
   "id": "T-0001",
   "titre": "Échafaudage Vite + vitest",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "xs",
-  "tags": ["build"],
+  "tags": [
+    "build"
+  ],
   "cree": "2026-09-22",
   "maj": "2026-09-22",
   "plan": "2026-09-22-outil-d-illustration-vectorielle-generative.md"

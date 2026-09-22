@@ -2,10 +2,13 @@
 {
   "id": "T-0004",
   "titre": "Panneaux calques, propriétés et toolbar",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "m",
-  "tags": ["ui", "a11y"],
+  "tags": [
+    "ui",
+    "a11y"
+  ],
   "cree": "2026-09-22",
   "maj": "2026-09-22",
   "plan": "2026-09-22-outil-d-illustration-vectorielle-generative.md"

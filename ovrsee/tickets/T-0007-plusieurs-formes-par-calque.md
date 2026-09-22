@@ -2,10 +2,13 @@
 {
   "id": "T-0007",
   "titre": "Plusieurs formes par calque",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "m",
-  "tags": ["core", "ui"],
+  "tags": [
+    "core",
+    "ui"
+  ],
   "cree": "2026-09-22",
   "maj": "2026-09-22",
   "plan": "2026-09-22-outil-d-illustration-vectorielle-generative.md"
