@@ -1,4 +1,4 @@
-import { clampExtent, getRenderedChildren, SHAPES, STAGE } from './scene.js';
+import { clampExtent, getActiveLayer, getRenderedChildren, SHAPES, STAGE } from './scene.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -22,6 +22,68 @@ export const render = (scene, svgRoot) => {
     for (const child of children) group.append(createNode(child));
     svgRoot.append(group);
   }
+
+  const guides = createGuides(getActiveLayer(scene));
+  if (guides) svgRoot.append(guides);
+};
+
+/* Demi-longueur des branches de la croix, et rayon de l'anneau qui marque le
+   centre. */
+const GUIDE_MARK = 14;
+
+const guideNode = (geometry, attrs) => {
+  const node = document.createElementNS(SVG_NS, geometry);
+  for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, round(value));
+  return node;
+};
+
+const guideLine = (x1, y1, x2, y2) => guideNode('line', { x1, y1, x2, y2 });
+
+/** Marque un centre de transformation : croix + anneau. */
+const guideCenter = ({ x, y }) => [
+  guideLine(x - GUIDE_MARK, y, x + GUIDE_MARK, y),
+  guideLine(x, y - GUIDE_MARK, x, y + GUIDE_MARK),
+  guideNode('circle', { cx: x, cy: y, r: GUIDE_MARK }),
+];
+
+/**
+ * Repères propres à chaque modificateur : l'axe pour un miroir, le centre de
+ * rotation pour l'axial et la spirale.
+ *
+ * `none` n'y figure pas : sans duplication, il n'y a rien à situer.
+ */
+const GUIDES = {
+  mirrorH: (center) => [guideLine(center.x, 0, center.x, STAGE.height)],
+  mirrorV: (center) => [guideLine(0, center.y, STAGE.width, center.y)],
+  axial: guideCenter,
+  spiral: guideCenter,
+};
+
+/**
+ * Repères du modificateur du calque actif.
+ *
+ * Ils vivent dans le `<svg>` de la scène : même viewBox, donc ils restent
+ * alignés sous le zoom sans qu'aucune coordonnée soit recalculée. `toSvgDocument`
+ * les retire — ce sont des repères d'écran, pas du dessin.
+ */
+const createGuides = (layer) => {
+  const build = layer?.visible ? GUIDES[layer.modifier.type] : null;
+  if (!build) return null;
+
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.dataset.guides = layer.modifier.type;
+  group.setAttribute('fill', 'none');
+  group.setAttribute('stroke', '#7dd3c0');
+  group.setAttribute('stroke-width', '1');
+  group.setAttribute('stroke-opacity', '0.45');
+  group.setAttribute('stroke-dasharray', '6 6');
+  /* Le trait garde son épaisseur à l'écran quel que soit le zoom : un repère
+     qui grossit avec le dessin finit par le cacher. */
+  group.setAttribute('vector-effect', 'non-scaling-stroke');
+  /* Un glissement sur un repère dessine comme ailleurs. */
+  group.setAttribute('pointer-events', 'none');
+  group.append(...build(layer.center));
+  return group;
 };
 
 const createNode = (child) => {
@@ -30,8 +92,16 @@ const createNode = (child) => {
   const ry = clampExtent(child.type, child.ry * scale);
   const geometry = SHAPES[child.type].geometry;
 
-  const node = document.createElementNS(SVG_NS, geometry);
-  if (geometry === 'line') {
+  const node = document.createElementNS(SVG_NS, geometry === 'dot' ? 'line' : geometry);
+  let strokeWidth = child.strokeWidth;
+  if (geometry === 'dot') {
+    /* Trait de longueur nulle : seul le bout rond est peint, d'un diamètre égal
+       à l'épaisseur. L'échelle agit donc sur l'épaisseur, faute d'étendue. */
+    for (const axis of ['x1', 'x2']) node.setAttribute(axis, round(child.x));
+    for (const axis of ['y1', 'y2']) node.setAttribute(axis, round(child.y));
+    node.setAttribute('stroke-linecap', 'round');
+    strokeWidth *= scale;
+  } else if (geometry === 'line') {
     /* Mêmes demi-extensions que les autres formes, mais signées : la ligne va
        d'un bout à l'autre en passant par son centre, donc l'échelle l'étire
        depuis son milieu et le modificateur la déplace d'un seul point. */
@@ -54,7 +124,7 @@ const createNode = (child) => {
 
   node.setAttribute('fill', child.fill);
   node.setAttribute('stroke', child.stroke);
-  node.setAttribute('stroke-width', round(child.strokeWidth));
+  node.setAttribute('stroke-width', round(strokeWidth));
   node.setAttribute('fill-opacity', round(child.opacity ?? 1));
   node.setAttribute('stroke-opacity', round(child.opacity ?? 1));
   return node;
@@ -67,10 +137,12 @@ const round = (value) => String(Math.round(value * 1000) / 1000);
  *
  * Le `<svg>` du DOM est cloné avant d'y poser les attributs de document : la
  * racine vivante garde ses attributs d'interface (id, role, aria-label) et le
- * fichier n'embarque que ce qui a un sens hors de la page.
+ * fichier n'embarque que ce qui a un sens hors de la page — les repères du
+ * modificateur en sont donc retirés.
  */
 export const toSvgDocument = (svgRoot) => {
   const clone = svgRoot.cloneNode(true);
+  clone.querySelector('[data-guides]')?.remove();
   clone.removeAttribute('id');
   clone.removeAttribute('role');
   clone.removeAttribute('aria-label');

@@ -207,8 +207,8 @@ describe('formes d’un calque', () => {
     const base = withTwo();
     const scene = addElement(base, base.layers[0].id, 'point', 30, 30);
     const point = scene.layers[0].elements.at(-1);
-    expect(point.fill).not.toBe('none');
-    expect(point.rx).toBe(5);
+    expect(point.strokeWidth).toBe(10);
+    expect(point.rx).toBe(0);
   });
 
   it('supprimer la forme active en réactive une autre', () => {
@@ -303,6 +303,22 @@ describe('persistance', () => {
     expect(read('')).toBe(false);
     expect(read(0)).toBe(false);
     expect(read('oui')).toBe(true);
+  });
+
+  it('relit un ancien point plein comme un point dimensionné par son épaisseur', () => {
+    const text = JSON.stringify({
+      format: 'illu/scene@3',
+      layers: [
+        {
+          id: 'L1',
+          elements: [
+            { id: 'E1', type: 'point', x: 0, y: 0, rx: 5, ry: 5, fill: '#abcdef', stroke: 'none', strokeWidth: 0 },
+          ],
+        },
+      ],
+    });
+    const [point] = deserialize(text).layers[0].elements;
+    expect(point).toMatchObject({ stroke: '#abcdef', strokeWidth: 10, fill: 'none', rx: 0 });
   });
 
   it('relit un projet v1 : `radius` converti, forme unique devenue liste', () => {

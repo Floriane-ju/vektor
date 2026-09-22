@@ -55,8 +55,23 @@ const readRange = (ranges, key) => {
   return [clamp(raw[0], bounds), clamp(raw[1], bounds)];
 };
 
-const readElement = (raw) => {
-  if (raw == null || typeof raw !== 'object') fail('Une forme doit être un objet.');
+/* Ancien point : un disque plein sans contour. Son diamètre devient
+   l'épaisseur, sa couleur de remplissage celle du contour. */
+const upgradeLegacyPoint = (raw) =>
+  raw.type === 'point' && (raw.stroke === 'none' || !(num(raw.strokeWidth, 0) > 0))
+    ? {
+        ...raw,
+        rx: 0,
+        ry: 0,
+        fill: 'none',
+        stroke: raw.fill,
+        strokeWidth: 2 * num(raw.rx, num(raw.radius, 5)),
+      }
+    : raw;
+
+const readElement = (input) => {
+  if (input == null || typeof input !== 'object') fail('Une forme doit être un objet.');
+  const raw = upgradeLegacyPoint(input);
   if (!Object.hasOwn(SHAPES, raw.type)) {
     fail(`Type de forme non pris en charge : ${String(raw.type)}.`);
   }

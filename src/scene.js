@@ -18,9 +18,9 @@ export const RANGE_BOUNDS = {
 /**
  * Formes disponibles.
  *
- * `geometry` est le nœud SVG émis : « point » est un cercle, mais reste un type
- * à part entière parce qu'il a ses propres valeurs par défaut (plein, minuscule,
- * sans contour) et doit se relire comme tel dans un fichier.
+ * `geometry` est le nœud SVG émis. « dot » n'est pas un cercle : c'est un trait
+ * de longueur nulle à bout rond, donc sans taille propre — son diamètre est
+ * l'épaisseur du contour, et sa couleur celle du contour.
  *
  * `uniform` décide de la lecture du glissement : une forme uniforme reste
  * circulaire quelle que soit la direction du geste, un rectangle prend ses deux
@@ -43,9 +43,9 @@ export const SHAPES = {
   },
   point: {
     label: 'Point',
-    geometry: 'circle',
+    geometry: 'dot',
     uniform: true,
-    defaults: { rx: 5, ry: 5, fill: '#7dd3c0', stroke: 'none', strokeWidth: 0 },
+    defaults: { rx: 0, ry: 0, fill: 'none', stroke: '#7dd3c0', strokeWidth: 10 },
   },
   rect: {
     label: 'Rectangle',
@@ -95,6 +95,8 @@ export const clampExtent = (type, value) => (SHAPES[type].signed ? value : Math.
  * déplacement.
  */
 export const dragPatch = (type, origin, dx, dy) => {
+  /* Un point n'a pas d'étendue : le geste le pose, l'épaisseur le dimensionne. */
+  if (SHAPES[type].geometry === 'dot') return { rx: 0, ry: 0 };
   if (SHAPES[type].signed) {
     return { x: origin.x + dx / 2, y: origin.y + dy / 2, rx: dx / 2, ry: dy / 2 };
   }
@@ -228,8 +230,8 @@ export const moveLayer = (scene, id, delta) => {
  * La nouvelle forme reprend le style de la forme active quand elle est du même
  * type — dessiner dix cercles rouges d'affilée ne doit pas demander de régler
  * la couleur dix fois. Un type différent repart de ses propres valeurs par
- * défaut, sans quoi un point hériterait du `fill: none` d'un cercle et serait
- * invisible.
+ * défaut, sans quoi un point hériterait de l'épaisseur fine d'un cercle et
+ * serait à peine visible.
  */
 export const addElement = (scene, layerId, type, x, y, overrides = {}) => {
   const previous = getActiveElement(scene);

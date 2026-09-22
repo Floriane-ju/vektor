@@ -82,6 +82,51 @@ describe('renderer SVG', () => {
   });
 });
 
+describe('repères du modificateur', () => {
+  const scene = (layer) => ({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+
+  it('trace l’axe du miroir du calque actif', () => {
+    const svg = stage();
+    render(scene(mirrorLayer({ center: { x: 400, y: 300 } })), svg);
+    const guides = svg.querySelector('[data-guides]');
+    expect(guides.dataset.guides).toBe('mirrorH');
+    const axis = guides.querySelector('line');
+    expect([axis.getAttribute('x1'), axis.getAttribute('x2')]).toEqual(['400', '400']);
+    expect([axis.getAttribute('y1'), axis.getAttribute('y2')]).toEqual([
+      '0',
+      String(STAGE.height),
+    ]);
+  });
+
+  it('marque le centre de la spirale', () => {
+    const svg = stage();
+    const layer = mirrorLayer({
+      center: { x: 400, y: 300 },
+      modifier: { type: 'spiral', n: 3, angleStep: 0.4, radiusStep: 12 },
+    });
+    render(scene(layer), svg);
+    const mark = svg.querySelector('[data-guides] circle');
+    expect([mark.getAttribute('cx'), mark.getAttribute('cy')]).toEqual(['400', '300']);
+  });
+
+  it('ne trace rien sans modificateur, ni sans calque actif', () => {
+    const svg = stage();
+    const plain = mirrorLayer({ modifier: { type: 'none', n: 6, angleStep: 0, radiusStep: 0 } });
+    render(scene(plain), svg);
+    expect(svg.querySelector('[data-guides]')).toBeNull();
+
+    render({ layers: [mirrorLayer()], activeLayerId: null, activeElementId: null }, svg);
+    expect(svg.querySelector('[data-guides]')).toBeNull();
+  });
+
+  it('laisse les repères hors de l’export', () => {
+    const svg = stage();
+    render(scene(mirrorLayer({ center: { x: 400, y: 300 } })), svg);
+    expect(svg.querySelector('[data-guides]')).not.toBeNull();
+    expect(toSvgDocument(svg)).not.toContain('data-guides');
+  });
+});
+
 describe('export SVG', () => {
   it('reprend exactement les nœuds affichés', () => {
     const svg = stage();
@@ -210,15 +255,14 @@ describe('dessin au glisser', () => {
     });
   });
 
-  it('le point reste circulaire et plein', () => {
+  it('le glissement pose le point sans lui donner d’étendue', () => {
     const { store, svg, shapes } = withLayer();
     pick(shapes, 'point');
     pointer(svg, 'pointerdown', 200, 200);
     pointer(svg, 'pointerup', 230, 240);
 
     const element = store.get().layers[0].elements.at(-1);
-    expect(element).toMatchObject({ type: 'point', rx: 50, ry: 50 });
-    expect(element.fill).not.toBe('none');
+    expect(element).toMatchObject({ type: 'point', x: 200, y: 200, rx: 0, ry: 0 });
   });
 
   it('la ligne se trace d’un bout à l’autre du geste, centrée en son milieu', () => {
@@ -250,14 +294,13 @@ describe('dessin au glisser', () => {
     const { store, svg, shapes } = withLayer();
     pointer(svg, 'pointerdown', 100, 100);
     pointer(svg, 'pointerup', 100, 160);
-    expect(store.get().layers[0].elements.at(-1).fill).toBe('none');
+    expect(store.get().layers[0].elements.at(-1).strokeWidth).toBe(1.5);
 
     pick(shapes, 'point');
     pointer(svg, 'pointerdown', 100, 100);
     pointer(svg, 'pointerup', 100, 160);
-    /* Sans cette reprise, le point héritait du `fill: none` du cercle et
-       n'apparaissait pas du tout. */
-    expect(store.get().layers[0].elements.at(-1).fill).not.toBe('none');
+    /* Sans cette reprise, le point héritait de l'épaisseur fine du cercle. */
+    expect(store.get().layers[0].elements.at(-1).strokeWidth).toBe(10);
   });
 
   it('refuse sans calque actif et le signale', () => {
@@ -282,7 +325,11 @@ describe('rendu des formes', () => {
 
     render({ layers: [shaped('circle'), shaped('point'), shaped('rect')], activeElementId: null }, svg);
 
-    expect(svg.querySelectorAll('circle')).toHaveLength(2);
+    expect(svg.querySelectorAll('circle')).toHaveLength(1);
+    /* Le point est un trait nul à bout rond : son diamètre est l'épaisseur. */
+    const dot = svg.querySelector('line');
+    expect(dot.getAttribute('x1')).toBe(dot.getAttribute('x2'));
+    expect(dot.getAttribute('stroke-linecap')).toBe('round');
     const rect = svg.querySelector('rect');
     /* rx/ry sont des demi-extensions depuis le centre : le <rect> se replace
        par son coin supérieur gauche. */

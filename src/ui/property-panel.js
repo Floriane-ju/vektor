@@ -156,14 +156,9 @@ export const mountPropertyPanel = ({
   sizeRow.className = 'field-row';
   sizeRow.append(radiusField, widthField, heightField, field('Épaisseur', strokeWidth));
 
-  shape.append(
-    shapeName,
-    positionRow,
-    sizeRow,
-    field('Contour', stroke),
-    field('Remplir', filled),
-    field('Remplissage', fill),
-  );
+  const filledField = field('Remplir', filled);
+  const fillField = field('Remplissage', fill);
+  shape.append(shapeName, positionRow, sizeRow, field('Contour', stroke), filledField, fillField);
 
   /* ---- Modificateur ---- */
 
@@ -292,9 +287,13 @@ export const mountPropertyPanel = ({
     }
 
     const uniform = element ? SHAPES[element.type].uniform : true;
-    radiusField.hidden = !uniform;
+    /* Un point n'a ni taille ni remplissage : son épaisseur est son diamètre. */
+    const dot = element ? SHAPES[element.type].geometry === 'dot' : false;
+    radiusField.hidden = !uniform || dot;
     widthField.hidden = uniform;
     heightField.hidden = uniform;
+    filledField.hidden = dot;
+    fillField.hidden = dot;
     const [widthLabel, heightLabel] =
       spanLabels[element && SHAPES[element.type].signed ? 'signed' : 'default'];
     widthField.querySelector('label').textContent = widthLabel;
