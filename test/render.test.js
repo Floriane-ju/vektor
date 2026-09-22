@@ -110,8 +110,21 @@ describe('repères du modificateur', () => {
       modifiers: [{ type: 'spiral', n: 3, angleStep: 0.4, radiusStep: 12 }],
     });
     render(scene(layer), svg);
-    const mark = svg.querySelector('[data-guides] circle');
-    expect([mark.getAttribute('cx'), mark.getAttribute('cy')]).toEqual(['400', '300']);
+    const [horizontal, vertical] = svg.querySelectorAll('[data-guides] line');
+    /* Croix centrée : chaque branche s'étend autant de part et d'autre du centre. */
+    expect([
+      horizontal.getAttribute('x1'),
+      horizontal.getAttribute('x2'),
+      horizontal.getAttribute('y1'),
+      horizontal.getAttribute('y2'),
+    ]).toEqual(['386', '414', '300', '300']);
+    expect([
+      vertical.getAttribute('x1'),
+      vertical.getAttribute('x2'),
+      vertical.getAttribute('y1'),
+      vertical.getAttribute('y2'),
+    ]).toEqual(['400', '400', '286', '314']);
+    expect(svg.querySelectorAll('[data-guides] circle')).toHaveLength(0);
   });
 
   it('ne trace rien pour `none` ni pour un pas, ni sans calque actif', () => {
@@ -137,9 +150,8 @@ describe('repères du modificateur', () => {
     render(scene(layer), svg);
     const guides = svg.querySelector('[data-guides]');
     expect(guides.dataset.guides).toBe('mirrorH spiral');
-    /* L'axe du miroir, plus la croix et l'anneau du centre de la spirale. */
+    /* L'axe du miroir, plus les deux branches du centre de la spirale. */
     expect(guides.querySelectorAll('line')).toHaveLength(3);
-    expect(guides.querySelectorAll('circle')).toHaveLength(1);
   });
 
   it('laisse les repères hors de l’export', () => {

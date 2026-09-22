@@ -27,8 +27,7 @@ export const render = (scene, svgRoot) => {
   if (guides) svgRoot.append(guides);
 };
 
-/* Demi-longueur des branches de la croix, et rayon de l'anneau qui marque le
-   centre. */
+/* Demi-longueur des branches de la croix qui marque un centre. */
 const GUIDE_MARK = 14;
 
 const guideNode = (geometry, attrs) => {
@@ -39,12 +38,21 @@ const guideNode = (geometry, attrs) => {
 
 const guideLine = (x1, y1, x2, y2) => guideNode('line', { x1, y1, x2, y2 });
 
-/** Marque un centre de transformation : croix + anneau. */
-const guideCenter = ({ center }) => [
-  guideLine(center.x - GUIDE_MARK, center.y, center.x + GUIDE_MARK, center.y),
-  guideLine(center.x, center.y - GUIDE_MARK, center.x, center.y + GUIDE_MARK),
-  guideNode('circle', { cx: center.x, cy: center.y, r: GUIDE_MARK }),
-];
+/**
+ * Marque un centre de transformation : une croix, deux branches égales de part
+ * et d'autre du point.
+ *
+ * Trait plein : les tirets du groupe partent du début de chaque branche, donc
+ * une croix pointillée rend des bras inégaux et le centre paraît décalé.
+ */
+const guideCenter = ({ center }) => {
+  const cross = [
+    guideLine(center.x - GUIDE_MARK, center.y, center.x + GUIDE_MARK, center.y),
+    guideLine(center.x, center.y - GUIDE_MARK, center.x, center.y + GUIDE_MARK),
+  ];
+  for (const branch of cross) branch.setAttribute('stroke-dasharray', 'none');
+  return cross;
+};
 
 /** Axe de symétrie d'un miroir : la seule chose que `n` ne déplace plus. */
 const mirrorGuides = (axis) => (layer) =>
