@@ -83,7 +83,9 @@ const createGuides = (layer) => {
   const group = document.createElementNS(SVG_NS, 'g');
   group.dataset.guides = marked.map((modifier) => modifier.type).join(' ');
   group.setAttribute('fill', 'none');
-  group.setAttribute('stroke', '#7dd3c0');
+  /* Gris neutre : un repère ne doit pas se confondre avec un trait dessiné,
+     dont l'accent est la couleur par défaut. */
+  group.setAttribute('stroke', '#a2a8b4');
   group.setAttribute('stroke-width', '1');
   group.setAttribute('stroke-opacity', '0.45');
   group.setAttribute('stroke-dasharray', '6 6');
