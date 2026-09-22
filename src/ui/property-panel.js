@@ -127,22 +127,23 @@ export const mountPropertyPanel = ({
     (element, value) =>
       store.apply(updateElement, element.id, { ry: clampExtent(element.type, value) / 2 }),
   );
+  /* Le remplissage n'a pas de couleur propre : rempli, une forme se peint de
+     son contour. Un seul choix de couleur, donc, et le contour l'emporte. */
   const stroke = bind(
     input('color'),
     (element) => (element.stroke === 'none' ? '#000000' : element.stroke),
-    (element, value) => store.apply(updateElement, element.id, { stroke: value }),
-    { parse: String },
-  );
-  const fill = bind(
-    input('color'),
-    (element) => (element.fill === 'none' ? '#000000' : element.fill),
-    (element, value) => store.apply(updateElement, element.id, { fill: value }),
+    (element, value) =>
+      store.apply(updateElement, element.id, {
+        stroke: value,
+        ...(element.fill === 'none' ? {} : { fill: value }),
+      }),
     { parse: String },
   );
   const filled = bind(
     input('checkbox'),
     (element) => element.fill !== 'none',
-    (element, value) => store.apply(updateElement, element.id, { fill: value ? fill.value : 'none' }),
+    (element, value) =>
+      store.apply(updateElement, element.id, { fill: value ? element.stroke : 'none' }),
     { event: 'change', parse: () => filled.checked },
   );
 
@@ -162,8 +163,7 @@ export const mountPropertyPanel = ({
   sizeRow.append(radiusField, widthField, heightField);
 
   const filledField = field('Remplir', filled);
-  const fillField = field('Remplissage', fill);
-  shape.append(shapeName, positionRow, sizeRow, field('Contour', stroke), filledField, fillField);
+  shape.append(shapeName, positionRow, sizeRow, field('Contour', stroke), filledField);
 
   /* ---- Calque ---- */
 
@@ -424,7 +424,6 @@ export const mountPropertyPanel = ({
     widthField.hidden = uniform;
     heightField.hidden = uniform;
     filledField.hidden = dot;
-    fillField.hidden = dot;
     const [widthLabel, heightLabel] =
       spanLabels[element && SHAPES[element.type].signed ? 'signed' : 'default'];
     widthField.querySelector('label').textContent = widthLabel;
