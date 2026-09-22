@@ -63,6 +63,13 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
   const render = (scene) => {
     if (collapsedId !== scene.activeLayerId) collapsedId = null;
     rebuild(scene);
+    /* La couleur change en continu pendant qu'on la règle : on la pose sur
+       place plutôt que de reconstruire les cards. */
+    for (const layer of scene.layers) {
+      container
+        .querySelector(`[data-layer-id="${layer.id}"]`)
+        ?.style.setProperty('--layer-color', layer.stroke);
+    }
   };
 
   const layerRow = (scene, layer) => {
@@ -73,6 +80,7 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
     const card = document.createElement('li');
     card.className = 'layer-card';
     card.dataset.active = String(isActive);
+    card.dataset.layerId = layer.id;
     const row = document.createElement('div');
     row.className = 'layer-row';
     card.append(row);

@@ -362,6 +362,8 @@ fieldset legend {
   border: 0;
   color: var(--text-dim);
 }
+/* Seul le bouton de visibilité est « pressé » dans l'entête d'un calque. */
+.layer-row > .icon-btn[aria-pressed="true"] { color: var(--layer-color, var(--accent)); }
 
 .icon-btn[aria-pressed="true"] { color: var(--accent); }
 .icon-btn:hover:not(:disabled) { color: var(--text); }
