@@ -99,14 +99,28 @@ describe('modificateurs', () => {
     }
   });
 
-  it('spiral accroît rayon et angle par pas constants', () => {
+  it('spiral tourne et dilate d’un facteur constant', () => {
     const children = copies('spiral', { x: 10, y: 0 }, 4, {
       angleStep: Math.PI / 2,
-      radiusStep: 5,
+      radiusStep: 50,
     });
-    expect(children.map(dist).map(Math.round)).toEqual([10, 15, 20, 25]);
+    expect(children.map(dist)).toEqual([10, 15, 22.5, 33.75].map((d) => expect.closeTo(d)));
     expect(children[1].x).toBeCloseTo(0);
     expect(children[1].y).toBeCloseTo(15);
+  });
+
+  /* Une similitude, pas un étirement : deux formes du calque gardent leurs
+     proportions d'une copie à l'autre, l'écart suivant le même facteur. */
+  it('spiral grandit le motif sans le déformer', () => {
+    const near = { x: 20, y: 12 };
+    const far = { x: 300, y: -140 };
+    const gap = Math.hypot(far.x - near.x, far.y - near.y);
+    const options = { angleStep: 0.4, radiusStep: 12 };
+    const a = copies('spiral', near, 5, options);
+    const b = copies('spiral', far, 5, options);
+    for (let i = 0; i < a.length; i += 1) {
+      expect(Math.hypot(b[i].x - a[i].x, b[i].y - a[i].y)).toBeCloseTo(gap * 1.12 ** i);
+    }
   });
 
   it('N=1 ne rend qu’une copie, à la position de départ', () => {

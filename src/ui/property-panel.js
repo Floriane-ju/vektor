@@ -296,7 +296,7 @@ export const mountPropertyPanel = ({
     stepRow.className = 'field-row';
     stepRow.append(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
     const angleField = field('Pas angulaire (rad)', angleStep);
-    const radiusStepField = field('Pas radial (px)', radiusStep);
+    const radiusStepField = field('Croissance par copie (%)', radiusStep);
 
     const root = document.createElement('div');
     root.className = 'modifier-block';

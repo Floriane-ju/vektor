@@ -13,10 +13,10 @@ import { clampCount } from './interpolate.js';
  * sont conservées : un motif composé de trois cercles tourne comme un motif,
  * pas comme trois cercles indépendants.
  *
- * Chaque transformation est donc une isométrie — translation, rotation,
- * réflexion — et ne dépend de la forme que par le point transformé. Une
- * transformation qui lirait la position d'une forme pour décider du
- * déplacement des autres déformerait le motif copie après copie.
+ * Chaque transformation est donc une similitude — translation, rotation,
+ * réflexion, dilatation autour du centre — et ne dépend de la forme que par le
+ * point transformé. Une transformation qui déplacerait chaque point selon sa
+ * propre distance au centre disloquerait le motif copie après copie.
  *
  * Travailler sur un point plutôt que sur un élément est ce qui rend cela
  * possible — la transformation ne sait rien de la forme qu'elle déplace, et
@@ -61,20 +61,22 @@ const mirrorV = (point, i, n, center) =>
 const axial = (point, i, n, center) => rotateAround(point, center, (i * Math.PI * 2) / n);
 
 /**
- * Spirale : la copie `i` est à `(r0 + i * radiusStep, θ0 + i * angleStep)` en
- * coordonnées polaires autour de `center`.
+ * Spirale : la copie `i` est le calque tourné de `i * angleStep` autour de
+ * `center`, puis dilaté de `(1 + radiusStep/100)^i` depuis ce même centre.
  *
- * ponytail: seule transformation non isométrique du lot — le pas radial
- * s'ajoute au rayon de chaque point, donc le motif s'étire en s'éloignant du
- * centre. C'est l'effet recherché ; une spirale rigide translaterait le groupe
- * entier au lieu de l'ouvrir.
+ * ponytail: seule transformation non isométrique du lot, mais c'est une
+ * similitude — même angle, même facteur pour tous les points. Le motif grandit
+ * sans se déformer. Ajouter un pas radial constant au rayon de chaque point
+ * (la version précédente) poussait chaque forme dans sa propre direction et
+ * disloquait le groupe copie après copie.
  */
 const spiral = (point, i, n, center, { angleStep = 0.4, radiusStep = 12 } = {}) => {
-  const dx = point.x - center.x;
-  const dy = point.y - center.y;
-  const radius = Math.hypot(dx, dy) + i * radiusStep;
-  const angle = Math.atan2(dy, dx) + i * angleStep;
-  return { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
+  const rotated = rotateAround(point, center, i * angleStep);
+  const growth = (1 + radiusStep / 100) ** i;
+  return {
+    x: center.x + (rotated.x - center.x) * growth,
+    y: center.y + (rotated.y - center.y) * growth,
+  };
 };
 
 const none = (point) => ({ x: point.x, y: point.y });
