@@ -2,7 +2,7 @@
 {
   "id": "T-0011",
   "titre": "Pile d'interpolations par calque",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": [
     "noyau",
