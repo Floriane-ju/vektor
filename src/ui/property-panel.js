@@ -6,8 +6,10 @@ import {
   moveModifier,
   RANGE_BOUNDS,
   removeModifier,
+  resetRanges,
   setLayerStroke,
   setLayerStrokeWidth,
+  setRangeBinding,
   SHAPES,
   updateElement,
   updateModifier,
@@ -33,6 +35,13 @@ const field = (labelText, control) => {
   label.htmlFor = control.id;
   wrap.append(label, control);
   return wrap;
+};
+
+const option = (value, label) => {
+  const node = document.createElement('option');
+  node.value = value;
+  node.textContent = label;
+  return node;
 };
 
 let uid = 0;
@@ -212,12 +221,7 @@ export const mountPropertyPanel = ({ store, container, status }) => {
     const type = document.createElement('select');
     type.id = `prop-${++uid}`;
     type.setAttribute('aria-label', `Type du modificateur ${rank}`);
-    for (const [value, label] of Object.entries(MODIFIER_LABELS)) {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = label;
-      type.append(option);
-    }
+    for (const [value, label] of Object.entries(MODIFIER_LABELS)) type.append(option(value, label));
     bindModifier(type, (layer) => layer.modifiers[index].type, (value) => ({ type: value }), {
       event: 'change',
       parse: String,
@@ -353,6 +357,49 @@ export const mountPropertyPanel = ({ store, container, status }) => {
     return wrap;
   };
 
+  /**
+   * Rampe suivie par une propriété : toutes les copies de la pile, ou l'indice
+   * d'un seul de ses étages.
+   *
+   * Un par propriété, et non un pour la section : lier l'opacité au miroir
+   * pendant que l'échelle court sur le total est précisément ce qu'on veut
+   * pouvoir dessiner.
+   */
+  const bindingSelects = [];
+  const bindingControl = (property, labelText) => {
+    const select = document.createElement('select');
+    select.id = `prop-${++uid}`;
+    select.dataset.binding = property;
+    bind(
+      select,
+      (layer) => String(layer.rangeBindings[property] ?? ''),
+      (layer, value) =>
+        store.apply(setRangeBinding, layer.id, property, value === '' ? null : Number(value)),
+      { subject: 'layer', event: 'change', parse: String },
+    );
+    bindingSelects.push(select);
+    return field(labelText, select);
+  };
+
+  /* Les options nomment les étages : elles suivent donc le contenu de la pile,
+     pas seulement sa longueur — un changement de type change l'étiquette. */
+  let bindingSignature = null;
+  const syncBindingOptions = (stack) => {
+    const signature = stack.map((modifier) => modifier.type).join('|');
+    if (signature === bindingSignature) return;
+    bindingSignature = signature;
+    for (const select of bindingSelects) {
+      const current = select.value;
+      select.replaceChildren(
+        option('', 'Toutes les copies'),
+        ...stack.map((modifier, index) =>
+          option(String(index), `${index + 1}. ${MODIFIER_LABELS[modifier.type]}`),
+        ),
+      );
+      select.value = current;
+    }
+  };
+
   const opacityRow = document.createElement('div');
   opacityRow.className = 'field-row';
   opacityRow.append(
@@ -367,7 +414,22 @@ export const mountPropertyPanel = ({ store, container, status }) => {
     rangeControl('scale', 1, 'Échelle fin'),
   );
 
-  interpolationSet.append(opacityRow, scaleRow);
+  const resetButton = document.createElement('button');
+  resetButton.type = 'button';
+  resetButton.textContent = 'Réinitialiser';
+  resetButton.dataset.focusKey = 'reset-interpolation';
+  resetButton.addEventListener('click', () => {
+    const layer = getActiveLayer(store.get());
+    if (layer) store.apply(resetRanges, layer.id);
+  });
+
+  interpolationSet.append(
+    opacityRow,
+    bindingControl('opacity', 'Opacité liée à'),
+    scaleRow,
+    bindingControl('scale', 'Échelle liée à'),
+    resetButton,
+  );
 
   container.append(shape, layerSet, modifierSet, interpolationSet);
 
@@ -387,6 +449,10 @@ export const mountPropertyPanel = ({ store, container, status }) => {
       set.disabled = !layer;
       set.setAttribute('aria-disabled', String(!layer));
     }
+
+    /* Avant la boucle : un `select` ne peut prendre la valeur d'une option qui
+       n'existe pas encore. */
+    syncBindingOptions(layer?.modifiers ?? []);
 
     for (const { node, read, subject } of controls) {
       const target = subjects[subject];

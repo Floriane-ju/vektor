@@ -16,20 +16,23 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@6';
+export const FORMAT = 'illu/scene@7';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
    - `@1` et `@2` n'avaient qu'une forme par calque, dans `baseElement` ;
    - `@1` à `@3` portaient l'épaisseur sur chaque forme, pas sur le calque ;
    - `@1` à `@4` n'avaient qu'un modificateur par calque, dans `modifier` ;
-   - `@1` à `@5` portaient la couleur sur chaque forme, pas sur le calque. */
+   - `@1` à `@5` portaient la couleur sur chaque forme, pas sur le calque ;
+   - `@1` à `@6` ignoraient les liaisons d'interpolation : leurs rampes sont
+     globales, ce qui rend exactement le même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
   'illu/scene@3',
   'illu/scene@4',
   'illu/scene@5',
+  'illu/scene@6',
   FORMAT,
 ]);
 
@@ -66,6 +69,22 @@ const readRange = (ranges, key) => {
   const raw = Array.isArray(ranges?.[key]) ? ranges[key] : [];
   return [clamp(raw[0], bounds), clamp(raw[1], bounds)];
 };
+
+/**
+ * Liaison d'interpolation : un rang dans la pile de modificateurs du calque.
+ * Absente, hors bornes ou non entière, la propriété suit la rampe globale.
+ */
+const readBinding = (value, stackSize) => {
+  /* `parseInt` plutôt que `Number` : `Number(null)` vaut 0, ce qui lierait à
+     son insu la propriété au premier modificateur de la pile. */
+  const rank = typeof value === 'number' ? value : Number.parseInt(value, 10);
+  return Number.isInteger(rank) && rank >= 0 && rank < stackSize ? rank : null;
+};
+
+const readBindings = (raw, stackSize) =>
+  Object.fromEntries(
+    Object.keys(RANGE_BOUNDS).map((key) => [key, readBinding(raw?.[key], stackSize)]),
+  );
 
 /* Ancien point : un disque plein sans contour. Sa couleur de remplissage
    devient celle du contour, et son diamètre l'épaisseur — reprise par le calque,
@@ -166,6 +185,7 @@ const readStroke = (raw) => {
 const readLayer = (raw, index) => {
   if (raw == null || typeof raw !== 'object') fail(`Calque ${index} : objet attendu.`);
   if (typeof raw.id !== 'string' || raw.id === '') fail(`Calque ${index} : \`id\` manquant.`);
+  const modifiers = readModifiers(raw);
   return createLayer({
     id: raw.id,
     name: typeof raw.name === 'string' && raw.name !== '' ? raw.name : `Calque ${index + 1}`,
@@ -177,11 +197,12 @@ const readLayer = (raw, index) => {
     strokeWidth: readStrokeWidth(raw),
     stroke: readStroke(raw),
     elements: readElements(raw),
-    modifiers: readModifiers(raw),
+    modifiers,
     propertyRanges: {
       opacity: readRange(raw.propertyRanges, 'opacity'),
       scale: readRange(raw.propertyRanges, 'scale'),
     },
+    rangeBindings: readBindings(raw.rangeBindings, modifiers.length),
   });
 };
 

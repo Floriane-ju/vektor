@@ -8,11 +8,15 @@ import {
   getRenderedChildren,
   moveElement,
   moveLayer,
+  moveModifier,
   removeElement,
   removeLayer,
+  removeModifier,
+  resetRanges,
   setLayerStroke,
   setLayerStrokeWidth,
   updateElement,
+  updateRange,
 } from '../src/scene.js';
 import { deserialize, serialize } from '../src/persistence.js';
 
@@ -26,21 +30,31 @@ const copies = (type, point, n, options = {}) =>
 
 describe('interpolation', () => {
   it('répartit une plage linéairement sur les indices', () => {
-    const values = [0, 1, 2, 3, 4].map((i) => interpolateProps({ opacity: [1, 0] }, i, 5).opacity);
+    const values = [0, 1, 2, 3, 4].map(
+      (i) => interpolateProps({ opacity: [1, 0] }, () => t(i, 5)).opacity,
+    );
     expect(values).toEqual([1, 0.75, 0.5, 0.25, 0]);
   });
 
   it('interpole plusieurs propriétés en une passe', () => {
-    expect(interpolateProps({ opacity: [1, 0], scale: [1, 2] }, 1, 3)).toEqual({
+    expect(interpolateProps({ opacity: [1, 0], scale: [1, 2] }, () => t(1, 3))).toEqual({
       opacity: 0.5,
       scale: 1.5,
     });
   });
 
+  /* Chaque propriété tire son facteur de sa propre rampe : c'est ce qui permet
+     de lier l'opacité à un étage de la pile et l'échelle au total des copies. */
+  it('donne à chaque propriété le facteur de sa rampe', () => {
+    expect(
+      interpolateProps({ opacity: [1, 0], scale: [1, 3] }, (key) => (key === 'opacity' ? 0.5 : 1)),
+    ).toEqual({ opacity: 0.5, scale: 3 });
+  });
+
   it('garde le cas dégénéré sans NaN', () => {
     expect(t(0, 1)).toBe(0);
     expect(t(0, 0)).toBe(0);
-    expect(interpolateProps({ opacity: [1, 0] }, 0, 1).opacity).toBe(1);
+    expect(interpolateProps({ opacity: [1, 0] }, () => t(0, 1)).opacity).toBe(1);
     expect(clampCount(0)).toBe(1);
     expect(clampCount(-3)).toBe(1);
     expect(clampCount(2.7)).toBe(2);
@@ -228,6 +242,39 @@ describe('composition', () => {
     );
   });
 
+  /* Liée à un étage, la rampe ne voit que l'indice de cet étage : le miroir
+     éteint la copie reflétée, et le pas ne change rien à l'opacité. */
+  it('une interpolation liée à un modificateur suit le seul indice de cet étage', () => {
+    const stacked = layer({
+      modifiers: [
+        { type: 'step', n: 3, stepX: 10, stepY: 0 },
+        { type: 'mirrorH', n: 2 },
+      ],
+      propertyRanges: { opacity: [1, 0], scale: [1, 1] },
+      rangeBindings: { opacity: 1, scale: null },
+    });
+    expect(getRenderedChildren(stacked).map((c) => c.opacity)).toEqual([1, 0, 1, 0, 1, 0]);
+  });
+
+  it('deux propriétés suivent chacune leur rampe', () => {
+    const stacked = layer({
+      modifiers: [
+        { type: 'step', n: 3, stepX: 10, stepY: 0 },
+        { type: 'mirrorH', n: 2 },
+      ],
+      propertyRanges: { opacity: [1, 0], scale: [1, 3] },
+      rangeBindings: { opacity: 0, scale: null },
+    });
+    const children = getRenderedChildren(stacked);
+    expect(children.map((c) => c.opacity)).toEqual([1, 1, 0.5, 0.5, 0, 0]);
+    children.map((c) => c.scale).forEach((scale, i) => expect(scale).toBeCloseTo(1 + 0.4 * i));
+  });
+
+  it('une liaison qui ne désigne plus d’étage retombe sur la rampe globale', () => {
+    const orphan = layer({ rangeBindings: { opacity: 4, scale: null } });
+    expect(getRenderedChildren(orphan).map((c) => c.opacity)).toEqual([1, 0.75, 0.5, 0.25, 0]);
+  });
+
   it('une pile vide rend le calque tel quel', () => {
     const bare = layer({ modifiers: [] });
     const children = getRenderedChildren(bare);
@@ -266,6 +313,47 @@ describe('scène immuable', () => {
     const scene = { layers: [a], activeLayerId: a.id, activeElementId: null };
     expect(moveLayer(scene, a.id, 1)).toBe(scene);
     expect(moveElement(scene, 'inconnu', 1)).toBe(scene);
+  });
+});
+
+/* Une liaison désigne un rang dans la pile : remuer la pile doit l'emmener,
+   sinon l'opacité sauterait en silence d'un étage à l'autre. */
+describe('liaisons d’interpolation', () => {
+  const scene = () => {
+    const layer = createLayer({
+      modifiers: [{ type: 'step' }, { type: 'axial' }, { type: 'mirrorH' }],
+      rangeBindings: { opacity: 2, scale: 0 },
+    });
+    return { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+  };
+  const bindings = (next) => next.layers[0].rangeBindings;
+
+  it('suit le modificateur déplacé dans la pile', () => {
+    const start = scene();
+    expect(bindings(moveModifier(start, start.layers[0].id, 2, -1))).toEqual({
+      opacity: 1,
+      scale: 0,
+    });
+  });
+
+  it('retombe sur la rampe globale quand l’étage lié disparaît', () => {
+    const start = scene();
+    const next = removeModifier(start, start.layers[0].id, 2);
+    expect(bindings(next)).toEqual({ opacity: null, scale: 0 });
+  });
+
+  it('décale les liaisons des étages suivant celui qu’on supprime', () => {
+    const start = scene();
+    const next = removeModifier(start, start.layers[0].id, 0);
+    expect(bindings(next)).toEqual({ opacity: 1, scale: null });
+  });
+
+  it('la réinitialisation rend les plages neutres et les rampes globales', () => {
+    const start = scene();
+    const busy = updateRange(start, start.layers[0].id, 'opacity', 1, 0.2);
+    const reset = resetRanges(busy, start.layers[0].id);
+    expect(reset.layers[0].propertyRanges).toEqual({ opacity: [1, 1], scale: [1, 1] });
+    expect(bindings(reset)).toEqual({ opacity: null, scale: null });
   });
 });
 
@@ -406,6 +494,30 @@ describe('persistance', () => {
       activeLayerId: 'L1',
     });
     expect(deserialize(raw).layers[0].modifiers[0].n).toBe(1);
+  });
+
+  it('relit une liaison d’interpolation et refuse un rang hors pile', () => {
+    const raw = JSON.stringify({
+      format: 'illu/scene@7',
+      layers: [
+        {
+          id: 'L1',
+          modifiers: [{ type: 'step' }, { type: 'mirrorH' }],
+          rangeBindings: { opacity: 1, scale: 5 },
+        },
+      ],
+      activeLayerId: 'L1',
+    });
+    expect(deserialize(raw).layers[0].rangeBindings).toEqual({ opacity: 1, scale: null });
+  });
+
+  it('un fichier antérieur aux liaisons se relit en rampes globales', () => {
+    const raw = JSON.stringify({
+      format: 'illu/scene@6',
+      layers: [{ id: 'L1', modifiers: [{ type: 'step' }] }],
+      activeLayerId: 'L1',
+    });
+    expect(deserialize(raw).layers[0].rangeBindings).toEqual({ opacity: null, scale: null });
   });
 
   it('replie une plage absente sur la valeur neutre, pas sur une borne', () => {

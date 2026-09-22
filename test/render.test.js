@@ -539,6 +539,45 @@ describe('accessibilité au clavier', () => {
     panel.remove();
   });
 
+  it('lie une interpolation à un étage, et la réinitialise', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const { addModifier, createLayer } = await import('../src/scene.js');
+    const layer = createLayer();
+    const store = createStore({
+      layers: [layer],
+      activeLayerId: layer.id,
+      activeElementId: null,
+    });
+    const panel = document.createElement('div');
+    mountPropertyPanel({ store, container: panel, status: { show: () => {} } });
+
+    store.apply(addModifier, layer.id);
+    store.apply(addModifier, layer.id);
+
+    /* Les étages sont nommés par leur rang et leur type : « le deuxième pas »
+       se choisit sans compter les blocs à l'écran. */
+    const select = panel.querySelector('[data-binding="opacity"]');
+    expect([...select.options].map((o) => o.textContent)).toEqual([
+      'Toutes les copies',
+      '1. Pas',
+      '2. Pas',
+    ]);
+
+    select.value = '1';
+    select.dispatchEvent(new Event('change'));
+    expect(store.get().layers[0].rangeBindings).toEqual({ opacity: 1, scale: null });
+
+    const [opacityStart] = panel.querySelectorAll('input[type="range"]');
+    opacityStart.value = '0.2';
+    opacityStart.dispatchEvent(new Event('input'));
+    expect(store.get().layers[0].propertyRanges.opacity[0]).toBeCloseTo(0.2);
+
+    panel.querySelector('[data-focus-key="reset-interpolation"]').click();
+    expect(store.get().layers[0].propertyRanges).toEqual({ opacity: [1, 1], scale: [1, 1] });
+    expect(store.get().layers[0].rangeBindings).toEqual({ opacity: null, scale: null });
+    expect(select.value).toBe('');
+  });
+
   it('la forme s’ajoute et se positionne sans souris', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const { mountShapeList } = await import('../src/ui/shape-list.js');
