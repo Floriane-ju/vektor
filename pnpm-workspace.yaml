@@ -1,0 +1,6 @@
+# Les scripts de cycle de vie restent bloqués par défaut (protection contre les
+# vers de supply chain npm). esbuild n'a pas besoin du sien : son binaire arrive
+# par le paquet optionnel de la plateforme, et `pnpm dev` comme `pnpm test`
+# fonctionnent sans.
+allowBuilds:
+  esbuild: false

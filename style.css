@@ -1,0 +1,282 @@
+/* Thème sombre monochrome, accent unique. Contrastes visés : AA (4.5:1) sur tout
+   le texte, mesurés contre --bg-panel. */
+:root {
+  --bg: #0c0d10;
+  --bg-panel: #131519;
+  --bg-field: #1c1f25;
+  --line: #2b2f37;
+  --text: #e6e8ec;      /* 14.2:1 sur --bg-panel */
+  --text-dim: #a2a8b4;  /* 6.4:1  sur --bg-panel */
+  --accent: #7dd3c0;    /* 9.1:1  sur --bg-panel */
+  --danger: #ff8f7a;    /* 7.3:1  sur --bg-panel */
+  --radius: 4px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ---- Topbar ---- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-panel);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.topbar-actions { display: flex; gap: 8px; }
+
+/* Sélecteur de forme : des radios natifs, masqués visuellement mais toujours
+   focalisables — c'est le navigateur qui fournit la navigation aux flèches et
+   l'exclusivité du groupe. */
+.shape-picker {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.shape-picker legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.shape-picker input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.shape-picker label {
+  padding: 5px 12px;
+  cursor: pointer;
+  color: var(--text-dim);
+  border-left: 1px solid var(--line);
+}
+
+.shape-picker label:first-of-type { border-left: 0; }
+.shape-picker label:hover { color: var(--text); }
+
+.shape-picker input:checked + label {
+  color: var(--bg);
+  background: var(--accent);
+}
+
+.shape-picker input:focus-visible + label {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.shape-name {
+  margin: 0 0 10px;
+  color: var(--accent);
+}
+
+/* ---- Layout ---- */
+
+.workspace {
+  display: grid;
+  grid-template-columns: 240px 1fr 280px;
+  min-height: 0;
+}
+
+.panel {
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--bg-panel);
+}
+
+.panel-left { border-right: 1px solid var(--line); }
+.panel-right { border-left: 1px solid var(--line); }
+
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.stage-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 24px;
+  background:
+    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 30px 30px,
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 30px 30px,
+    var(--bg);
+}
+
+#stage {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  cursor: crosshair;
+  max-width: 100%;
+  height: auto;
+  /* Un glissement sur le stage dessine : il ne doit pas aussi faire défiler la
+     page ou sélectionner du texte. */
+  touch-action: none;
+  user-select: none;
+}
+
+.stage-hint {
+  position: absolute;
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.stage-hint[hidden] { display: none; }
+
+.status {
+  margin: 0;
+  padding: 6px 16px;
+  min-height: 28px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-panel);
+  color: var(--text-dim);
+}
+
+.status[data-tone="error"] { color: var(--danger); }
+
+/* ---- Contrôles ---- */
+
+button,
+select,
+input {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-field);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+}
+
+button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+
+:is(button, select, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:disabled { opacity: 0.45; cursor: not-allowed; }
+
+input[type="color"] { padding: 2px; width: 100%; height: 28px; }
+input[type="range"] { padding: 0; border: 0; background: none; width: 100%; }
+
+.field {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.field label { color: var(--text-dim); }
+.field-row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.field[hidden] { display: none; }
+
+fieldset {
+  margin: 0 0 14px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+fieldset legend {
+  padding: 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.range-value {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Panneau calques ---- */
+
+.layer-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.layer-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--bg-field);
+}
+
+.layer-row.is-shape { grid-template-columns: 1fr auto auto auto; }
+
+.layer-row[data-active="true"] { border-color: var(--accent); }
+
+.layer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+}
+
+.icon-btn {
+  padding: 2px 6px;
+  line-height: 1;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+}
+
+.icon-btn[aria-pressed="true"] { color: var(--accent); }
+.icon-btn:hover:not(:disabled) { color: var(--text); }
+.icon-btn.is-danger { color: var(--danger); }
+
+.empty-note { color: var(--text-dim); margin: 0 0 10px; }

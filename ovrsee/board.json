@@ -1,0 +1,29 @@
+{
+  "colonnes": [
+    {
+      "id": "backlog",
+      "titre": "Backlog"
+    },
+    {
+      "id": "a-specifier",
+      "titre": "À spécifier"
+    },
+    {
+      "id": "pret",
+      "titre": "Prêt"
+    },
+    {
+      "id": "en-cours",
+      "titre": "En cours",
+      "wip": 3
+    },
+    {
+      "id": "revue",
+      "titre": "Revue"
+    },
+    {
+      "id": "fait",
+      "titre": "Fait"
+    }
+  ]
+}

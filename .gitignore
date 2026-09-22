@@ -1,0 +1,5 @@
+node_modules
+dist
+
+# État de session ovrsee (plan et ticket actifs, propres à chaque session)
+ovrsee/.active/
