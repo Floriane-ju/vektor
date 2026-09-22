@@ -1,14 +1,20 @@
 node_modules
 dist
 
-# Captures d'écran ovrsee : régénérées à chaque commit, purge auto côté
-# disque (30j puis 1/semaine) — inutile de les suivre dans git.
-ovrsee/pages/shots/
-
 # Journal des scans : local à une machine.
 ovrsee/pages/scans.jsonl
 
 # État de session ovrsee (plan et ticket actifs, propres à chaque session)
+ovrsee/.active/
+ovrsee/.active-plan
+ovrsee/.active-ticket
+
+# Captures d'écran ovrsee : régénérées à chaque commit, purge auto côté
+# disque (30j puis 1/semaine) — inutile de les suivre dans git.
+ovrsee/pages/shots/
+
+# État de travail des sessions Claude (ovrsee) : local à une machine, jamais
+# versionné.
 ovrsee/.active/
 ovrsee/.active-plan
 ovrsee/.active-ticket
