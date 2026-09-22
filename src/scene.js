@@ -1,5 +1,5 @@
 import { applyStack, createModifier, effectiveCount, stackCopies } from './modifiers.js';
-import { clampCount, interpolateProps, t } from './interpolate.js';
+import { clampCount, stackValues, t } from './interpolate.js';
 
 export const STAGE = { width: 900, height: 900 };
 
@@ -11,26 +11,11 @@ export const STAGE = { width: 900, height: 900 };
  * dériver de `max` donnait silencieusement `scale = 10` à l'import.
  */
 export const RANGE_BOUNDS = {
-  opacity: { min: 0, max: 1, step: 0.01, identity: 1 },
-  scale: { min: 0, max: 3, step: 0.01, identity: 1 },
+  opacity: { min: 0, max: 1, step: 0.01, identity: 1, defaultRange: [1, 0] },
+  scale: { min: 0, max: 3, step: 0.01, identity: 1, defaultRange: [1, 0.4] },
 };
 
-/** Plages neutres : l'état d'un calque neuf, et celui que rend « Réinitialiser ». */
-export const identityRanges = () =>
-  Object.fromEntries(
-    Object.entries(RANGE_BOUNDS).map(([property, { identity }]) => [property, [identity, identity]]),
-  );
-
-/**
- * Rampe suivie par chaque propriété interpolée.
- *
- * `null` = la rampe globale, qui court sur le total des copies de la pile. Un
- * entier = le rang du modificateur dont l'indice de copie mène seul
- * l'interpolation : lier l'opacité à un miroir éteint la copie reflétée sans
- * que le pas voisin n'y change quoi que ce soit.
- */
-export const globalBindings = () =>
-  Object.fromEntries(Object.keys(RANGE_BOUNDS).map((property) => [property, null]));
+export const RANGE_LABELS = { opacity: 'Opacité', scale: 'Échelle' };
 
 /**
  * Formes disponibles.
@@ -99,7 +84,7 @@ export const DEFAULT_STROKE_WIDTH = 1.5;
  */
 export const DEFAULT_STROKE = '#7dd3c0';
 
-const counters = { L: 0, E: 0 };
+const counters = { L: 0, E: 0, I: 0 };
 const nextId = (prefix) => `${prefix}${++counters[prefix]}`;
 
 export const createElement = (type, x, y, overrides = {}) => ({
@@ -149,8 +134,30 @@ export const createLayer = (overrides = {}) => ({
   elements: [],
   /* Pile vide : le calque se rend tel quel. On empile ensuite les gestes. */
   modifiers: [],
-  propertyRanges: identityRanges(),
-  rangeBindings: globalBindings(),
+  /* Pile vide : toutes les copies se rendent pareilles. */
+  interpolations: [],
+  ...overrides,
+});
+
+/**
+ * Une interpolation fait courir une propriété d'une valeur à l'autre le long
+ * des copies. Le calque en porte une pile, comme il porte celle des
+ * modificateurs : c'est la même pile de gestes, appliquée aux propriétés
+ * plutôt qu'aux positions.
+ *
+ * `binding` = rang du modificateur dont l'indice mène seul la rampe, ou `null`
+ * pour la rampe globale qui court sur le total des copies. Un rang ne désigne
+ * un étage que dans la pile de ce calque — d'où l'intérêt de les loger au même
+ * endroit.
+ *
+ * La pile s'ajoute par produit et non par écrasement, donc deux interpolations
+ * d'opacité se composent — voir `stackValues`.
+ */
+export const createInterpolation = (overrides = {}) => ({
+  id: nextId('I'),
+  property: 'opacity',
+  range: [...RANGE_BOUNDS.opacity.defaultRange],
+  binding: null,
   ...overrides,
 });
 
@@ -174,6 +181,7 @@ export const reserveIds = (layers) => {
   for (const layer of layers) {
     take(layer.id);
     for (const element of layer.elements) take(element.id);
+    for (const interpolation of layer.interpolations) take(interpolation.id);
   }
 };
 
@@ -193,9 +201,11 @@ export const getActiveElement = (scene) =>
  * formes d'une même copie subissent le même déplacement et partagent la même
  * opacité et la même échelle. C'est ce qui fait tourner un motif comme un motif.
  *
- * Empiler multiplie : deux modificateurs de 5 et 2 copies en font 10. La rampe
- * d'interpolation court sur ce total, pas sur chaque modificateur — sinon deux
- * copies voisines de la pile intérieure auraient la même opacité.
+ * Empiler multiplie : deux modificateurs de 5 et 2 copies en font 10. Une rampe
+ * d'interpolation court par défaut sur ce total, pas sur chaque modificateur —
+ * sinon deux copies voisines de la pile intérieure auraient la même opacité.
+ * Elle se lie au besoin à un seul étage, et plusieurs interpolations peuvent
+ * viser le calque : leurs valeurs se composent par produit.
  *
  * Le résultat est groupé par copie, ce qui fixe aussi l'ordre de dessin à
  * l'intérieur du calque.
@@ -205,26 +215,26 @@ export const getActiveElement = (scene) =>
  */
 
 /**
- * Facteur de rampe d'une propriété pour la copie `i` de la pile.
+ * Facteur de rampe d'une interpolation pour la copie `i` de la pile.
  *
  * Liée à un modificateur, l'interpolation ne lit que l'indice de cet étage :
  * deux copies qui n'en diffèrent pas partagent la même valeur. Une liaison qui
  * ne désigne plus de modificateur — fichier importé, étage supprimé ailleurs —
  * retombe sur la rampe globale plutôt que de rendre `NaN`.
  */
-const rangeFactor = (layer, property, indices, i, total) => {
-  const rank = layer.rangeBindings?.[property] ?? null;
-  const modifier = rank === null ? null : layer.modifiers[rank];
-  return modifier ? t(indices[rank], effectiveCount(modifier)) : t(i, total);
+const rangeFactor = (layer, binding, indices, i, total) => {
+  const modifier = binding === null ? null : layer.modifiers[binding];
+  return modifier ? t(indices[binding], effectiveCount(modifier)) : t(i, total);
 };
+
 export const getRenderedChildren = (layer) => {
   if (layer.elements.length === 0) return [];
   const copies = stackCopies(layer.modifiers);
 
   const children = [];
   copies.forEach((indices, i) => {
-    const properties = interpolateProps(layer.propertyRanges, (property) =>
-      rangeFactor(layer, property, indices, i, copies.length),
+    const properties = stackValues(layer.interpolations, (interpolation) =>
+      rangeFactor(layer, interpolation.binding, indices, i, copies.length),
     );
     for (const element of layer.elements) {
       children.push({
@@ -356,23 +366,27 @@ export const addModifier = (scene, id) =>
   mapLayer(scene, id, (layer) => ({ ...layer, modifiers: [...layer.modifiers, createModifier()] }));
 
 /**
- * Une liaison d'interpolation désigne un rang dans la pile : remuer la pile doit
- * l'emmener, sinon l'opacité passerait en silence à l'étage du voisin.
+ * Une liaison d'interpolation désigne un rang dans la pile de modificateurs du
+ * calque : remuer la pile doit l'emmener, sinon l'opacité passerait en silence
+ * à l'étage du voisin.
  */
-const remapBindings = (bindings, fn) =>
-  Object.fromEntries(
-    Object.entries(bindings).map(([property, rank]) => [property, rank === null ? null : fn(rank)]),
-  );
+const remapBindings = (layer, fn) => ({
+  ...layer,
+  interpolations: layer.interpolations.map((interpolation) =>
+    interpolation.binding === null
+      ? interpolation
+      : { ...interpolation, binding: fn(interpolation.binding) },
+  ),
+});
 
 export const removeModifier = (scene, id, index) =>
-  mapLayer(scene, id, (layer) => ({
-    ...layer,
-    modifiers: layer.modifiers.filter((_, i) => i !== index),
-    /* L'étage supprimé emporte sa liaison ; ceux du dessus reculent d'un rang. */
-    rangeBindings: remapBindings(layer.rangeBindings, (rank) =>
-      rank === index ? null : rank > index ? rank - 1 : rank,
+  mapLayer(scene, id, (layer) =>
+    remapBindings(
+      { ...layer, modifiers: layer.modifiers.filter((_, i) => i !== index) },
+      /* L'étage supprimé emporte sa liaison ; ceux du dessus reculent d'un rang. */
+      (rank) => (rank === index ? null : rank > index ? rank - 1 : rank),
     ),
-  }));
+  );
 
 /** `delta` = -1 vers le début de la pile, +1 vers la fin. L'ordre change le dessin. */
 export const moveModifier = (scene, id, index, delta) =>
@@ -381,13 +395,9 @@ export const moveModifier = (scene, id, index, delta) =>
     if (to < 0 || to >= layer.modifiers.length) return layer;
     const modifiers = [...layer.modifiers];
     [modifiers[index], modifiers[to]] = [modifiers[to], modifiers[index]];
-    return {
-      ...layer,
-      modifiers,
-      rangeBindings: remapBindings(layer.rangeBindings, (rank) =>
-        rank === index ? to : rank === to ? index : rank,
-      ),
-    };
+    return remapBindings({ ...layer, modifiers }, (rank) =>
+      rank === index ? to : rank === to ? index : rank,
+    );
   });
 
 export const updateModifier = (scene, id, index, patch) =>
@@ -400,24 +410,50 @@ export const updateModifier = (scene, id, index, patch) =>
     }),
   }));
 
-/** `rank` = rang du modificateur qui mène la rampe, ou `null` pour la rampe globale. */
-export const setRangeBinding = (scene, id, property, rank) =>
-  mapLayer(scene, id, (layer) => ({
+/* ---- Pile d'interpolations ---- */
+
+const mapInterpolation = (scene, layerId, id, fn) =>
+  mapLayer(scene, layerId, (layer) => ({
     ...layer,
-    rangeBindings: { ...layer.rangeBindings, [property]: rank },
+    interpolations: layer.interpolations.map((interpolation) =>
+      interpolation.id === id ? fn(interpolation) : interpolation,
+    ),
   }));
 
-/** Remet l'interpolation dans son état d'origine : plages neutres, rampes globales. */
-export const resetRanges = (scene, id) =>
-  mapLayer(scene, id, (layer) => ({
+export const addInterpolation = (scene, layerId) =>
+  mapLayer(scene, layerId, (layer) => ({
     ...layer,
-    propertyRanges: identityRanges(),
-    rangeBindings: globalBindings(),
+    interpolations: [...layer.interpolations, createInterpolation()],
   }));
 
-export const updateRange = (scene, id, property, index, value) =>
-  mapLayer(scene, id, (layer) => {
-    const range = [...layer.propertyRanges[property]];
+export const removeInterpolation = (scene, layerId, id) =>
+  mapLayer(scene, layerId, (layer) => ({
+    ...layer,
+    interpolations: layer.interpolations.filter((interpolation) => interpolation.id !== id),
+  }));
+
+/** Vide la pile : le calque rend à nouveau toutes ses copies pareilles. */
+export const clearInterpolations = (scene, layerId) =>
+  mapLayer(scene, layerId, (layer) => ({ ...layer, interpolations: [] }));
+
+/**
+ * `patch` porte les champs à changer : `property`, `binding` ou `range`.
+ *
+ * Changer de propriété change les bornes, donc la plage repart du réglage par
+ * défaut de la nouvelle plutôt que d'être rabotée à une valeur qui ne veut plus
+ * rien dire — une échelle de 3 ramenée à une opacité de 1.
+ */
+export const updateInterpolation = (scene, layerId, id, patch) =>
+  mapInterpolation(scene, layerId, id, (interpolation) => {
+    const next = { ...interpolation, ...patch };
+    if (next.property === interpolation.property) return next;
+    return { ...next, range: [...RANGE_BOUNDS[next.property].defaultRange] };
+  });
+
+/** `index` = 0 pour la borne de début, 1 pour celle de fin. */
+export const updateInterpolationRange = (scene, layerId, id, index, value) =>
+  mapInterpolation(scene, layerId, id, (interpolation) => {
+    const range = [...interpolation.range];
     range[index] = value;
-    return { ...layer, propertyRanges: { ...layer.propertyRanges, [property]: range } };
+    return { ...interpolation, range };
   });

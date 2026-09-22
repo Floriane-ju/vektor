@@ -149,6 +149,7 @@ body {
   color: var(--text-dim);
 }
 
+
 .stage-wrap {
   position: relative;
   display: grid;
@@ -284,6 +285,30 @@ fieldset legend {
 .modifier-block .field:last-child,
 .modifier-block .field-row:last-child { margin-bottom: 0; }
 
+/* ---- Pile d'interpolations ---- */
+
+/* Une interpolation se règle comme un modificateur : même bloc, même entête. */
+.interpolation-block {
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-field);
+}
+
+.interpolation-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.interpolation-block .field:last-child,
+.interpolation-block .field-row:last-child { margin-bottom: 0; }
+
+.interpolation-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
 /* ---- Panneau calques ---- */
 
 .layer-list {
@@ -343,4 +368,5 @@ fieldset legend {
 .icon-btn.is-danger { color: var(--danger); }
 
 .empty-note { color: var(--text-dim); margin: 0 0 10px; }
+
 

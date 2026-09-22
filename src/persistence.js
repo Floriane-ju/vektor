@@ -3,6 +3,7 @@ import { clampCount } from './interpolate.js';
 import {
   clampExtent,
   createElement,
+  createInterpolation,
   createLayer,
   DEFAULT_STROKE,
   DEFAULT_STROKE_WIDTH,
@@ -16,7 +17,7 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@7';
+export const FORMAT = 'illu/scene@8';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -25,7 +26,10 @@ export const FORMAT = 'illu/scene@7';
    - `@1` à `@4` n'avaient qu'un modificateur par calque, dans `modifier` ;
    - `@1` à `@5` portaient la couleur sur chaque forme, pas sur le calque ;
    - `@1` à `@6` ignoraient les liaisons d'interpolation : leurs rampes sont
-     globales, ce qui rend exactement le même dessin. */
+     globales, ce qui rend exactement le même dessin ;
+   - `@1` à `@7` n'avaient qu'une interpolation par propriété et par calque,
+     dans `propertyRanges` : chaque plage non neutre se relit comme un étage de
+     la pile, ce qui rend exactement le même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -33,6 +37,7 @@ const READABLE_FORMATS = new Set([
   'illu/scene@4',
   'illu/scene@5',
   'illu/scene@6',
+  'illu/scene@7',
   FORMAT,
 ]);
 
@@ -81,10 +86,47 @@ const readBinding = (value, stackSize) => {
   return Number.isInteger(rank) && rank >= 0 && rank < stackSize ? rank : null;
 };
 
-const readBindings = (raw, stackSize) =>
-  Object.fromEntries(
-    Object.keys(RANGE_BOUNDS).map((key) => [key, readBinding(raw?.[key], stackSize)]),
-  );
+/**
+ * Interpolation d'un calque. Une propriété inconnue se replie sur l'opacité et
+ * la plage est ramenée dans les bornes de cette propriété : un fichier importé
+ * est une donnée externe, jamais une plage de confiance.
+ */
+const readInterpolation = (raw, stackSize) => {
+  const property = Object.hasOwn(RANGE_BOUNDS, raw?.property) ? raw.property : 'opacity';
+  const bounds = RANGE_BOUNDS[property];
+  const range = Array.isArray(raw?.range) ? raw.range : [];
+  return createInterpolation({
+    ...(typeof raw?.id === 'string' && raw.id !== '' ? { id: raw.id } : {}),
+    property,
+    range: [clamp(range[0], bounds), clamp(range[1], bounds)],
+    binding: readBinding(raw?.binding, stackSize),
+  });
+};
+
+/**
+ * Pile d'interpolations du calque. Avant `@8` il n'en portait qu'une par
+ * propriété, dans `propertyRanges` : chacune devient un étage de la pile.
+ *
+ * Une plage restée neutre n'en devient pas un — elle ne rendait rien, et la
+ * faire apparaître encombrerait le panneau d'une ligne sans effet.
+ */
+const readInterpolations = (raw, stackSize) => {
+  if (Array.isArray(raw.interpolations)) {
+    return raw.interpolations.map((entry) => readInterpolation(entry, stackSize));
+  }
+  return Object.keys(RANGE_BOUNDS).flatMap((property) => {
+    const range = readRange(raw.propertyRanges, property);
+    const { identity } = RANGE_BOUNDS[property];
+    if (range[0] === identity && range[1] === identity) return [];
+    return [
+      createInterpolation({
+        property,
+        range,
+        binding: readBinding(raw.rangeBindings?.[property], stackSize),
+      }),
+    ];
+  });
+};
 
 /* Ancien point : un disque plein sans contour. Sa couleur de remplissage
    devient celle du contour, et son diamètre l'épaisseur — reprise par le calque,
@@ -198,11 +240,7 @@ const readLayer = (raw, index) => {
     stroke: readStroke(raw),
     elements: readElements(raw),
     modifiers,
-    propertyRanges: {
-      opacity: readRange(raw.propertyRanges, 'opacity'),
-      scale: readRange(raw.propertyRanges, 'scale'),
-    },
-    rangeBindings: readBindings(raw.rangeBindings, modifiers.length),
+    interpolations: readInterpolations(raw, modifiers.length),
   });
 };
 

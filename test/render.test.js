@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render, toSvgDocument } from '../src/renderer-svg.js';
-import { createElement, createLayer, STAGE } from '../src/scene.js';
+import { createElement, createInterpolation, createLayer, STAGE } from '../src/scene.js';
 import { createStore } from '../src/store.js';
 import { mountToolbar } from '../src/ui/toolbar.js';
 
@@ -20,9 +20,10 @@ const repeatLayer = (overrides = {}) =>
     center: { x: 0, y: 0 },
     elements: [createElement('circle', 100, 0)],
     modifiers: [{ type: 'step', n: 5, stepX: -50, stepY: 0, angleStep: 0.4, radiusStep: 12 }],
-    propertyRanges: { opacity: [1, 0], scale: [1, 1] },
     ...overrides,
   });
+
+const ramp = (property, range) => createInterpolation({ property, range });
 
 describe('renderer SVG', () => {
   let svg;
@@ -31,7 +32,10 @@ describe('renderer SVG', () => {
   });
 
   it('rend les opacités interpolées sur les enfants', () => {
-    render({ layers: [repeatLayer()], activeLayerId: null, activeElementId: null }, svg);
+    render(
+      { layers: [repeatLayer({ interpolations: [ramp('opacity', [1, 0])] })] },
+      svg,
+    );
     const circles = [...svg.querySelectorAll('circle')];
     expect(circles).toHaveLength(5);
     expect(circles.map((c) => c.getAttribute('fill-opacity'))).toEqual([
@@ -49,9 +53,9 @@ describe('renderer SVG', () => {
   it('multiplie le rayon par l’échelle interpolée', () => {
     const layer = repeatLayer({
       modifiers: [{ type: 'step', n: 3, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
-      propertyRanges: { opacity: [1, 1], scale: [1, 2] },
+      interpolations: [ramp('scale', [1, 2])],
     });
-    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    render({ layers: [layer] }, svg);
     expect([...svg.querySelectorAll('circle')].map((c) => c.getAttribute('r'))).toEqual([
       '60',
       '90',
@@ -574,9 +578,9 @@ describe('rendu des formes', () => {
       elements: [createElement('line', 100, 0, { rx: 40, ry: 0 })],
       modifiers: [{ type: 'mirrorH', n: 2, angleStep: 0, radiusStep: 0 }],
       center: { x: 100, y: 0 },
-      propertyRanges: { opacity: [1, 1], scale: [1, 2] },
+      interpolations: [ramp('scale', [1, 2])],
     });
-    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    render({ layers: [layer] }, svg);
 
     const lines = [...svg.querySelectorAll('line')];
     expect(lines.map((l) => [l.getAttribute('x1'), l.getAttribute('x2')])).toEqual([
@@ -591,9 +595,9 @@ describe('rendu des formes', () => {
       center: { x: 0, y: 0 },
       elements: [createElement('rect', 0, 0, { rx: 10, ry: 5 })],
       modifiers: [{ type: 'step', n: 3, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
-      propertyRanges: { opacity: [1, 1], scale: [1, 3] },
+      interpolations: [ramp('scale', [1, 3])],
     });
-    render({ layers: [layer], activeElementId: null }, svg);
+    render({ layers: [layer] }, svg);
 
     expect([...svg.querySelectorAll('rect')].map((r) => r.getAttribute('width'))).toEqual([
       '20',
@@ -673,7 +677,7 @@ describe('accessibilité au clavier', () => {
     panel.remove();
   });
 
-  it('lie une interpolation à un étage, et la réinitialise', async () => {
+  it('ajoute une interpolation au calque, la lie à un étage et la retire', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const { addModifier, createLayer } = await import('../src/scene.js');
     const layer = createLayer();
@@ -683,33 +687,52 @@ describe('accessibilité au clavier', () => {
       activeElementId: null,
     });
     const panel = document.createElement('div');
+    document.body.append(panel);
     panel.append(mountPropertyPanel({ store }).layerDetail);
 
     store.apply(addModifier, layer.id);
     store.apply(addModifier, layer.id);
 
+    panel.querySelector('[data-focus-key="add-interpolation"]').click();
+    const stack = () => store.get().layers[0].interpolations;
+    expect(stack()).toHaveLength(1);
+    const { id } = stack()[0];
+
+    const block = () => panel.querySelector('.interpolation-block');
+    const [property, binding] = block().querySelectorAll('select');
+
+    property.value = 'scale';
+    property.dispatchEvent(new Event('change'));
+    /* Changer de propriété change les bornes : la plage repart de celle-ci. */
+    expect(stack()[0]).toMatchObject({ property: 'scale', range: [1, 0.4] });
+
     /* Les étages sont nommés par leur rang et leur type : « le deuxième pas »
        se choisit sans compter les blocs à l'écran. */
-    const select = panel.querySelector('[data-binding="opacity"]');
-    expect([...select.options].map((o) => o.textContent)).toEqual([
+    expect([...binding.options].map((option) => option.textContent)).toEqual([
       'Toutes les copies',
       '1. Pas',
       '2. Pas',
     ]);
+    binding.value = '1';
+    binding.dispatchEvent(new Event('change'));
+    expect(stack()[0].binding).toBe(1);
 
-    select.value = '1';
-    select.dispatchEvent(new Event('change'));
-    expect(store.get().layers[0].rangeBindings).toEqual({ opacity: 1, scale: null });
+    const [start] = block().querySelectorAll('input[type="range"]');
+    start.focus();
+    start.value = '0.2';
+    start.dispatchEvent(new Event('input'));
+    expect(stack()[0].range[0]).toBeCloseTo(0.2);
+    /* Un curseur réglé en plein glissement garde le focus : le bloc ne s'est
+       pas reconstruit sous la souris. */
+    expect(document.activeElement).toBe(start);
 
-    const [opacityStart] = panel.querySelectorAll('input[type="range"]');
-    opacityStart.value = '0.2';
-    opacityStart.dispatchEvent(new Event('input'));
-    expect(store.get().layers[0].propertyRanges.opacity[0]).toBeCloseTo(0.2);
-
-    panel.querySelector('[data-focus-key="reset-interpolation"]').click();
-    expect(store.get().layers[0].propertyRanges).toEqual({ opacity: [1, 1], scale: [1, 1] });
-    expect(store.get().layers[0].rangeBindings).toEqual({ opacity: null, scale: null });
-    expect(select.value).toBe('');
+    const remove = panel.querySelector(`[data-focus-key="delete-interpolation${id}"]`);
+    remove.focus();
+    remove.click();
+    expect(stack()).toEqual([]);
+    /* Le focus retombe sur le bouton d'ajout, pas en haut de la page. */
+    expect(document.activeElement.dataset.focusKey).toBe('add-interpolation');
+    panel.remove();
   });
 
   it('la forme s’ajoute et se positionne sans souris', async () => {
@@ -759,13 +782,14 @@ describe('accessibilité au clavier', () => {
     expect(cardOf(bottom).contains(layerDetail)).toBe(true);
     expect(cardOf(top).querySelector('fieldset')).toBeNull();
 
-    /* Un curseur réglé en plein glissement reste en place, focus compris. */
-    const slider = layerDetail.querySelector('input[type="range"]');
-    slider.focus();
-    slider.value = '0.4';
-    slider.dispatchEvent(new Event('input'));
-    expect(document.activeElement).toBe(slider);
-    expect(cardOf(bottom).contains(slider)).toBe(true);
+    /* Un champ réglé en pleine saisie reste en place, focus compris. */
+    const thickness = layerDetail.querySelector('input[type="number"]');
+    thickness.focus();
+    thickness.value = '4';
+    thickness.dispatchEvent(new Event('input'));
+    expect(store.get().layers[0].strokeWidth).toBe(4);
+    expect(document.activeElement).toBe(thickness);
+    expect(cardOf(bottom).contains(thickness)).toBe(true);
 
     store.apply(setActiveLayer, top.id);
     expect(cardOf(top).contains(layerDetail)).toBe(true);
@@ -778,7 +802,7 @@ describe('accessibilité au clavier', () => {
     const { mountShapeList } = await import('../src/ui/shape-list.js');
     const { addElement, createLayer } = await import('../src/scene.js');
     const layer = createLayer();
-    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null, interpolations: [] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
     store.apply(addElement, layer.id, 'rect', 10, 10);
     const panel = document.createElement('div');
     const shapeList = document.createElement('div');

@@ -14,19 +14,31 @@ export const lerp = (from, to, factor) => from + (to - from) * factor;
 export const clampCount = (n) => Math.max(1, Math.floor(Number(n) || 1));
 
 /**
- * Calcule les valeurs interpolées d'une copie.
+ * Valeurs interpolées d'une copie, sous une pile d'interpolations.
  *
- * @param {Record<string, [number, number]>} ranges plages `[début, fin]` par propriété
- * @param {(property: string) => number} factorOf facteur de rampe, propriété par propriété
- * @returns {Record<string, number>}
+ * @param {{property: string, range: [number, number]}[]} interpolations pile qui s'applique à la copie
+ * @param {(interpolation: object) => number} factorOf facteur de rampe, interpolation par interpolation
+ * @returns {Record<string, number>} une entrée par propriété touchée
  *
- * Le facteur est demandé par propriété, et non calculé ici : c'est ce qui
- * permet à l'opacité de suivre un étage de la pile pendant que l'échelle court
- * sur le total des copies. Générique sur le nom de propriété : ajouter
- * `rotation` = ajouter une entrée dans `propertyRanges`, rien à toucher ici.
- * Une couleur demandera une variante `lerpColor`, le reste ne bouge pas.
+ * Deux interpolations de la même propriété se composent par produit. 1 est la
+ * valeur neutre de l'opacité comme de l'échelle, donc une pile vide ne rend
+ * rien, une interpolation seule rend exactement sa rampe, et deux qui se
+ * superposent agissent comme deux filtres posés l'un sur l'autre. Le produit
+ * est commutatif : l'ordre de la pile n'a pas à être réglable, contrairement à
+ * celle des modificateurs.
+ *
+ * Le facteur est demandé par interpolation, et non calculé ici : c'est ce qui
+ * permet à l'une de suivre un étage de la pile de modificateurs pendant qu'une
+ * autre court sur le total des copies. Générique sur le nom de propriété :
+ * ajouter `rotation` = ajouter une entrée dans `RANGE_BOUNDS`, rien à toucher
+ * ici. Une couleur demandera une variante `lerpColor`, le reste ne bouge pas.
  */
-export const interpolateProps = (ranges, factorOf) =>
-  Object.fromEntries(
-    Object.entries(ranges).map(([key, [from, to]]) => [key, lerp(from, to, factorOf(key))]),
-  );
+export const stackValues = (interpolations, factorOf) => {
+  const values = {};
+  for (const interpolation of interpolations) {
+    const [from, to] = interpolation.range;
+    const value = lerp(from, to, factorOf(interpolation));
+    values[interpolation.property] = (values[interpolation.property] ?? 1) * value;
+  }
+  return values;
+};

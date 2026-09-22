@@ -2,11 +2,14 @@
 {
   "id": "T-0010",
   "titre": "Interpolation liée à un modificateur, et réinitialisation",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
-  "tags": ["noyau", "ui"],
+  "tags": [
+    "noyau",
+    "ui"
+  ],
   "cree": "2026-09-23",
-  "maj": "2026-09-23",
+  "maj": "2026-09-22",
   "plan": null
 }
 ---

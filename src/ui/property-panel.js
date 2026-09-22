@@ -4,18 +4,15 @@ import {
   getActiveElement,
   getActiveLayer,
   moveModifier,
-  RANGE_BOUNDS,
   removeModifier,
-  resetRanges,
   setLayerStroke,
   setLayerStrokeWidth,
-  setRangeBinding,
   SHAPES,
   updateElement,
   updateModifier,
-  updateRange,
 } from '../scene.js';
 import { iconButton, rebuildWithFocus } from './list.js';
+import { interpolationSection } from './interpolation-section.js';
 import { FIXED_COPIES, MODIFIER_LABELS } from '../modifiers.js';
 
 /**
@@ -61,8 +58,8 @@ export const mountPropertyPanel = ({ store }) => {
    * Relie un `input` à une transition de scène.
    *
    * `subject` dit ce que le contrôle édite : la forme active pour les champs de
-   * forme, le calque actif pour l'épaisseur, le modificateur et
-   * l'interpolation. Le contrôle ne s'écrit pas quand son sujet est absent.
+   * forme, le calque actif pour l'épaisseur et les modificateurs. Le contrôle
+   * ne s'écrit pas quand son sujet est absent.
    */
   const bind = (
     node,
@@ -312,121 +309,19 @@ export const mountPropertyPanel = ({ store }) => {
   const rebuildModifiers = (stack) =>
     rebuildWithFocus(modifierHost, () => {
       blocks = stack.map((_, index) => modifierBlock(index, stack.length));
-      if (blocks.length === 0) {
-        const note = document.createElement('p');
-        note.className = 'empty-note';
-        note.textContent = 'Aucun : le calque se rend tel quel.';
-        modifierHost.append(note);
-      }
       modifierHost.append(...blocks.map((block) => block.root));
       return addModifierButton;
     });
 
-  /* ---- Interpolation ---- */
+  /* ---- Interpolations ---- */
 
-  const interpolationSet = document.createElement('fieldset');
-  const interpolationLegend = document.createElement('legend');
-  interpolationLegend.textContent = 'Interpolation';
-  interpolationSet.append(interpolationLegend);
-
-  const rangeControl = (property, index, labelText) => {
-    const { min, max, step } = RANGE_BOUNDS[property];
-    const slider = bind(
-      input('range', { min: String(min), max: String(max), step: String(step) }),
-      (layer) => layer.propertyRanges[property][index],
-      (layer, value) => store.apply(updateRange, layer.id, property, index, value),
-      { subject: 'layer' },
-    );
-    const readout = document.createElement('span');
-    readout.className = 'range-value';
-    controls.push({
-      node: readout,
-      subject: 'layer',
-      read: (layer) => layer.propertyRanges[property][index].toFixed(2),
-    });
-
-    const wrap = field(labelText, slider);
-    wrap.querySelector('label').append(' ', readout);
-    return wrap;
-  };
-
-  /**
-   * Rampe suivie par une propriété : toutes les copies de la pile, ou l'indice
-   * d'un seul de ses étages.
-   *
-   * Un par propriété, et non un pour la section : lier l'opacité au miroir
-   * pendant que l'échelle court sur le total est précisément ce qu'on veut
-   * pouvoir dessiner.
-   */
-  const bindingSelects = [];
-  const bindingControl = (property, labelText) => {
-    const select = document.createElement('select');
-    select.id = `prop-${++uid}`;
-    select.dataset.binding = property;
-    bind(
-      select,
-      (layer) => String(layer.rangeBindings[property] ?? ''),
-      (layer, value) =>
-        store.apply(setRangeBinding, layer.id, property, value === '' ? null : Number(value)),
-      { subject: 'layer', event: 'change', parse: String },
-    );
-    bindingSelects.push(select);
-    return field(labelText, select);
-  };
-
-  /* Les options nomment les étages : elles suivent donc le contenu de la pile,
-     pas seulement sa longueur — un changement de type change l'étiquette. */
-  let bindingSignature = null;
-  const syncBindingOptions = (stack) => {
-    const signature = stack.map((modifier) => modifier.type).join('|');
-    if (signature === bindingSignature) return;
-    bindingSignature = signature;
-    for (const select of bindingSelects) {
-      const current = select.value;
-      select.replaceChildren(
-        option('', 'Toutes les copies'),
-        ...stack.map((modifier, index) =>
-          option(String(index), `${index + 1}. ${MODIFIER_LABELS[modifier.type]}`),
-        ),
-      );
-      select.value = current;
-    }
-  };
-
-  const opacityRow = document.createElement('div');
-  opacityRow.className = 'field-row';
-  opacityRow.append(
-    rangeControl('opacity', 0, 'Opacité début'),
-    rangeControl('opacity', 1, 'Opacité fin'),
-  );
-
-  const scaleRow = document.createElement('div');
-  scaleRow.className = 'field-row';
-  scaleRow.append(
-    rangeControl('scale', 0, 'Échelle début'),
-    rangeControl('scale', 1, 'Échelle fin'),
-  );
-
-  const resetButton = document.createElement('button');
-  resetButton.type = 'button';
-  resetButton.textContent = 'Réinitialiser';
-  resetButton.dataset.focusKey = 'reset-interpolation';
-  resetButton.addEventListener('click', () => {
-    const layer = getActiveLayer(store.get());
-    if (layer) store.apply(resetRanges, layer.id);
-  });
-
-  interpolationSet.append(
-    opacityRow,
-    bindingControl('opacity', 'Opacité liée à'),
-    scaleRow,
-    bindingControl('scale', 'Échelle liée à'),
-    resetButton,
-  );
+  /* Même calque, même card : la rampe d'une interpolation se lie à un étage de
+     la pile voisine. */
+  const interpolations = interpolationSection({ store });
 
   const layerDetail = document.createElement('div');
   layerDetail.className = 'card-detail';
-  layerDetail.append(layerSet, modifierSet, interpolationSet);
+  layerDetail.append(layerSet, modifierSet, interpolations.root);
   const shapeDetail = document.createElement('div');
   shapeDetail.className = 'card-detail';
   shapeDetail.append(shape);
@@ -438,19 +333,15 @@ export const mountPropertyPanel = ({ store }) => {
     const element = getActiveElement(scene);
     const subjects = { layer, element };
 
-    /* Les champs de forme suivent la forme sélectionnée, le modificateur et
-       l'interpolation suivent le calque : sans forme sélectionnée on peut
-       encore régler le modificateur du calque. */
+    /* Les champs de forme suivent la forme sélectionnée, les modificateurs
+       suivent le calque : sans forme sélectionnée on peut encore régler la pile
+       du calque. */
     shape.disabled = !element;
     shape.setAttribute('aria-disabled', String(!element));
-    for (const set of [layerSet, modifierSet, interpolationSet]) {
+    for (const set of [layerSet, modifierSet]) {
       set.disabled = !layer;
       set.setAttribute('aria-disabled', String(!layer));
     }
-
-    /* Avant la boucle : un `select` ne peut prendre la valeur d'une option qui
-       n'existe pas encore. */
-    syncBindingOptions(layer?.modifiers ?? []);
 
     for (const { node, read, subject } of controls) {
       const target = subjects[subject];
@@ -480,6 +371,7 @@ export const mountPropertyPanel = ({ store }) => {
     if (stack.length !== blocks.length) rebuildModifiers(stack);
     addModifierButton.disabled = !layer;
     if (layer) for (const block of blocks) block.sync(layer);
+    interpolations.sync(layer);
   };
 
   store.subscribe(sync);

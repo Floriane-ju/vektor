@@ -28,7 +28,7 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   expect(hint.hidden).toBe(false);
   expect(stage.childNodes).toHaveLength(0);
   expect(document.querySelectorAll('#layer-panel .layer-row')).toHaveLength(1);
-  /* La card du calque actif s'ouvre sur Calque, Modificateurs, Interpolation ;
+  /* La card du calque actif s'ouvre sur Calque, Modificateurs, Interpolations ;
      sans forme sélectionnée, aucune card de forme n'est ouverte. */
   expect(document.querySelectorAll('#layer-panel fieldset')).toHaveLength(3);
   expect(document.querySelectorAll('#shape-list fieldset')).toHaveLength(0);
@@ -83,4 +83,13 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   blocks[0].querySelector('.icon-btn.is-danger').click();
   expect(document.querySelectorAll('#layer-panel .modifier-block')).toHaveLength(1);
   expect(stage.querySelectorAll('circle')).toHaveLength(2 * 2);
+
+  /* Une interpolation ajoutée depuis la card du calque éteint ses copies. */
+  const opacities = () =>
+    [...stage.querySelectorAll('circle')].map((node) => node.getAttribute('fill-opacity'));
+  expect(opacities()).toEqual(['1', '1', '1', '1']);
+
+  document.querySelector('[data-focus-key="add-interpolation"]').click();
+  expect(document.querySelectorAll('#layer-panel .interpolation-block')).toHaveLength(1);
+  expect(opacities()).toEqual(['1', '1', '0', '0']);
 });
