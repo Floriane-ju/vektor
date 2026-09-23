@@ -2,7 +2,10 @@ import { clampCount } from './interpolate.js';
 
 /**
  * Un modificateur est une transformation de point paramétrée par l'indice de
- * copie : `(point, i, n, center, options) -> {x, y}`.
+ * copie : `(point, i, n, center, options) -> {x, y, angle, flip}`. `angle`
+ * (radians) et `flip` (reflet par l'axe vertical, appliqué avant l'angle) sont
+ * la partie linéaire de la transformation — ce qu'elle fait à l'orientation
+ * d'une forme posée en ce point.
  *
  * Un calque en porte une pile : les copies sont toutes les combinaisons
  * d'indices, un par modificateur. Empiler multiplie donc les copies au lieu de
@@ -20,12 +23,9 @@ import { clampCount } from './interpolate.js';
  *
  * Travailler sur un point plutôt que sur un élément est ce qui rend cela
  * possible — la transformation ne sait rien de la forme qu'elle déplace, et
- * s'applique donc aussi bien à une forme qu'à un groupe.
- *
- * ponytail: le modificateur ne déplace que le centre — l'angle propre d'une
- * forme (`rotation`) n'est pas tourné avec lui, donc les copies d'un axial
- * gardent toutes la même inclinaison. Ajouter l'angle de la copie à
- * `rotation` le jour où l'on veut des rayons qui suivent le cercle.
+ * s'applique donc aussi bien à une forme qu'à un groupe. Une similitude a le
+ * même angle en tout point : le rendre à côté de la position suffit à orienter
+ * la forme, sans rien savoir d'elle.
  */
 
 const rotateAround = (point, center, angle) => {
@@ -40,6 +40,8 @@ const rotateAround = (point, center, angle) => {
 const step = (point, i, n, center, { stepX = 60, stepY = 0 } = {}) => ({
   x: point.x + i * stepX,
   y: point.y + i * stepY,
+  angle: 0,
+  flip: false,
 });
 
 /**
@@ -52,14 +54,21 @@ const step = (point, i, n, center, { stepX = 60, stepY = 0 } = {}) => ({
  * copie à l'autre. Répéter est le travail de `step`.
  */
 const mirrorH = (point, i, n, center) =>
-  i === 0 ? { x: point.x, y: point.y } : { x: 2 * center.x - point.x, y: point.y };
+  i === 0
+    ? { x: point.x, y: point.y, angle: 0, flip: false }
+    : { x: 2 * center.x - point.x, y: point.y, angle: 0, flip: true };
 
-/** Idem sur l'axe horizontal passant par `center.y`. */
+/** Idem sur l'axe horizontal passant par `center.y` : reflet vertical puis demi-tour. */
 const mirrorV = (point, i, n, center) =>
-  i === 0 ? { x: point.x, y: point.y } : { x: point.x, y: 2 * center.y - point.y };
+  i === 0
+    ? { x: point.x, y: point.y, angle: 0, flip: false }
+    : { x: point.x, y: 2 * center.y - point.y, angle: Math.PI, flip: true };
 
 /** Copies réparties sur un tour complet autour de `center`. */
-const axial = (point, i, n, center) => rotateAround(point, center, (i * Math.PI * 2) / n);
+const axial = (point, i, n, center) => {
+  const angle = (i * Math.PI * 2) / n;
+  return { ...rotateAround(point, center, angle), angle, flip: false };
+};
 
 /**
  * Spirale : la copie `i` est le calque tourné de `i * angleStep` autour de
@@ -72,15 +81,18 @@ const axial = (point, i, n, center) => rotateAround(point, center, (i * Math.PI 
  * disloquait le groupe copie après copie.
  */
 const spiral = (point, i, n, center, { angleStep = 0.4, radiusStep = 12 } = {}) => {
-  const rotated = rotateAround(point, center, i * angleStep);
+  const angle = i * angleStep;
+  const rotated = rotateAround(point, center, angle);
   const growth = (1 + radiusStep / 100) ** i;
   return {
     x: center.x + (rotated.x - center.x) * growth,
     y: center.y + (rotated.y - center.y) * growth,
+    angle,
+    flip: false,
   };
 };
 
-const none = (point) => ({ x: point.x, y: point.y });
+const none = (point) => ({ x: point.x, y: point.y, angle: 0, flip: false });
 
 export const MODIFIERS = { none, step, mirrorH, mirrorV, axial, spiral };
 
@@ -102,6 +114,16 @@ export const MODIFIER_LABELS = {
  * proposer le champ « Nombre ».
  */
 export const FIXED_COPIES = { none: 1, mirrorH: 2, mirrorV: 2 };
+
+/**
+ * Modificateurs qui orientent leurs copies tant que la case « Orienter les
+ * copies » n'a pas été touchée. `step` et `none` ne tournent rien : la case n'y
+ * a pas de sens et n'est pas proposée.
+ */
+export const ORIENTING = new Set(['mirrorH', 'mirrorV', 'axial', 'spiral']);
+
+/** `orient` absent = réglage par défaut du type. */
+export const orients = (modifier) => ORIENTING.has(modifier.type) && (modifier.orient ?? true);
 
 export const effectiveCount = (modifier) =>
   FIXED_COPIES[modifier.type] ?? clampCount(modifier.n);
@@ -140,16 +162,28 @@ export const stackCopies = (modifiers) =>
  * Applique la pile à un point, dans l'ordre : le modificateur suivant travaille
  * sur le résultat du précédent. L'ordre compte — un pas puis un miroir donne
  * deux rangées face à face, un miroir puis un pas une seule rangée doublée.
+ *
+ * L'orientation cumulée `R(angle)·S^flip` se compose à gauche par celle de
+ * chaque étage qui oriente : `R(b)·S^g · R(a)·S^f = R(b ± a)·S^(g⊕f)`, le signe
+ * s'inversant quand l'étage reflète. Un étage dont la case est décochée ne
+ * déplace que le point.
  */
 export const applyStack = (point, modifiers, indices, center) =>
   modifiers.reduce(
-    (current, modifier, k) =>
-      (MODIFIERS[modifier.type] ?? MODIFIERS.none)(
+    (current, modifier, k) => {
+      const next = (MODIFIERS[modifier.type] ?? MODIFIERS.none)(
         current,
         indices[k],
         effectiveCount(modifier),
         center,
         modifier,
-      ),
-    point,
+      );
+      if (!orients(modifier)) return { ...next, angle: current.angle, flip: current.flip };
+      return {
+        ...next,
+        angle: next.angle + (next.flip ? -current.angle : current.angle),
+        flip: next.flip !== current.flip,
+      };
+    },
+    { x: point.x, y: point.y, angle: 0, flip: false },
   );

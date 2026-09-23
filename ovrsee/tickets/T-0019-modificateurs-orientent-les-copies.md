@@ -2,9 +2,12 @@
 {
   "id": "T-0019",
   "titre": "Les modificateurs orientent les copies",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "haute",
-  "tags": ["modificateurs","rendu"],
+  "tags": [
+    "modificateurs",
+    "rendu"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null,
@@ -29,11 +32,11 @@ en cercle est un motif légitime. Le comportement se règle par modificateur.
 
 ## Critères d'acceptation
 
-- [ ] Chaque modificateur rend, en plus de la position, l'angle et le
+- [x] Chaque modificateur rend, en plus de la position, l'angle et le
       retournement qu'il applique à la copie.
-- [ ] Une case « Orienter les copies » par modificateur, active par défaut sur
+- [x] Une case « Orienter les copies » par modificateur, active par défaut sur
       `axial` et `spiral`.
-- [ ] Rectangle + `axial` n = 6, orientation active ⇒ six rectangles rayonnants
+- [x] Rectangle + `axial` n = 6, orientation active ⇒ six rectangles rayonnants
       régulièrement répartis.
-- [ ] Ligne + `mirrorH` ⇒ le reflet est bien le symétrique, pas une copie
+- [x] Ligne + `mirrorH` ⇒ le reflet est bien le symétrique, pas une copie
       translatée.

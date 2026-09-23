@@ -22,7 +22,7 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@12';
+export const FORMAT = 'illu/scene@13';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -37,7 +37,9 @@ export const FORMAT = 'illu/scene@12';
      la pile, ce qui rend exactement le même dessin ;
    - `@1` à `@8` ne connaissaient ni l'ellipse ni le polygone, `@1` à `@9`
      pas le tracé, `@1` à `@10` pas la rotation propre (formes droites), `@1` à
-     `@11` pas l'arc : rien à convertir, ils se relisent tels quels. */
+     `@11` pas l'arc : rien à convertir, ils se relisent tels quels ;
+   - `@1` à `@12` n'orientaient pas les copies : leurs modificateurs se relisent
+     case décochée, ce qui rend exactement le même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -50,6 +52,7 @@ const READABLE_FORMATS = new Set([
   'illu/scene@9',
   'illu/scene@10',
   'illu/scene@11',
+  'illu/scene@12',
   FORMAT,
 ]);
 
@@ -203,8 +206,10 @@ const readElement = (input) => {
   });
 };
 
-const readModifier = (raw) =>
+/* `orient` absent d'un fichier courant = réglage par défaut du type. */
+const readModifier = (raw, legacy) =>
   createModifier({
+    ...(legacy ? { orient: false } : typeof raw?.orient === 'boolean' ? { orient: raw.orient } : {}),
     type: Object.hasOwn(MODIFIERS, raw?.type) ? raw.type : 'none',
     n: clampCount(raw?.n),
     stepX: num(raw?.stepX, 60),
@@ -217,9 +222,10 @@ const readModifier = (raw) =>
  * Avant `@5` un calque portait un modificateur unique dans `modifier` : il se
  * relit comme une pile d'un seul élément, ce qui rend le même dessin.
  */
-const readModifiers = (raw) => {
-  if (Array.isArray(raw.modifiers)) return raw.modifiers.map(readModifier);
-  return raw.modifier == null ? [] : [readModifier(raw.modifier)];
+const readModifiers = (raw, legacy) => {
+  const read = (entry) => readModifier(entry, legacy);
+  if (Array.isArray(raw.modifiers)) return raw.modifiers.map(read);
+  return raw.modifier == null ? [] : [read(raw.modifier)];
 };
 
 /**
@@ -264,10 +270,10 @@ const readStroke = (raw) => {
   return isPainted(legacy.stroke) ? legacy.stroke : legacy.fill;
 };
 
-const readLayer = (raw, index) => {
+const readLayer = (raw, index, legacy) => {
   if (raw == null || typeof raw !== 'object') fail(`Calque ${index} : objet attendu.`);
   if (typeof raw.id !== 'string' || raw.id === '') fail(`Calque ${index} : \`id\` manquant.`);
-  const modifiers = readModifiers(raw);
+  const modifiers = readModifiers(raw, legacy);
   return createLayer({
     id: raw.id,
     name: typeof raw.name === 'string' && raw.name !== '' ? raw.name : `Calque ${index + 1}`,
@@ -302,7 +308,8 @@ export const deserialize = (text) => {
   }
   if (!Array.isArray(raw.layers)) fail('`layers` doit être un tableau.');
 
-  const layers = raw.layers.map(readLayer);
+  const legacy = raw.format !== FORMAT;
+  const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy));
   if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
     fail('Deux calques portent le même identifiant.');
   }

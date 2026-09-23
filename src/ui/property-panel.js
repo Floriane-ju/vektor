@@ -17,7 +17,7 @@ import {
 } from '../scene.js';
 import { iconButton, rebuildWithFocus } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
-import { FIXED_COPIES, MODIFIER_LABELS } from '../modifiers.js';
+import { FIXED_COPIES, MODIFIER_LABELS, ORIENTING, orients } from '../modifiers.js';
 
 /**
  * Réglages de la forme et du calque actifs, construits une seule fois et
@@ -301,6 +301,14 @@ export const mountPropertyPanel = ({ store }) => {
       (layer) => layer.modifiers[index].radiusStep,
       (value) => ({ radiusStep: value }),
     );
+    /* Décochée, la copie ne fait que se déplacer : des carrés droits posés en
+       cercle sont un motif aussi légitime que des rayons. */
+    const orient = bindModifier(
+      input('checkbox'),
+      (layer) => orients(layer.modifiers[index]),
+      (value) => ({ orient: value }),
+      { event: 'change', parse: () => orient.checked },
+    );
 
     const apply = (transition, ...args) => {
       const layer = getActiveLayer(store.get());
@@ -342,16 +350,18 @@ export const mountPropertyPanel = ({ store }) => {
     stepRow.append(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
     const angleField = field('Pas angulaire (rad)', angleStep);
     const radiusStepField = field('Croissance par copie (%)', radiusStep);
+    const orientField = field('Orienter les copies', orient);
 
     const root = document.createElement('div');
     root.className = 'modifier-block';
-    root.append(head, countField, stepRow, angleField, radiusStepField);
+    root.append(head, countField, stepRow, angleField, radiusStepField, orientField);
 
     const sync = (layer) => {
       const modifier = layer.modifiers[index];
       if (!modifier) return;
       for (const { node, read } of blockControls) {
-        if (document.activeElement !== node) node.value = read(layer);
+        if (node.type === 'checkbox') node.checked = read(layer);
+        else if (document.activeElement !== node) node.value = read(layer);
       }
       /* `none` et les miroirs décident eux-mêmes de leur nombre de copies : leur
          proposer un « Nombre » promettrait un réglage sans effet. */
@@ -359,6 +369,8 @@ export const mountPropertyPanel = ({ store }) => {
       stepRow.hidden = modifier.type !== 'step';
       angleField.hidden = modifier.type !== 'spiral';
       radiusStepField.hidden = modifier.type !== 'spiral';
+      /* Un pas ne tourne rien : rien à orienter. */
+      orientField.hidden = !ORIENTING.has(modifier.type);
     };
 
     return { root, sync };

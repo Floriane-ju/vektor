@@ -241,9 +241,14 @@ const createNode = (child) => {
     node.setAttribute('r', round(rx));
   }
 
-  /* Rotation propre, autour du centre de la forme après le déplacement des
-     modificateurs : la géométrie émise reste celle de la forme droite. */
-  if (child.rotation) node.setAttribute('transform', rotateAbout(child.rotation, child));
+  /* Orientation de la copie et rotation propre, autour du centre de la forme
+     après le déplacement des modificateurs : la géométrie émise reste celle de
+     la forme droite. Le reflet passe avant l'angle. */
+  const transform = [
+    child.rotation ? rotateAbout(child.rotation, child) : '',
+    child.flip ? flipAbout(child) : '',
+  ].filter(Boolean);
+  if (transform.length > 0) node.setAttribute('transform', transform.join(' '));
   node.setAttribute('fill', child.fill);
   node.setAttribute('stroke', child.stroke);
   node.setAttribute('stroke-width', round(strokeWidth));
@@ -352,6 +357,9 @@ export const showHover = (svgRoot, elementId) => {
 const round = (value) => String(Math.round(value * 1000) / 1000);
 
 const rotateAbout = (degrees, { x, y }) => `rotate(${round(degrees)} ${round(x)} ${round(y)})`;
+
+/* Reflet par l'axe vertical passant par le centre de la forme. */
+const flipAbout = ({ x, y }) => `translate(${round(x)} ${round(y)}) scale(-1 1) translate(${round(-x)} ${round(-y)})`;
 
 /**
  * Sérialise le nœud affiché en document SVG autonome.

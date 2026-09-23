@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { clampCount, stackValues, t } from '../src/interpolate.js';
-import { MODIFIERS } from '../src/modifiers.js';
+import { createModifier, MODIFIERS, orients } from '../src/modifiers.js';
 import {
   addElement,
   addInterpolation,
@@ -18,6 +18,7 @@ import {
   removeInterpolation,
   removeLayer,
   removeModifier,
+  rotateVector,
   setLayerStroke,
   setLayerStrokeWidth,
   updateElement,
@@ -964,5 +965,94 @@ describe('arc importé', () => {
       ],
     });
     expect(deserialize(raw).layers[0].elements[0]).toMatchObject({ start: -360, end: 180, closure: 'open' });
+  });
+});
+
+describe('orientation des copies', () => {
+  /* Extrémités d'une ligne rendue, par la même composition que le renderer :
+     reflet autour du centre, puis rotation. */
+  const ends = (child) =>
+    [-1, 1].map((sign) => {
+      const local = { x: sign * child.rx * (child.flip ? -1 : 1), y: sign * child.ry };
+      const turned = rotateVector(local, child.rotation);
+      return { x: child.x + turned.x, y: child.y + turned.y };
+    });
+
+  const axialRects = (modifier = {}) =>
+    getRenderedChildren(
+      createLayer({
+        center,
+        elements: [createElement('rect', 100, 0)],
+        modifiers: [createModifier({ type: 'axial', n: 6, ...modifier })],
+      }),
+    );
+
+  it('rectangle + axial n = 6 : six rectangles rayonnants', () => {
+    const children = axialRects();
+    expect(children).toHaveLength(6);
+    children.forEach((child, i) => {
+      expect(child.rotation).toBeCloseTo(i * 60);
+      /* Rayonnant : l'axe long de la copie pointe vers le centre. */
+      expect(Math.atan2(child.y, child.x)).toBeCloseTo(
+        Math.atan2(Math.sin((child.rotation * Math.PI) / 180), Math.cos((child.rotation * Math.PI) / 180)),
+      );
+    });
+  });
+
+  it('case décochée : les copies gardent leur angle propre', () => {
+    expect(axialRects({ orient: false }).map((c) => c.rotation)).toEqual([0, 0, 0, 0, 0, 0]);
+  });
+
+  it('ligne + mirrorH : le reflet est le symétrique', () => {
+    const line = createElement('line', 100, 20, { rx: 40, ry: 30 });
+    const [original, reflected] = getRenderedChildren(
+      createLayer({ center, elements: [line], modifiers: [createModifier({ type: 'mirrorH' })] }),
+    );
+    const mirrored = ends(original).map((p) => ({ x: -p.x, y: p.y }));
+    const actual = ends(reflected);
+    /* Même paire d'extrémités, dans l'ordre inverse ou non. */
+    const match = (a, b) => a.every((p, i) => Math.hypot(p.x - b[i].x, p.y - b[i].y) < 1e-9);
+    expect(match(actual, mirrored) || match(actual, [...mirrored].reverse())).toBe(true);
+  });
+
+  it('le reflet inverse le sens de la rotation propre', () => {
+    const rect = createElement('rect', 100, 0, { rotation: 20 });
+    const children = getRenderedChildren(
+      createLayer({ center, elements: [rect], modifiers: [createModifier({ type: 'mirrorH' })] }),
+    );
+    expect(children.map((c) => [c.rotation, c.flip])).toEqual([
+      [20, false],
+      [-20, true],
+    ]);
+  });
+
+  /* Deux reflets orthogonaux font un demi-tour, sans reflet. */
+  it('mirrorH puis mirrorV composent un demi-tour', () => {
+    const children = getRenderedChildren(
+      createLayer({
+        center,
+        elements: [createElement('rect', 100, 20)],
+        modifiers: [createModifier({ type: 'mirrorH' }), createModifier({ type: 'mirrorV' })],
+      }),
+    );
+    const last = children.at(-1);
+    expect(last.flip).toBe(false);
+    expect(((last.rotation % 360) + 360) % 360).toBeCloseTo(180);
+  });
+
+  it('un fichier antérieur se relit case décochée, un fichier courant garde son réglage', () => {
+    const legacy = JSON.stringify({
+      format: 'illu/scene@12',
+      layers: [{ id: 'L1', modifiers: [{ type: 'axial', n: 6 }] }],
+    });
+    expect(deserialize(legacy).layers[0].modifiers[0].orient).toBe(false);
+
+    const layer = createLayer({ modifiers: [createModifier({ type: 'axial', orient: false })] });
+    const reread = deserialize(serialize({ layers: [layer], activeLayerId: layer.id }));
+    expect(reread.layers[0].modifiers[0].orient).toBe(false);
+
+    const fresh = createLayer({ modifiers: [createModifier({ type: 'spiral' })] });
+    const rereadFresh = deserialize(serialize({ layers: [fresh], activeLayerId: fresh.id }));
+    expect(orients(rereadFresh.layers[0].modifiers[0])).toBe(true);
   });
 });

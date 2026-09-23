@@ -332,12 +332,19 @@ export const getRenderedChildren = (layer) => {
       rangeFactor(layer, interpolation.binding, indices, i, copies.length),
     );
     for (const element of layer.elements) {
+      const { x, y, angle, flip } = applyStack(element, layer.modifiers, indices, layer.center);
+      /* Orientation de la copie puis rotation propre : `R(a)·S·R(r) = R(a − r)·S`,
+         le reflet inverse le sens de l'angle propre. */
+      const own = element.rotation ?? 0;
       children.push({
         ...element,
         strokeWidth: layer.strokeWidth,
         stroke: layer.stroke,
         fill: element.filled ? layer.stroke : 'none',
-        ...applyStack(element, layer.modifiers, indices, layer.center),
+        x,
+        y,
+        rotation: (angle * 180) / Math.PI + (flip ? -own : own),
+        flip,
         ...properties,
       });
     }

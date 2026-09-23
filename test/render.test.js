@@ -1152,3 +1152,18 @@ describe('arc', () => {
     expect(svg.querySelector('path').getAttribute('fill')).toBe('#ff0000');
   });
 });
+
+describe('orientation des copies', () => {
+  it('le reflet d’un miroir est retourné autour du centre de la copie', () => {
+    const svg = stage();
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      elements: [createElement('line', 100, 20, { rx: 40, ry: 30 })],
+      modifiers: [{ type: 'mirrorH', n: 2 }],
+    });
+    render({ layers: [layer] }, svg);
+    const [original, reflected] = svg.querySelectorAll('line');
+    expect(original.hasAttribute('transform')).toBe(false);
+    expect(reflected.getAttribute('transform')).toBe('translate(-100 20) scale(-1 1) translate(100 -20)');
+  });
+});
