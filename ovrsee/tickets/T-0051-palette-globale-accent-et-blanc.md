@@ -2,7 +2,7 @@
 {
   "id": "T-0051",
   "titre": "Palette globale : accent + blanc, puis les couleurs du dessin",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "ui"
