@@ -2,9 +2,12 @@
 {
   "id": "T-0035",
   "titre": "Raccourcis clavier",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["ui","a11y"],
+  "tags": [
+    "ui",
+    "a11y"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null,

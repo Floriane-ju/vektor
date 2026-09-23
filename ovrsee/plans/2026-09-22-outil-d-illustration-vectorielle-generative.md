@@ -1,9 +1,9 @@
 ---
 {
-  "status": "open",
+  "status": "closed",
   "title": "Outil d'illustration vectorielle générative",
   "opened": "2026-09-22",
-  "closed": null,
+  "closed": "2026-09-22",
   "commits": [
     {
       "sha": "e048436",

@@ -2,7 +2,7 @@
 {
   "id": "T-0040",
   "titre": "Paramètres : grille et aimantation",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "ui"

@@ -4,7 +4,21 @@
   "title": "Paramètres : grille + aimantation",
   "opened": "2026-09-23",
   "closed": null,
-  "commits": []
+  "commits": [
+    {
+      "sha": "16f11fb",
+      "date": "2026-09-23",
+      "files": [
+        "src/main.js",
+        "src/scene.js",
+        "src/ui/settings.js",
+        "src/ui/toolbar.js",
+        "style.css",
+        "test/app.test.js",
+        "test/core.test.js"
+      ]
+    }
+  ]
 }
 ---
 

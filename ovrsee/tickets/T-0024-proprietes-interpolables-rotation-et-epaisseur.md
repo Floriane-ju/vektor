@@ -2,9 +2,11 @@
 {
   "id": "T-0024",
   "titre": "Propriétés interpolables : rotation et épaisseur",
-  "colonne": "backlog",
+  "colonne": "pret",
   "priorite": "haute",
-  "tags": ["interpolation"],
+  "tags": [
+    "interpolation"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null,
