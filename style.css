@@ -93,19 +93,23 @@ input[type="range"] {
   inset: 0;
   display: flex;
   overflow: auto;
-  /* `--slack-*` (posés par `ui/zoom.js`) : assez de marge pour que le plan,
-     plus petit que l'écran, glisse jusqu'à en toucher chaque bord. */
-  padding:
-    max(var(--gutter-top), var(--slack-y, 0px))
-    max(var(--gutter-right), var(--slack-x, 0px))
-    max(var(--gutter-bottom), var(--slack-y, 0px))
-    max(var(--gutter-left), var(--slack-x, 0px));
+  padding: var(--gutter-top) var(--gutter-right) var(--gutter-bottom) var(--gutter-left);
 }
 
 .artboard {
-  /* Centré par marges auto : zoomé plus grand que la zone, les marges tombent
-     à 0 et tout le plan reste défilable. */
-  margin: auto;
+  /* `--slack-*` (posés par `ui/zoom.js`) : assez de marge pour que le plan,
+     plus petit que l'écran, glisse jusqu'à en toucher chaque bord. En marge
+     de l'élément et pas en padding du conteneur : un padding plus large que
+     la fenêtre élargissait `.stage-wrap` lui-même, donc la marge suivante —
+     boucle qui envoyait le plan au loin à chaque cran de dézoom. */
+  margin:
+    max(0px, var(--slack-y, 0px) - var(--gutter-top))
+    max(0px, var(--slack-x, 0px) - var(--gutter-right))
+    max(0px, var(--slack-y, 0px) - var(--gutter-bottom))
+    max(0px, var(--slack-x, 0px) - var(--gutter-left));
+  /* Sans marges auto, l'étirement flex écraserait le `<svg>` en hauteur. */
+  align-self: flex-start;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
