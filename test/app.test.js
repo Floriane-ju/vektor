@@ -114,4 +114,28 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   document.body.append(field);
   field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
   expect(circles()).toBe(2 * 2);
+
+  /* Grille : la case pose le fond, et le geste suivant tombe sur un croisement. */
+  const grid = document.getElementById('settings-grid');
+  grid.checked = true;
+  grid.dispatchEvent(new Event('change'));
+  expect(stage.hasAttribute('data-grid')).toBe(true);
+  pointer('pointerdown', 130, 44);
+  pointer('pointerup', 130, 44);
+  const rect = stage.querySelector('rect[data-element-id]');
+  /* (130, 44) → croisement (90, 0) ; le `<rect>` se place par son coin. */
+  expect([rect.getAttribute('x'), rect.getAttribute('y')]).toEqual(['20', '-45']);
+
+  /* Grille ronde : le geste tombe sur un croisement cercle × rayon. */
+  const gridType = document.getElementById('settings-grid-type');
+  gridType.value = 'polar';
+  gridType.dispatchEvent(new Event('change'));
+  expect(document.getElementById('settings-circles').closest('label').hidden).toBe(false);
+  expect(stage.style.backgroundImage).toContain('data:image/svg+xml');
+  /* 8 cercles de 56,25, 10 rayons : (460, 280) → 3ᵉ cercle, rayon du haut. */
+  pointer('pointerdown', 460, 280);
+  pointer('pointerup', 460, 280);
+  const rects = stage.querySelectorAll('rect[data-element-id]');
+  expect([rects[1].getAttribute('x'), rects[1].getAttribute('y')]).toEqual(['380', '236.25']);
 });
+

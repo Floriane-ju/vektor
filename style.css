@@ -389,3 +389,22 @@ fieldset legend {
   border-radius: var(--radius);
 }
 .shortcuts form { text-align: right; }
+
+/* ---- Paramètres ---- */
+
+/* L'image de la grille (posée par `ui/settings.js`) couvre le plan à l'échelle
+   de son viewBox, donc elle suit le zoom. */
+#stage[data-grid] { background-size: 100% 100%; background-repeat: no-repeat; }
+
+.settings {
+  min-width: 16rem;
+  padding: 16px 20px;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.settings h2 { margin: 0 0 12px; font-size: 1rem; }
+.settings-field { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.settings-field[hidden] { display: none; }
+.settings-field input[type="number"] { width: 5rem; }

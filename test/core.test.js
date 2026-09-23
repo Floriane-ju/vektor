@@ -21,6 +21,8 @@ import {
   rotateVector,
   setLayerStroke,
   setLayerStrokeWidth,
+  snapToGrid,
+  snapToPolarGrid,
   updateElement,
   updateInterpolation,
   updateInterpolationRange,
@@ -1093,5 +1095,34 @@ describe('style de trait de la forme', () => {
       layers: [{ id: 'L1', elements: [{ ...shape, dash: 'tirets', linecap: 42 }] }],
     });
     expect(deserialize(bad).layers[0].elements[0]).toMatchObject({ dash: [], linecap: 'butt' });
+  });
+});
+
+describe('grille', () => {
+  it('aimante au croisement le plus proche', () => {
+    expect(snapToGrid({ x: 130, y: 44 }, 10)).toEqual({ x: 90, y: 0 });
+    expect(snapToGrid({ x: 136, y: 46 }, 10)).toEqual({ x: 180, y: 90 });
+  });
+
+  it('laisse en place un point déjà sur la grille', () => {
+    expect(snapToGrid({ x: 450, y: 270 }, 10)).toEqual({ x: 450, y: 270 });
+  });
+});
+
+describe('grille ronde', () => {
+  /* Centre (450, 450), rayon 450 : 5 cercles tous les 90, 4 rayons dont un vers le haut. */
+  const near = (point, expected) => {
+    expect(point.x).toBeCloseTo(expected.x);
+    expect(point.y).toBeCloseTo(expected.y);
+  };
+
+  it('aimante au croisement cercle × rayon le plus proche', () => {
+    near(snapToPolarGrid({ x: 460, y: 280 }, 5, 4), { x: 450, y: 270 });
+    near(snapToPolarGrid({ x: 640, y: 470 }, 5, 4), { x: 630, y: 450 });
+  });
+
+  it('ramène au centre près du centre, au dernier cercle au-delà', () => {
+    near(snapToPolarGrid({ x: 470, y: 440 }, 5, 4), { x: 450, y: 450 });
+    near(snapToPolarGrid({ x: 450, y: -200 }, 5, 4), { x: 450, y: 0 });
   });
 });

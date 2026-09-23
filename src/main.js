@@ -9,6 +9,7 @@ import { mountShapeList } from './ui/shape-list.js';
 import { mountZoom } from './ui/zoom.js';
 import { mountHistory } from './ui/history.js';
 import { mountShortcuts } from './ui/shortcuts.js';
+import { mountSettings } from './ui/settings.js';
 
 const svgRoot = document.getElementById('stage');
 const hint = document.getElementById('stage-hint');
@@ -39,9 +40,11 @@ store.subscribe((next) => {
 store.subscribe(debounce(saveLocal));
 
 mountHistory({ store });
+const { snap } = mountSettings({ svgRoot, container: document.getElementById('toolbar-actions') });
 const { getTool } = mountToolbar({
   store,
   svgRoot,
+  snap,
   container: document.getElementById('toolbar-actions'),
   shapeContainer: document.getElementById('toolbar-shapes'),
   status,

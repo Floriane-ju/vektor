@@ -86,7 +86,12 @@ const mountShapePicker = (container, onChange) => {
   container.append(group);
 };
 
-export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status }) => {
+export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status, snap = (point) => point }) => {
+  /* Le dessin lit le pointeur aimanté par la grille. Les déplacements lisent
+     le pointeur brut et aimantent la position d'arrivée : sur une grille ronde,
+     un écart entre deux croisements ne mène pas d'un croisement à un autre. */
+  const stagePoint = (event) => snap(toStagePoint(svgRoot, event));
+
   /* `tool` reste la dernière forme choisie même sous le curseur : « + Ajouter
      une forme » en a toujours besoin. */
   let tool = DEFAULT_SHAPE;
@@ -220,7 +225,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     /* Sans seuil, le tremblement d'un clic décalerait la forme d'un pixel. */
     if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     drag.moved = true;
-    store.apply(updateElement, drag.origin.id, { x: drag.origin.x + dx, y: drag.origin.y + dy });
+    store.apply(updateElement, drag.origin.id, snap({ x: drag.origin.x + dx, y: drag.origin.y + dy }));
   };
 
   const endDrag = (event) => {
@@ -234,11 +239,13 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   const moveVertex = (event) => {
     const { x, y } = toStagePoint(svgRoot, event);
     const { element, index, point } = vertexDrag;
-    /* Le geste est lu à l'écran, le sommet vit dans le repère de la forme. */
-    const delta = rotateVector({ x: x - point.x, y: y - point.y }, -(element.rotation ?? 0));
-    const points = element.points.map((p, i) =>
-      i === index ? { x: p.x + delta.x, y: p.y + delta.y } : p,
-    );
+    /* Le geste est lu à l'écran, le sommet vit dans le repère de la forme :
+       on aimante sa position à l'écran, puis on la ramène dans ce repère. */
+    const rotation = element.rotation ?? 0;
+    const start = rotateVector(element.points[index], rotation);
+    const target = snap({ x: element.x + start.x + x - point.x, y: element.y + start.y + y - point.y });
+    const local = rotateVector({ x: target.x - element.x, y: target.y - element.y }, -rotation);
+    const points = element.points.map((p, i) => (i === index ? local : p));
     store.apply(updateElement, element.id, { points });
   };
 
@@ -259,7 +266,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
      redimensionner : chaque geste crée une forme de plus sur le calque au lieu
      de remplacer la précédente. */
   const patchAt = (event) => {
-    const point = toStagePoint(svgRoot, event);
+    const point = stagePoint(event);
     return dragPatch(tool, stroke, point.x - stroke.x, point.y - stroke.y);
   };
 
@@ -271,7 +278,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     const element = elementById(store.get(), trace.elementId);
     if (!element) return;
     const last = absolutePoints(element).at(-1);
-    const { x, y } = toStagePoint(svgRoot, event);
+    const { x, y } = stagePoint(event);
     clearHover(svgRoot);
     const ghost = document.createElementNS(svgRoot.namespaceURI, 'line');
     for (const [name, value] of Object.entries({ x1: last.x, y1: last.y, x2: x, y2: y })) {
@@ -340,7 +347,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
       status.show('Sélectionner un calque avant de dessiner.', 'error');
       return;
     }
-    const { x, y } = toStagePoint(svgRoot, event);
+    const { x, y } = stagePoint(event);
     if (tool === 'polyline') {
       traceClick(layer, x, y);
       return;
