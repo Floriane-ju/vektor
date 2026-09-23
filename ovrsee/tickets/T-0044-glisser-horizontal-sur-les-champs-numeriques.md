@@ -2,9 +2,11 @@
 {
   "id": "T-0044",
   "titre": "Glisser horizontal sur les champs numériques",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["ui"],
+  "tags": [
+    "ui"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null

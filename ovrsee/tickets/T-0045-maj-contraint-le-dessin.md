@@ -2,9 +2,12 @@
 {
   "id": "T-0045",
   "titre": "Maj contraint le dessin (carré, cercle, 45°)",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["ui", "dessin"],
+  "tags": [
+    "ui",
+    "dessin"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null
