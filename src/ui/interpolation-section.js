@@ -76,16 +76,18 @@ export const interpolationSection = ({ store }) => {
    * bloc, donc le `min` et le `max` suivent sans réglage à la main.
    */
   const boundControl = (interpolation, index, labelText) => {
-    const { min, max, step } = RANGE_BOUNDS[interpolation.property];
+    const { min, max, step, unit = '%' } = RANGE_BOUNDS[interpolation.property];
+    /* Les facteurs s'affichent en pourcentage, la rotation en degrés tels quels. */
+    const ratio = unit === '%' ? PERCENT : 1;
     const number = document.createElement('input');
     number.type = 'number';
     number.id = `interp-${++uid}`;
-    number.min = String(min * PERCENT);
-    number.max = String(max * PERCENT);
-    number.step = String(step * PERCENT);
+    number.min = String(min * ratio);
+    number.max = String(max * ratio);
+    number.step = String(step * ratio);
     number.addEventListener('input', () => {
       if (number.value === '') return;
-      apply(updateInterpolationRange, interpolation.id, index, Number(number.value) / PERCENT);
+      apply(updateInterpolationRange, interpolation.id, index, Number(number.value) / ratio);
     });
 
     bounds.push({
@@ -94,21 +96,21 @@ export const interpolationSection = ({ store }) => {
           (candidate) => candidate.id === interpolation.id,
         );
         if (!current) return;
-        const value = Math.round(current.range[index] * PERCENT);
+        const value = Math.round(current.range[index] * ratio);
         if (document.activeElement !== number) number.value = String(value);
       },
     });
 
-    const unit = document.createElement('div');
-    unit.className = 'unit-input';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'unit-input';
     const suffix = document.createElement('span');
     suffix.setAttribute('aria-hidden', 'true');
-    suffix.textContent = '%';
+    suffix.textContent = unit;
     /* `field` pose le libellé et le champ ; le champ passe ensuite dans son
        habillage à suffixe. */
     const wrap = field(labelText, number);
-    unit.append(number, suffix);
-    wrap.append(unit);
+    wrapper.append(number, suffix);
+    wrap.append(wrapper);
     return wrap;
   };
 
@@ -134,9 +136,13 @@ export const interpolationSection = ({ store }) => {
           const value = lerp(current.range[0], current.range[1], t(Math.round((i * (n - 1)) / Math.max(1, shown - 1)), n));
           const dot = document.createElement('span');
           if (current.property === 'opacity') dot.style.opacity = String(value);
+          else if (current.property === 'rotation') dot.style.transform = `rotate(${value}deg)`;
+          else if (current.property === 'strokeWidth') dot.style.boxShadow = `inset 0 0 0 ${Math.min(value * 2, 7)}px var(--layer-color, var(--accent))`;
           else dot.style.transform = `scale(${Math.min(value, 1.6)})`;
           return dot;
         });
+        /* Une pastille ronde ne montre pas sa rotation : la vrille s'aperçoit en barrettes. */
+        root.classList.toggle('is-rotation', current.property === 'rotation');
         root.replaceChildren(...dots);
       },
     });

@@ -30,15 +30,22 @@ export const clampCount = (n) => Math.max(1, Math.floor(Number(n) || 1));
  * Le facteur est demandé par interpolation, et non calculé ici : c'est ce qui
  * permet à l'une de suivre un étage de la pile de modificateurs pendant qu'une
  * autre court sur le total des copies. Générique sur le nom de propriété :
- * ajouter `rotation` = ajouter une entrée dans `RANGE_BOUNDS`, rien à toucher
+ * ajouter une propriété = ajouter une entrée dans `RANGE_BOUNDS`, rien à toucher
  * ici. Une couleur demandera une variante `lerpColor`, le reste ne bouge pas.
+ *
+ * Exception : une propriété marquée `additive` dans `bounds` (la rotation) se
+ * compose par somme, neutre 0 — deux vrilles s'ajoutent, elles ne se
+ * multiplient pas.
  */
-export const stackValues = (interpolations, factorOf) => {
+export const stackValues = (interpolations, factorOf, bounds = {}) => {
   const values = {};
   for (const interpolation of interpolations) {
     const [from, to] = interpolation.range;
     const value = lerp(from, to, factorOf(interpolation));
-    values[interpolation.property] = (values[interpolation.property] ?? 1) * value;
+    const { property } = interpolation;
+    values[property] = bounds[property]?.additive
+      ? (values[property] ?? 0) + value
+      : (values[property] ?? 1) * value;
   }
   return values;
 };

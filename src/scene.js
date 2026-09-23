@@ -40,9 +40,14 @@ export const snapToPolarGrid = ({ x, y }, circles, divisions) => {
 export const RANGE_BOUNDS = {
   opacity: { min: 0, max: 1, step: 0.01, identity: 1, defaultRange: [1, 0] },
   scale: { min: 0, max: 3, step: 0.01, identity: 1, defaultRange: [1, 0.4] },
+  /* Degrés ajoutés à l'angle propre de la copie. Additive, neutre 0 : un
+     produit mettrait toutes les copies à 0° dès qu'une rampe part de 0. */
+  rotation: { min: -720, max: 720, step: 1, identity: 0, defaultRange: [0, 180], additive: true, unit: '°' },
+  /* Facteur de l'épaisseur du calque, comme l'échelle l'est de la taille. */
+  strokeWidth: { min: 0, max: 5, step: 0.01, identity: 1, defaultRange: [1, 0.2] },
 };
 
-export const RANGE_LABELS = { opacity: 'Opacité', scale: 'Échelle' };
+export const RANGE_LABELS = { opacity: 'Opacité', scale: 'Échelle', rotation: 'Rotation', strokeWidth: 'Épaisseur' };
 
 /**
  * Formes disponibles.
@@ -396,17 +401,20 @@ export const getRenderedChildren = (layer) => {
 
   const children = [];
   copies.forEach((indices, i) => {
-    const properties = stackValues(layer.interpolations, (interpolation) =>
-      rangeFactor(layer, interpolation.binding, indices, i, copies.length),
+    const { rotation: twist = 0, strokeWidth: widthFactor = 1, ...properties } = stackValues(
+      layer.interpolations,
+      (interpolation) => rangeFactor(layer, interpolation.binding, indices, i, copies.length),
+      RANGE_BOUNDS,
     );
     for (const element of layer.elements) {
       const { x, y, angle, flip } = applyStack(element, layer.modifiers, indices, layer.center);
       /* Orientation de la copie puis rotation propre : `R(a)·S·R(r) = R(a − r)·S`,
-         le reflet inverse le sens de l'angle propre. */
-      const own = element.rotation ?? 0;
+         le reflet inverse le sens de l'angle propre — vrille interpolée comprise,
+         pour qu'un motif miroir vrille en miroir. */
+      const own = (element.rotation ?? 0) + twist;
       children.push({
         ...element,
-        strokeWidth: layer.strokeWidth,
+        strokeWidth: layer.strokeWidth * widthFactor,
         stroke: layer.stroke,
         fill: element.filled ? layer.stroke : 'none',
         x,

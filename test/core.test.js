@@ -218,6 +218,44 @@ describe('composition', () => {
     expect(getRenderedChildren(plain).every((child) => child.opacity === undefined)).toBe(true);
   });
 
+  /* La rotation s'additionne à l'angle propre de chaque copie : 0 → 180° sur
+     10 copies donne un pas régulier de 20°. */
+  it('une interpolation de rotation vrille le motif régulièrement', () => {
+    const twisted = layer({
+      modifiers: [{ type: 'step', n: 10, stepX: 0, stepY: 0 }],
+      elements: [createElement('ellipse', 100, 0, { rotation: 10 })],
+      interpolations: [createInterpolation({ property: 'rotation', range: [0, 180] })],
+    });
+    const angles = getRenderedChildren(twisted).map((c) => c.rotation);
+    angles.forEach((angle, i) => expect(angle).toBeCloseTo(10 + i * 20));
+  });
+
+  /* Deux rotations empilées s'additionnent (neutre 0) : un produit mettrait
+     toutes les copies à 0° dès qu'une des deux part de 0. */
+  it('deux interpolations de rotation se composent par somme', () => {
+    const twisted = layer({
+      interpolations: [
+        createInterpolation({ property: 'rotation', range: [0, 40] }),
+        createInterpolation({ property: 'rotation', range: [0, 40] }),
+      ],
+    });
+    const angles = getRenderedChildren(twisted).map((c) => c.rotation);
+    angles.forEach((angle, i) => expect(angle).toBeCloseTo(i * 20));
+  });
+
+  /* L'épaisseur est un facteur de celle du calque, comme l'échelle l'est de la
+     taille : 4 → 0,5 va de 4× à la moitié de l'épaisseur du calque. */
+  it('une interpolation d’épaisseur affine les copies', () => {
+    const thinning = layer({
+      strokeWidth: 2,
+      interpolations: [createInterpolation({ property: 'strokeWidth', range: [4, 0.5] })],
+    });
+    const widths = getRenderedChildren(thinning).map((c) => c.strokeWidth);
+    expect(widths[0]).toBeCloseTo(8);
+    expect(widths[4]).toBeCloseTo(1);
+    expect(widths).toEqual([...widths].sort((a, b) => b - a));
+  });
+
   it('un calque sans forme ne rend rien', () => {
     expect(getRenderedChildren(createLayer())).toEqual([]);
   });
@@ -1120,6 +1158,38 @@ describe('style de trait de la forme', () => {
       layers: [{ id: 'L1', elements: [{ ...shape, dash: 'tirets', linecap: 42 }] }],
     });
     expect(deserialize(bad).layers[0].elements[0]).toMatchObject({ dash: [], linecap: 'butt' });
+  });
+});
+
+describe('rotation et épaisseur interpolées', () => {
+  it('survivent à la sauvegarde, bornées à l’import', () => {
+    const layer = createLayer({
+      elements: [createElement('ellipse', 0, 0)],
+      interpolations: [
+        createInterpolation({ property: 'rotation', range: [0, 180] }),
+        createInterpolation({ property: 'strokeWidth', range: [4, 0.5] }),
+      ],
+    });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    const back = deserialize(serialize(scene)).layers[0].interpolations;
+    expect(back.map((i) => [i.property, i.range])).toEqual([
+      ['rotation', [0, 180]],
+      ['strokeWidth', [4, 0.5]],
+    ]);
+
+    const wild = JSON.stringify({
+      format: 'illu/scene@15',
+      layers: [{ id: 'L1', interpolations: [{ property: 'rotation', range: [-9999, 'x'] }] }],
+    });
+    expect(deserialize(wild).layers[0].interpolations[0].range).toEqual([-720, 0]);
+  });
+
+  it('une scène `@14` se relit sans rien interpoler de neuf', () => {
+    const old = JSON.stringify({
+      format: 'illu/scene@14',
+      layers: [{ id: 'L1', interpolations: [{ property: 'scale', range: [1, 0.4] }] }],
+    });
+    expect(deserialize(old).layers[0].interpolations.map((i) => i.property)).toEqual(['scale']);
   });
 });
 

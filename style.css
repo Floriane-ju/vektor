@@ -577,6 +577,7 @@ input[type="range"] {
   border-radius: var(--pill);
   box-shadow: inset 0 0 0 2px var(--layer-color, var(--accent));
 }
+.ramp-preview.is-rotation span { height: 4px; border-radius: 2px; }
 
 /* ---- Statut ---- */
 

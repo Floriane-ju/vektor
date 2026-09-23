@@ -24,7 +24,7 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@14';
+export const FORMAT = 'illu/scene@15';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -43,7 +43,10 @@ export const FORMAT = 'illu/scene@14';
    - `@1` à `@12` n'orientaient pas les copies : leurs modificateurs se relisent
      case décochée, ce qui rend exactement le même dessin ;
    - `@1` à `@13` ne connaissaient pas le style de trait des formes : trait
-     plein, bout net, ce qui rend exactement le même dessin. */
+     plein, bout net, ce qui rend exactement le même dessin ;
+   - `@1` à `@14` n'interpolaient ni la rotation ni l'épaisseur : rien à
+     convertir. Le bump empêche surtout une version antérieure de relire une
+     vrille comme une opacité. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -58,6 +61,7 @@ const READABLE_FORMATS = new Set([
   'illu/scene@11',
   'illu/scene@12',
   'illu/scene@13',
+  'illu/scene@14',
   FORMAT,
 ]);
 
@@ -316,7 +320,7 @@ export const deserialize = (text) => {
   if (!Array.isArray(raw.layers)) fail('`layers` doit être un tableau.');
 
   /* Avant `@13`, pas d'orientation des copies. */
-  const legacy = !['illu/scene@13', FORMAT].includes(raw.format);
+  const legacy = !['illu/scene@13', 'illu/scene@14', FORMAT].includes(raw.format);
   const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy));
   if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
     fail('Deux calques portent le même identifiant.');
