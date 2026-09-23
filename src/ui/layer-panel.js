@@ -146,13 +146,7 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
     const actions = document.createElement('span');
     actions.className = 'row-actions';
     actions.append(
-      iconButton({
-        label: layer.visible ? `Masquer ${layer.name}` : `Afficher ${layer.name}`,
-        text: layer.visible ? '◉' : '○',
-        focusKey: `visible-${layer.id}`,
-        pressed: layer.visible,
-        onClick: () => store.apply(toggleVisibility, layer.id),
-      }),
+      visibilityButton(layer),
       iconButton({
         label: `Dupliquer ${layer.name}`,
         text: '⧉',
@@ -193,6 +187,18 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
 
     row.append(chevron, swatch, name, actions);
     return card;
+  };
+
+  const visibilityButton = (layer) => {
+    const button = iconButton({
+      label: layer.visible ? `Masquer ${layer.name}` : `Afficher ${layer.name}`,
+      text: '',
+      focusKey: `visible-${layer.id}`,
+      pressed: layer.visible,
+      onClick: () => store.apply(toggleVisibility, layer.id),
+    });
+    button.append(icon(layer.visible ? 'eye' : 'eyeOff', 14));
+    return button;
   };
 
   const askDelete = (layer) => {
