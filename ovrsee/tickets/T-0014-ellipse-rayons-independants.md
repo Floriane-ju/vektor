@@ -2,7 +2,7 @@
 {
   "id": "T-0014",
   "titre": "Ellipse : rayons indépendants",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "formes"

@@ -2,7 +2,7 @@
 {
   "id": "T-0017",
   "titre": "Tracé polyligne libre",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "basse",
   "tags": [
     "formes"

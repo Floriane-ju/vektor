@@ -4,7 +4,9 @@
   "titre": "Découpe d'un calque par une forme",
   "colonne": "a-specifier",
   "priorite": "moyenne",
-  "tags": ["rendu"],
+  "tags": [
+    "rendu"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null,

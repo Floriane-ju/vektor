@@ -2,7 +2,7 @@
 {
   "id": "T-0015",
   "titre": "Polygone régulier",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": [
     "formes"

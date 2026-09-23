@@ -2,7 +2,7 @@
 {
   "id": "T-0037",
   "titre": "Initialiser CLAUDE.md",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "docs"

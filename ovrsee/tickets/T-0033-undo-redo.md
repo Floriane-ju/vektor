@@ -2,7 +2,7 @@
 {
   "id": "T-0033",
   "titre": "Annuler / rétablir",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": [
     "ui"
