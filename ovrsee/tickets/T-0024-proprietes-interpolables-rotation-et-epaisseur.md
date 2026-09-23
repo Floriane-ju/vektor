@@ -2,7 +2,7 @@
 {
   "id": "T-0024",
   "titre": "Propriétés interpolables : rotation et épaisseur",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": [
     "interpolation"
