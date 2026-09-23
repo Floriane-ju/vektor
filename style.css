@@ -75,6 +75,9 @@ input:is([type="number"], [type="text"]) {
 
 :disabled { opacity: 0.45; cursor: not-allowed; }
 
+/* Glisser horizontal pour régler la valeur (ui/scrub.js) ; focalisé, on tape. */
+input[type="number"]:not(:focus, :disabled) { cursor: ew-resize; }
+
 input[type="range"] {
   width: 100%;
   margin: 0;

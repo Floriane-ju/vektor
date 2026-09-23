@@ -10,6 +10,7 @@ import { mountZoom } from './ui/zoom.js';
 import { mountHistory } from './ui/history.js';
 import { mountShortcuts } from './ui/shortcuts.js';
 import { mountSettings } from './ui/settings.js';
+import { mountScrub } from './ui/scrub.js';
 
 const svgRoot = document.getElementById('stage');
 const hint = document.getElementById('stage-hint');
@@ -45,6 +46,7 @@ const shapeList = document.getElementById('shape-list');
 
 /* Ordre de montage = ordre d'affichage dans les pastilles. */
 mountHistory({ store, container: actions });
+mountScrub();
 mountShortcuts({ store, container: actions, status });
 mountZoom({
   svgRoot,

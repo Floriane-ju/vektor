@@ -41,10 +41,15 @@ export const mountHistory = ({ store, container = null }) => {
   );
   /* Phase de bouillonnement : le dernier `pointerup` du stage est déjà appliqué. */
   for (const type of ['pointerup', 'pointercancel']) {
-    document.addEventListener(type, () => store.end(pointer));
+    document.addEventListener(type, () => {
+      store.end(pointer);
+      pointer = null;
+    });
   }
-  document.addEventListener('input', (event) => store.begin(event.target), true);
-  document.addEventListener('change', (event) => store.end(event.target));
+  /* Bouton enfoncé, le pas du pointeur couvre déjà les `input`/`change` du
+     geste (slider, glisser d'un champ numérique) : ne pas le découper. */
+  document.addEventListener('input', (event) => pointer || store.begin(event.target), true);
+  document.addEventListener('change', (event) => pointer || store.end(event.target));
 
   window.addEventListener('keydown', (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return;
