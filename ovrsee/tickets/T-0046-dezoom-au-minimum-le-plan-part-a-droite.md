@@ -2,7 +2,7 @@
 {
   "id": "T-0046",
   "titre": "Dézoom au minimum : le plan part à droite",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "ui",
@@ -23,6 +23,6 @@ grossit, la marge suivante aussi — boucle, ×2 par cran.
 
 ## Critères d'acceptation
 
-- [ ] Dézoomer au minimum (molette, bouton, clavier) ne déplace plus le plan.
-- [ ] `.stage-wrap` garde la taille de la fenêtre quel que soit le zoom.
-- [ ] Le plan dézoomé défile toujours jusqu'à toucher chaque bord (T-0043).
+- [x] Dézoomer au minimum (molette, bouton, clavier) ne déplace plus le plan.
+- [x] `.stage-wrap` garde la taille de la fenêtre quel que soit le zoom.
+- [x] Le plan dézoomé défile toujours jusqu'à toucher chaque bord (T-0043).
