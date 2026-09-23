@@ -45,6 +45,16 @@ export const SHAPES = {
     uniform: true,
     defaults: { rx: 60, ry: 60, filled: false },
   },
+  /* Portion du cercle de rayon `rx`, de `start` à `end` en degrés — 0 en haut,
+     sens horaire, comme le premier sommet du polygone. `closure` choisit ce
+     qu'on voit de la même paire d'angles : l'arc nu, la corde ou le secteur.
+     Défaut : un demi-disque, pour qu'un geste seul pose un arc lisible. */
+  arc: {
+    label: 'Arc',
+    geometry: 'arc',
+    uniform: true,
+    defaults: { rx: 60, ry: 60, start: 0, end: 180, closure: 'sector', filled: false },
+  },
   /* Un cercle qui cesse d'être uniforme : même nœud à deux rayons. */
   ellipse: {
     label: 'Ellipse',
@@ -111,6 +121,13 @@ export const MAX_SIDES = 64;
 export const clampSides = (value) =>
   Math.min(MAX_SIDES, Math.max(3, Math.round(Number.isFinite(value) ? value : 6)));
 
+export const ARC_CLOSURES = { open: 'Ouvert', chord: 'Corde', sector: 'Secteur' };
+
+/* Un tour dans chaque sens : `end - start` suffit à dire l'étendue, au-delà le
+   même dessin sous un nombre sans borne. */
+export const clampAngle = (value, fallback = 0) =>
+  Math.min(360, Math.max(-360, Number.isFinite(value) ? value : fallback));
+
 /* Borne d'import : un tracé collé au-delà est plus probablement une erreur de
    copie qu'un dessin. */
 export const MAX_POINTS = 5000;
@@ -128,6 +145,16 @@ export const centerPoints = (absolute) => {
   return { x, y, points: absolute.map((p) => ({ x: p.x - x, y: p.y - y })) };
 };
 
+/** Tourne un vecteur de `degrees` : le repère d'une forme vers celui de l'écran. */
+export const rotateVector = ({ x, y }, degrees) => {
+  const angle = (degrees * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return { x: x * cos - y * sin, y: x * sin + y * cos };
+};
+
+/* Sommets dans le repère de la forme, sans sa rotation : c'est dans ce repère
+   que le tracé se dessine et se recentre. */
 export const absolutePoints = (element) =>
   element.points.map((p) => ({ x: element.x + p.x, y: element.y + p.y }));
 
@@ -152,8 +179,11 @@ export const DEFAULT_STROKE = '#7dd3c0';
 const counters = { L: 0, E: 0, I: 0 };
 const nextId = (prefix) => `${prefix}${++counters[prefix]}`;
 
+/* `rotation` en degrés, autour du centre `x, y` : l'angle appartient à la
+   forme, deux formes d'un même dessin s'inclinent rarement pareil. */
 export const createElement = (type, x, y, overrides = {}) => ({
   id: nextId('E'),
+  rotation: 0,
   ...SHAPES[type].defaults,
   type,
   x,
@@ -393,13 +423,17 @@ export const addTraces = (scene, layerId, traces) =>
     return addElement(current, layerId, 'polyline', x, y, { points: relative, closed });
   }, scene);
 
-/** Recalcule le centre d'un tracé sans le déplacer à l'écran. */
+/**
+ * Recalcule le centre d'un tracé sans le déplacer à l'écran. Le décalage est
+ * mesuré dans le repère de la forme, donc tourné avant de déplacer `x, y`.
+ */
 export const recenterTrace = (scene, elementId) => {
   const element = scene.layers.flatMap((layer) => layer.elements).find((el) => el.id === elementId);
   if (!element?.points?.length) return scene;
-  const next = centerPoints(absolutePoints(element));
-  if (next.x === element.x && next.y === element.y) return scene;
-  return updateElement(scene, elementId, next);
+  const { x, y, points } = centerPoints(element.points);
+  if (x === 0 && y === 0) return scene;
+  const offset = rotateVector({ x, y }, element.rotation ?? 0);
+  return updateElement(scene, elementId, { x: element.x + offset.x, y: element.y + offset.y, points });
 };
 
 export const setActiveElement = (scene, elementId) => ({ ...scene, activeElementId: elementId });

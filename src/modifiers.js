@@ -22,9 +22,10 @@ import { clampCount } from './interpolate.js';
  * possible — la transformation ne sait rien de la forme qu'elle déplace, et
  * s'applique donc aussi bien à une forme qu'à un groupe.
  *
- * ponytail: pas de rotation propre des formes — un cercle et un point n'en ont
- * pas, et un rectangle tourné demanderait un attribut `transform` sur chaque
- * nœud. À ajouter le jour où une forme orientée arrive.
+ * ponytail: le modificateur ne déplace que le centre — l'angle propre d'une
+ * forme (`rotation`) n'est pas tourné avec lui, donc les copies d'un axial
+ * gardent toutes la même inclinaison. Ajouter l'angle de la copie à
+ * `rotation` le jour où l'on veut des rayons qui suivent le cercle.
  */
 
 const rotateAround = (point, center, angle) => {

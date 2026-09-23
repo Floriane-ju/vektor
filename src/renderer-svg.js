@@ -56,6 +56,7 @@ const createHandles = (scene) => {
   group.setAttribute('stroke', '#1f2430');
   group.setAttribute('stroke-width', '1');
   group.setAttribute('vector-effect', 'non-scaling-stroke');
+  if (element.rotation) group.setAttribute('transform', rotateAbout(element.rotation, element));
   absolutePoints(element).forEach((point, index) => {
     const handle = guideNode('circle', { cx: point.x, cy: point.y, r: HANDLE_RADIUS });
     handle.dataset.vertex = String(index);
@@ -159,13 +160,39 @@ export const polygonPoints = (cx, cy, radius, sides, inner) => {
   }).join(' ');
 };
 
+/**
+ * Tracé `d` d'un arc de `start` à `end` (degrés, 0 en haut, sens horaire).
+ *
+ * Un tour complet ne s'écrit pas en une commande `A` — ses deux bouts
+ * confondus ne disent plus quel cercle passer — donc il se fait en deux
+ * demi-arcs et se ferme, quel que soit le mode : ni rayon au centre ni corde
+ * n'y auraient de sens.
+ */
+export const arcPath = (cx, cy, radius, start, end, closure) => {
+  const at = (degrees) => {
+    const angle = (degrees * Math.PI) / 180;
+    return `${round(cx + radius * Math.sin(angle))},${round(cy - radius * Math.cos(angle))}`;
+  };
+  const r = `${round(radius)},${round(radius)}`;
+  const span = end - start;
+  if (Math.abs(span) >= 360) {
+    return `M${at(start)} A${r} 0 0 1 ${at(start + 180)} A${r} 0 0 1 ${at(start)} Z`;
+  }
+  /* Un arc à rebours (270 → 90) court quand même en sens horaire. */
+  const sweep = ((span % 360) + 360) % 360;
+  const arc = `M${at(start)} A${r} 0 ${sweep > 180 ? 1 : 0} 1 ${at(start + sweep)}`;
+  if (closure === 'sector') return `${arc} L${round(cx)},${round(cy)} Z`;
+  return closure === 'chord' ? `${arc} Z` : arc;
+};
+
 const createNode = (child) => {
   const scale = child.scale ?? 1;
   const rx = clampExtent(child.type, child.rx * scale);
   const ry = clampExtent(child.type, child.ry * scale);
   const geometry = SHAPES[child.type].geometry;
 
-  const tag = { dot: 'line', polyline: child.closed ? 'polygon' : 'polyline' }[geometry] ?? geometry;
+  const tag =
+    { dot: 'line', arc: 'path', polyline: child.closed ? 'polygon' : 'polyline' }[geometry] ?? geometry;
   const node = document.createElementNS(SVG_NS, tag);
   node.dataset.elementId = child.id;
   let strokeWidth = child.strokeWidth;
@@ -202,6 +229,8 @@ const createNode = (child) => {
       'points',
       child.points.map((p) => `${round(child.x + p.x * scale)},${round(child.y + p.y * scale)}`).join(' '),
     );
+  } else if (geometry === 'arc') {
+    node.setAttribute('d', arcPath(child.x, child.y, rx, child.start, child.end, child.closure));
   } else if (geometry === 'polygon') {
     node.setAttribute('points', polygonPoints(child.x, child.y, rx, child.sides, child.inner));
   } else {
@@ -210,6 +239,9 @@ const createNode = (child) => {
     node.setAttribute('r', round(rx));
   }
 
+  /* Rotation propre, autour du centre de la forme après le déplacement des
+     modificateurs : la géométrie émise reste celle de la forme droite. */
+  if (child.rotation) node.setAttribute('transform', rotateAbout(child.rotation, child));
   node.setAttribute('fill', child.fill);
   node.setAttribute('stroke', child.stroke);
   node.setAttribute('stroke-width', round(strokeWidth));
@@ -286,6 +318,8 @@ export const renderedNodes = (svgRoot, elementId) =>
   svgRoot.querySelectorAll(`[data-element-id="${CSS.escape(elementId)}"]`);
 
 const round = (value) => String(Math.round(value * 1000) / 1000);
+
+const rotateAbout = (degrees, { x, y }) => `rotate(${round(degrees)} ${round(x)} ${round(y)})`;
 
 /**
  * Sérialise le nœud affiché en document SVG autonome.

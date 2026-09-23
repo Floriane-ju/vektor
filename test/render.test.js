@@ -248,6 +248,23 @@ describe('dessin au glisser', () => {
     radio.dispatchEvent(new Event('change'));
   };
 
+  it('un glissement à l’outil arc pose un secteur du rayon du geste', () => {
+    const { store, svg, shapes } = withLayer();
+    pick(shapes, 'arc');
+    pointer(svg, 'pointerdown', 400, 300);
+    pointer(svg, 'pointermove', 430, 340);
+    pointer(svg, 'pointerup', 430, 340);
+    expect(store.get().layers[0].elements.at(-1)).toMatchObject({
+      type: 'arc',
+      x: 400,
+      y: 300,
+      rx: 50,
+      start: 0,
+      end: 180,
+      closure: 'sector',
+    });
+  });
+
   it('le glissement prend le point de départ pour centre et la distance pour taille', () => {
     const { store, svg } = withLayer();
     pointer(svg, 'pointerdown', 400, 300);
@@ -1074,5 +1091,56 @@ describe('tracé', () => {
     [...container.querySelectorAll('button')].find((b) => b.textContent === 'Coller un tracé').click();
     expect(store.get().layers[0].elements).toHaveLength(0);
     expect(messages.at(-1)).toEqual([expect.stringContaining('« C »'), 'error']);
+  });
+});
+
+describe('rotation propre', () => {
+  it('tourne la forme autour de son centre, sans toucher sa géométrie', () => {
+    const svg = stage();
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      elements: [createElement('rect', 100, 50, { rx: 40, ry: 20, rotation: 30 }), createElement('rect', 0, 0)],
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const [turned, straight] = svg.querySelectorAll('rect');
+    expect(turned.getAttribute('transform')).toBe('rotate(30 100 50)');
+    expect(turned.getAttribute('x')).toBe('60');
+    expect(straight.hasAttribute('transform')).toBe(false);
+    expect(toSvgDocument(svg)).toContain('rotate(30 100 50)');
+  });
+});
+
+describe('arc', () => {
+  const arcPath = (extra) => {
+    const svg = stage();
+    const layer = createLayer({
+      elements: [createElement('arc', 0, 0, { rx: 10, ry: 10, start: 0, end: 90, ...extra })],
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    return svg.querySelector('path').getAttribute('d');
+  };
+
+  it('part du haut en sens horaire, fermé selon le mode', () => {
+    expect(arcPath({ closure: 'open' })).toBe('M0,-10 A10,10 0 0 1 10,0');
+    expect(arcPath({ closure: 'chord' })).toBe('M0,-10 A10,10 0 0 1 10,0 Z');
+    expect(arcPath({ closure: 'sector' })).toBe('M0,-10 A10,10 0 0 1 10,0 L0,0 Z');
+    expect(arcPath({ closure: 'open', start: 270, end: 90 })).toBe('M-10,0 A10,10 0 0 1 10,0');
+    expect(arcPath({ closure: 'open', end: 270 })).toBe('M0,-10 A10,10 0 1 1 -10,0');
+  });
+
+  it('de 0 à 360° rend un cercle fermé, sans rayon ni raccord', () => {
+    for (const closure of ['open', 'chord', 'sector']) {
+      expect(arcPath({ closure, end: 360 })).toBe('M0,-10 A10,10 0 0 1 0,10 A10,10 0 0 1 0,-10 Z');
+    }
+  });
+
+  it('un secteur rempli se peint de la couleur du calque', () => {
+    const svg = stage();
+    const layer = createLayer({
+      stroke: '#ff0000',
+      elements: [createElement('arc', 0, 0, { closure: 'sector', filled: true })],
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    expect(svg.querySelector('path').getAttribute('fill')).toBe('#ff0000');
   });
 });

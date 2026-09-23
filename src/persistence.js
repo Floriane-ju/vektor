@@ -1,6 +1,8 @@
 import { createModifier, MODIFIERS } from './modifiers.js';
 import { clampCount } from './interpolate.js';
 import {
+  ARC_CLOSURES,
+  clampAngle,
   clampExtent,
   clampInner,
   clampSides,
@@ -20,7 +22,7 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@10';
+export const FORMAT = 'illu/scene@12';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -34,7 +36,8 @@ export const FORMAT = 'illu/scene@10';
      dans `propertyRanges` : chaque plage non neutre se relit comme un étage de
      la pile, ce qui rend exactement le même dessin ;
    - `@1` à `@8` ne connaissaient ni l'ellipse ni le polygone, `@1` à `@9`
-     pas le tracé : rien à convertir, ils se relisent tels quels. */
+     pas le tracé, `@1` à `@10` pas la rotation propre (formes droites), `@1` à
+     `@11` pas l'arc : rien à convertir, ils se relisent tels quels. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -45,6 +48,8 @@ const READABLE_FORMATS = new Set([
   'illu/scene@7',
   'illu/scene@8',
   'illu/scene@9',
+  'illu/scene@10',
+  'illu/scene@11',
   FORMAT,
 ]);
 
@@ -178,12 +183,21 @@ const readElement = (input) => {
   const legacyRadius = num(raw.radius, undefined);
   return createElement(raw.type, num(raw.x, 0), num(raw.y, 0), {
     ...(typeof raw.id === 'string' && raw.id !== '' ? { id: raw.id } : {}),
+    /* Ramenée à un tour : au-delà, le même dessin sous un nombre sans borne. */
+    rotation: num(raw.rotation, 0) % 360,
     rx: clampExtent(raw.type, num(raw.rx, legacyRadius ?? defaults.rx)),
     ry: clampExtent(raw.type, num(raw.ry, legacyRadius ?? defaults.ry)),
     /* Avant `@6` le remplissage était une couleur : n'en reste que sa présence. */
     filled: typeof raw.filled === 'boolean' ? raw.filled : isPainted(raw.fill),
     ...(raw.type === 'polygon'
       ? { sides: clampSides(num(raw.sides, defaults.sides)), inner: clampInner(num(raw.inner, defaults.inner)) }
+      : {}),
+    ...(raw.type === 'arc'
+      ? {
+          start: clampAngle(num(raw.start, defaults.start)),
+          end: clampAngle(num(raw.end, defaults.end)),
+          closure: Object.hasOwn(ARC_CLOSURES, raw.closure) ? raw.closure : 'open',
+        }
       : {}),
     ...(raw.type === 'polyline' ? { points: readPoints(raw.points), closed: Boolean(raw.closed) } : {}),
   });

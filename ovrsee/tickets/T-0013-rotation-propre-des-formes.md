@@ -2,9 +2,12 @@
 {
   "id": "T-0013",
   "titre": "Rotation propre des formes",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "haute",
-  "tags": ["formes","rendu"],
+  "tags": [
+    "formes",
+    "rendu"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null,

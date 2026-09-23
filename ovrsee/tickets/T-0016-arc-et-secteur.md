@@ -2,9 +2,11 @@
 {
   "id": "T-0016",
   "titre": "Arc et secteur de cercle",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "haute",
-  "tags": ["formes"],
+  "tags": [
+    "formes"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null,

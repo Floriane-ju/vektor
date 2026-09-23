@@ -1,5 +1,7 @@
 import {
   addModifier,
+  ARC_CLOSURES,
+  clampAngle,
   clampExtent,
   clampInner,
   clampSides,
@@ -133,6 +135,30 @@ export const mountPropertyPanel = ({ store }) => {
     (element) => element.inner,
     (element, value) => store.apply(updateElement, element.id, { inner: clampInner(value) }),
   );
+  const rotation = bind(
+    input('number', { step: '1' }),
+    (element) => element.rotation ?? 0,
+    (element, value) => store.apply(updateElement, element.id, { rotation: value % 360 }),
+  );
+  const arcStart = bind(
+    input('number', { min: '-360', max: '360', step: '1' }),
+    (element) => element.start,
+    (element, value) => store.apply(updateElement, element.id, { start: clampAngle(value) }),
+  );
+  const arcEnd = bind(
+    input('number', { min: '-360', max: '360', step: '1' }),
+    (element) => element.end,
+    (element, value) => store.apply(updateElement, element.id, { end: clampAngle(value) }),
+  );
+  const closure = document.createElement('select');
+  closure.id = `prop-${++uid}`;
+  for (const [value, label] of Object.entries(ARC_CLOSURES)) closure.append(option(value, label));
+  bind(
+    closure,
+    (element) => element.closure,
+    (element, value) => store.apply(updateElement, element.id, { closure: value }),
+    { event: 'change', parse: String },
+  );
   /* La couleur est réglée sur le calque : ici on ne dit que rempli ou non, et
      le remplissage reprend cette couleur. */
   const filled = bind(
@@ -169,9 +195,15 @@ export const mountPropertyPanel = ({ store }) => {
   polygonRow.className = 'field-row';
   polygonRow.append(field('Côtés', sides), field('Rayon intérieur (%)', inner));
 
+  /* 0° en haut, sens horaire ; de 0 à 360 l'arc fait le tour complet. */
+  const arcRow = document.createElement('div');
+  arcRow.className = 'field-row';
+  arcRow.append(field('Début (°)', arcStart), field('Fin (°)', arcEnd), field('Fermeture', closure));
+
+  const rotationField = field('Rotation (°)', rotation);
   const filledField = field('Remplir', filled);
   const closedField = field('Fermé', closed);
-  shape.append(positionRow, sizeRow, polygonRow, closedField, filledField);
+  shape.append(positionRow, sizeRow, rotationField, polygonRow, arcRow, closedField, filledField);
 
   /* ---- Calque ---- */
 
@@ -386,7 +418,10 @@ export const mountPropertyPanel = ({ store }) => {
     widthField.hidden = uniform;
     heightField.hidden = uniform;
     filledField.hidden = dot;
+    /* Un cercle et un point tournés restent identiques : rien à régler. */
+    rotationField.hidden = !element || dot || SHAPES[element.type].geometry === 'circle';
     polygonRow.hidden = !element || SHAPES[element.type].geometry !== 'polygon';
+    arcRow.hidden = !element || SHAPES[element.type].geometry !== 'arc';
     /* Un tracé se dimensionne par ses sommets, pas par des champs. */
     const trace = element ? SHAPES[element.type].geometry === 'polyline' : false;
     sizeRow.hidden = trace;

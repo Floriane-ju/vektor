@@ -12,6 +12,7 @@ import {
   moveElement,
   moveLayer,
   moveModifier,
+  recenterTrace,
   removeElement,
   removeInterpolation,
   removeLayer,
@@ -880,5 +881,73 @@ describe('historique', () => {
     store.set(deserialize(serialize(addLayer(createScene()))));
     store.undo();
     expect(store.get()).toBe(before);
+  });
+});
+
+describe('rotation propre', () => {
+  it('une forme neuve n’est pas tournée', () => {
+    expect(createElement('rect', 0, 0).rotation).toBe(0);
+  });
+
+  it('se sérialise, et un fichier qui l’ignore se relit droit', () => {
+    const layer = createLayer({ elements: [createElement('rect', 0, 0, { rotation: 30 })] });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    expect(deserialize(serialize(scene)).layers[0].elements[0].rotation).toBe(30);
+
+    const legacy = JSON.stringify({
+      format: 'illu/scene@10',
+      layers: [
+        {
+          id: 'L1',
+          elements: [
+            { id: 'E1', type: 'rect', x: 0, y: 0 },
+            { id: 'E2', type: 'rect', x: 0, y: 0, rotation: 'x' },
+          ],
+        },
+      ],
+    });
+    expect(deserialize(legacy).layers[0].elements.map((e) => e.rotation)).toEqual([0, 0]);
+  });
+
+  it('recentrer un tracé tourné ne le déplace pas à l’écran', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 20, y: 0 },
+    ];
+    const layer = createLayer({ elements: [createElement('polyline', 0, 0, { points, rotation: 90 })] });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    const [element] = recenterTrace(scene, layer.elements[0].id).layers[0].elements;
+    /* Le milieu local (10, 0), tourné de 90°, tombe en (0, 10). */
+    expect(element.x).toBeCloseTo(0);
+    expect(element.y).toBeCloseTo(10);
+    expect(element.points).toEqual([
+      { x: -10, y: 0 },
+      { x: 10, y: 0 },
+    ]);
+  });
+});
+
+describe('arc importé', () => {
+  it('se relit, angles bornés et fermeture inconnue ramenée à « ouvert »', () => {
+    const layer = createLayer({
+      elements: [createElement('arc', 0, 0, { start: 45, end: 300, closure: 'chord' })],
+    });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    expect(deserialize(serialize(scene)).layers[0].elements[0]).toMatchObject({
+      start: 45,
+      end: 300,
+      closure: 'chord',
+    });
+
+    const raw = JSON.stringify({
+      format: 'illu/scene@11',
+      layers: [
+        {
+          id: 'L1',
+          elements: [{ id: 'E1', type: 'arc', x: 0, y: 0, start: -1e9, end: 'x', closure: 'spirale' }],
+        },
+      ],
+    });
+    expect(deserialize(raw).layers[0].elements[0]).toMatchObject({ start: -360, end: 180, closure: 'open' });
   });
 });

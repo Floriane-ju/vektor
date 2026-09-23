@@ -8,6 +8,7 @@ import {
   getActiveLayer,
   recenterTrace,
   removeElement,
+  rotateVector,
   setActiveElement,
   setActiveLayer,
   SHAPES,
@@ -233,8 +234,10 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   const moveVertex = (event) => {
     const { x, y } = toStagePoint(svgRoot, event);
     const { element, index, point } = vertexDrag;
+    /* Le geste est lu à l'écran, le sommet vit dans le repère de la forme. */
+    const delta = rotateVector({ x: x - point.x, y: y - point.y }, -(element.rotation ?? 0));
     const points = element.points.map((p, i) =>
-      i === index ? { x: p.x + x - point.x, y: p.y + y - point.y } : p,
+      i === index ? { x: p.x + delta.x, y: p.y + delta.y } : p,
     );
     store.apply(updateElement, element.id, { points });
   };
