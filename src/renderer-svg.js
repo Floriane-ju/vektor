@@ -29,9 +29,16 @@ export const render = (scene, svgRoot) => {
 
     const group = document.createElementNS(SVG_NS, 'g');
     group.dataset.layerId = layer.id;
+    /* Un outil booléen ne se dessine pas : il ne vit que dans le résultat. */
+    const tools = new Set(layer.elements.flatMap((element) => element.booleans.map((step) => step.with)));
+    const byCopy = new Map(children.map((child) => [`${child.id}:${child.copy}`, child]));
     for (const child of children) {
-      group.append(createNode(child));
       if (!bounds.has(child.id)) bounds.set(child.id, childBounds(child));
+      if (tools.has(child.id)) continue;
+      const steps = child.booleans
+        .map((step) => ({ shape: byCopy.get(`${step.with}:${child.copy}`), op: step.op }))
+        .filter((step) => step.shape);
+      group.append(steps.length > 0 ? createBoolean(child, steps) : createNode(child));
     }
     svgRoot.append(group);
   }
@@ -265,6 +272,102 @@ const createNode = (child) => {
   node.setAttribute('fill-opacity', round(child.opacity ?? 1));
   node.setAttribute('stroke-opacity', round(child.opacity ?? 1));
   return node;
+};
+
+/* Étendue d'un masque, en unités du dessin.
+   ponytail: trois plans de large autour du plan ; une forme qui déborde plus
+   loin serait coupée net, élargir le jour où le zoom y mène. */
+const MASK_REGION = { x: -STAGE.width, y: -STAGE.height, width: STAGE.width * 3, height: STAGE.height * 3 };
+
+/* Ce que chaque opération garde des bords, comme un pathfinder : les bords
+   déjà acquis, dedans ou dehors de l'outil ; le bord de l'outil, dedans ou
+   dehors du résultat précédent. */
+const EDGE_KEEP = { union: 'out', subtract: 'out', intersect: 'in' };
+const TOOL_EDGE_KEEP = { union: 'out', subtract: 'in', intersect: 'in' };
+
+const svgNode = (tag, attrs = {}) => {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
+  return node;
+};
+
+/* Nœud masqué : l'enveloppe porte le masque, pour qu'un bord en cumule un par
+   étape de la pile sans qu'un masque en écrase un autre. */
+const wrap = (nodes, mask) => {
+  const node = svgNode('g', { mask });
+  node.append(...nodes);
+  return node;
+};
+
+/**
+ * Résultat de la pile booléenne d'une copie de forme, chaque outil pris à la
+ * copie du même rang. R₀ = la forme, Rₖ = Rₖ₋₁ op outilₖ.
+ *
+ * - Une région se peint en deux teintes (`fg` dedans, `bg` pour les trous de
+ *   découpe) : en blanc sur noir elle fait un masque « dedans », en noir sur
+ *   un fond blanc un masque « dehors ». L'intersection s'y emboîte en masque.
+ * - Le contour est fait des bords de la forme et de chaque outil, chacun
+ *   gardé dedans ou dehors à chaque étape qui suit la sienne.
+ * - Le remplissage, s'il y en a, est un aplat masqué par la région finale.
+ *
+ * Tout prend le style de la forme, bords des outils compris. L'opacité
+ * interpolée passe sur le groupe : les morceaux qui se recouvrent ne se
+ * foncent pas. `<mask>` plutôt que `<clipPath>`, qui ne sait pas garder le
+ * dehors ; seul l'intérieur d'un outil compte, pas son trait.
+ *
+ * ponytail: masques non partagés entre copies, et trait coupé sur la ligne
+ * médiane de l'autre forme (léger cran aux jonctions) ; mutualiser si des
+ * centaines de copies se font sentir, dilater les masques si le cran gêne.
+ */
+const createBoolean = (child, steps) => {
+  const group = svgNode('g', { opacity: round(child.opacity ?? 1) });
+  group.dataset.elementId = child.id;
+  const masks = [];
+  let serial = 0;
+
+  const solid = (shape, color) => {
+    const node = createNode({ ...shape, opacity: 1 });
+    delete node.dataset.elementId;
+    node.setAttribute('fill', color);
+    node.setAttribute('stroke', 'none');
+    return node;
+  };
+  const maskOf = (paint, keep) => {
+    const mask = svgNode('mask', { id: `bool-${child.id}-${child.copy}-${serial++}`, maskUnits: 'userSpaceOnUse' });
+    for (const [name, value] of Object.entries(MASK_REGION)) mask.setAttribute(name, round(value));
+    if (keep === 'out') mask.append(svgNode('rect', { ...MASK_REGION, fill: '#fff' }));
+    mask.append(...(keep === 'out' ? paint('#000', '#fff') : paint('#fff', '#000')));
+    masks.push(mask);
+    return `url(#${mask.id})`;
+  };
+  const edge = (shape) => {
+    const node = createNode({ ...shape, opacity: 1 });
+    delete node.dataset.elementId;
+    node.setAttribute('fill', 'none');
+    return node;
+  };
+
+  let region = (fg) => [solid(child, fg)];
+  let edges = [edge(child)];
+  for (const { shape, op } of steps) {
+    const previous = region;
+    const tool = (fg) => [solid(shape, fg)];
+    const within = maskOf(tool, EDGE_KEEP[op]);
+    edges = edges.map((node) => wrap([node], within));
+    edges.push(wrap([edge({ ...shape, dash: child.dash, linecap: child.linecap })], maskOf(previous, TOOL_EDGE_KEEP[op])));
+    region = {
+      union: (fg, bg) => [...previous(fg, bg), ...tool(fg)],
+      subtract: (fg, bg) => [...previous(fg, bg), ...tool(bg)],
+      intersect: (fg, bg) => [wrap(previous(fg, bg), maskOf(tool, 'in'))],
+    }[op];
+  }
+
+  const fill =
+    child.fill === 'none'
+      ? []
+      : [svgNode('rect', { ...MASK_REGION, fill: child.fill, stroke: 'none', mask: maskOf(region, 'in') })];
+  group.append(...masks, ...fill, ...edges);
+  return group;
 };
 
 /* Cadre de sélection : écart à la forme, en unités du dessin ; son trait garde

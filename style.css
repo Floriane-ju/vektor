@@ -361,7 +361,28 @@ input[type="range"] {
 #shape-list .layer-card[data-active="true"] > .layer-row { background: var(--select); color: var(--ink); }
 #shape-list .layer-card[data-active="true"] .layer-name { font-weight: 600; }
 /* Survoler une forme de la liste l'encadre sur le dessin (voir `shape-list.js`). */
-#shape-list .layer-card:hover > .layer-row { box-shadow: inset 0 0 0 1.5px var(--select); }
+#shape-list .layer-card:hover:not(:has(.layer-card:hover)) > .layer-row { box-shadow: inset 0 0 0 1.5px var(--select); }
+/* Outil booléen rangé sous la forme qui l'emploie : un filet relie la
+   branche à son parent, un coude à chaque outil. */
+.boolean-branch { position: relative; margin: 2px 0 0 16px; padding-left: 16px; }
+.boolean-branch::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -2px;
+  bottom: 18px;
+  border-left: 1.5px solid var(--line);
+}
+.boolean-branch > .layer-card { position: relative; }
+.boolean-branch > .layer-card::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 18px;
+  width: 12px;
+  border-top: 1.5px solid var(--line);
+}
+.layer-card[data-template="true"] > .layer-row .layer-name { font-style: italic; opacity: 0.75; }
 
 /* Actions de ligne : au survol, au focus et sur la ligne active. Un calque
    masqué les garde visibles, sinon on ne saurait plus le réafficher. */

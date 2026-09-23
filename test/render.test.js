@@ -1261,3 +1261,187 @@ describe('panneau : motif de trait', () => {
     expect(radio(trait, 'dashed').checked).toBe(true);
   });
 });
+
+describe('booléens entre formes', () => {
+  const WIDE = String(STAGE.width * 3);
+  const setup = (steps, overrides = {}) => {
+    const tools = steps.map(([, geometry = 'ellipse'], i) => createElement(geometry, i * 30, 0, { rx: 40, ry: 40 }));
+    const forme = createElement('rect', 0, 0, {
+      booleans: steps.map(([op], i) => ({ with: tools[i].id, op })),
+      ...overrides,
+    });
+    return { tools, forme, layer: createLayer({ elements: [...tools, forme] }) };
+  };
+  const maskById = (svg, ref) => svg.querySelector(`mask#${ref.slice(5, -1)}`);
+  /* Masque décrit par ce qu'il garde : `in` ou `out`, puis ce qu'il peint. */
+  const describeMask = (mask) => {
+    const out = mask.firstElementChild.getAttribute('width') === WIDE && mask.firstElementChild.tagName.toLowerCase() === 'rect';
+    const painted = [...mask.children].slice(out ? 1 : 0);
+    const paint = (node) =>
+      node.tagName.toLowerCase() === 'g'
+        ? `[${[...node.children].map(paint).join(' ')}]∩`
+        : `${node.tagName.toLowerCase()}${node.getAttribute('fill') === (out ? '#000' : '#fff') ? '+' : '-'}`;
+    return `${out ? 'out' : 'in'}:${painted.map(paint).join(' ')}`;
+  };
+  /* Bord : sa forme, et les masques qui l'enveloppent du plus proche au plus loin. */
+  const edges = (svg, forme) => {
+    const group = svg.querySelector(`g[data-element-id="${forme.id}"]`);
+    return [...group.children]
+      .filter((node) => node.tagName.toLowerCase() === 'g')
+      .map((node) => {
+        const filters = [];
+        let current = node;
+        while (current.tagName.toLowerCase() === 'g') {
+          filters.unshift(describeMask(maskById(svg, current.getAttribute('mask'))));
+          current = current.firstElementChild;
+        }
+        return [current.tagName.toLowerCase(), ...filters];
+      });
+  };
+  const fillOf = (svg, forme) =>
+    [...svg.querySelector(`g[data-element-id="${forme.id}"]`).children].find(
+      (node) => node.tagName.toLowerCase() === 'rect',
+    );
+
+  it('les outils ne se dessinent pas ; intersection : chaque bord gardé dans l’autre forme', () => {
+    const svg = stage();
+    const { tools, forme, layer } = setup([['intersect']]);
+    render({ layers: [layer] }, svg);
+    expect(svg.querySelector(`[data-element-id="${tools[0].id}"]`)).toBeNull();
+    expect(edges(svg, forme)).toEqual([
+      ['rect', 'in:ellipse+'],
+      ['ellipse', 'in:rect+'],
+    ]);
+    expect(fillOf(svg, forme)).toBeUndefined();
+    expect(toSvgDocument(svg)).toContain('<mask');
+  });
+
+  it('découpe remplie : aplat masqué par la forme percée de l’outil', () => {
+    const svg = stage();
+    const { forme, layer } = setup([['subtract']], { filled: true });
+    render({ layers: [layer] }, svg);
+    expect(edges(svg, forme)).toEqual([
+      ['rect', 'out:ellipse+'],
+      ['ellipse', 'in:rect+'],
+    ]);
+    const fill = fillOf(svg, forme);
+    expect(fill.getAttribute('stroke')).toBe('none');
+    expect(describeMask(maskById(svg, fill.getAttribute('mask')))).toBe('in:rect+ ellipse-');
+  });
+
+  it('les opérations s’additionnent dans l’ordre : fusion puis découpe puis intersection', () => {
+    const svg = stage();
+    const { forme, layer } = setup([['union'], ['subtract', 'rect'], ['intersect']], {
+      filled: true,
+      dash: [4, 2],
+    });
+    render({ layers: [layer] }, svg);
+    const r1 = 'rect+ ellipse+';
+    const r2 = `${r1} rect-`;
+    expect(edges(svg, forme)).toEqual([
+      /* Bord de la forme : hors du disque, hors du carré, dans le 2e disque. */
+      ['rect', 'out:ellipse+', 'out:rect+', 'in:ellipse+'],
+      /* Bord du disque fusionné : hors de la forme, puis filtré comme elle. */
+      ['ellipse', 'out:rect+', 'out:rect+', 'in:ellipse+'],
+      /* Bord du carré découpé : dans le résultat de la fusion, puis dans le 2e disque. */
+      ['rect', `in:${r1}`, 'in:ellipse+'],
+      /* Bord du 2e disque : dans le résultat de la découpe. */
+      ['ellipse', `in:${r2}`],
+    ]);
+    expect(describeMask(maskById(svg, fillOf(svg, forme).getAttribute('mask')))).toBe(`in:[${r2}]∩`);
+    /* Le résultat prend le style de la forme, bords des outils compris. */
+    const dashes = [...svg.querySelectorAll(`g[data-element-id="${forme.id}"] g > :not(g)`)]
+      .filter((n) => !n.closest('mask'))
+      .map((n) => n.getAttribute('stroke-dasharray'));
+    expect(dashes).toHaveLength(4);
+    expect(new Set(dashes).size).toBe(1);
+  });
+
+  it('chaque copie passe par sa propre copie de l’outil, opacité sur le groupe', () => {
+    const svg = stage();
+    const { forme, layer } = setup([['intersect']]);
+    const stepped = {
+      ...layer,
+      modifiers: [{ type: 'step', n: 3, stepX: 100, stepY: 0, angleStep: 0, radiusStep: 0 }],
+      interpolations: [ramp('opacity', [1, 0])],
+    };
+    render({ layers: [stepped] }, svg);
+    const groups = [...svg.querySelectorAll(`g[data-element-id="${forme.id}"]`)];
+    expect(groups.map((g) => g.getAttribute('opacity'))).toEqual(['1', '0.5', '0']);
+    const toolEdges = groups.map((g) => g.querySelector(':scope > g > ellipse'));
+    expect(toolEdges.map((node) => node.getAttribute('cx'))).toEqual(['0', '100', '200']);
+    expect(toolEdges.map((node) => node.getAttribute('stroke-opacity'))).toEqual(['1', '1', '1']);
+    const ids = [...svg.querySelectorAll('mask')].map((m) => m.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('panneau : booléen', () => {
+  it('empile des opérations, chacune avec son outil et son mode', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const disque = createElement('ellipse', 0, 0);
+    const carre = createElement('rect', 0, 0);
+    const forme = createElement('rect', 0, 0);
+    const layer = createLayer({ elements: [disque, carre, forme] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: forme.id });
+    const { shapeDetail } = mountPropertyPanel({ store });
+    const add = shapeDetail.querySelector('[data-focus-key="add-boolean"]');
+    const steps = () => store.get().layers[0].elements[2].booleans;
+    expect(add.closest('section').querySelector('h3').textContent).toBe('Booléen');
+
+    add.click();
+    add.click();
+    expect(steps()).toEqual([
+      { with: disque.id, op: 'intersect' },
+      { with: carre.id, op: 'intersect' },
+    ]);
+    const blocks = shapeDetail.querySelectorAll('.modifier-block');
+    expect(blocks).toHaveLength(2);
+    expect([...blocks[0].querySelectorAll('.segment span')].map((n) => n.textContent)).toEqual([
+      'Fusion',
+      'Découpe',
+      'Intersection',
+    ]);
+    expect([...blocks[0].querySelector('select').options].map((o) => o.value)).toEqual([disque.id, carre.id]);
+
+    const union = shapeDetail.querySelectorAll('.modifier-block')[0].querySelector('input[value="union"]');
+    union.checked = true;
+    union.dispatchEvent(new Event('change'));
+    const tool = shapeDetail.querySelectorAll('.modifier-block')[1].querySelector('select');
+    tool.value = disque.id;
+    tool.dispatchEvent(new Event('change'));
+    expect(steps()).toEqual([
+      { with: disque.id, op: 'union' },
+      { with: disque.id, op: 'intersect' },
+    ]);
+
+    shapeDetail.querySelector('[data-focus-key="delete-boolean0"]').click();
+    expect(steps()).toEqual([{ with: disque.id, op: 'intersect' }]);
+  });
+});
+
+describe('liste des formes : arborescence des booléens', () => {
+  it('l’outil se range sous la forme qui l’emploie, une seule fois même en cycle', async () => {
+    const { mountShapeList } = await import('../src/ui/shape-list.js');
+    const gabarit = createElement('ellipse', 0, 0);
+    const forme = createElement('rect', 0, 0, { booleans: [{ with: gabarit.id, op: 'intersect' }] });
+    const libre = createElement('line', 0, 0);
+    const layer = createLayer({ elements: [gabarit, forme, libre] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const list = document.createElement('div');
+    mountShapeList({ store, container: list, status: { show: () => {} } });
+
+    const card = (element) => list.querySelector(`[data-focus-key="name-${element.id}"]`).closest('li');
+    expect(card(gabarit).parentElement.closest('li')).toBe(card(forme));
+    expect(card(gabarit).dataset.template).toBe('true');
+    expect(card(forme).parentElement.closest('li')).toBeNull();
+    expect(card(libre).parentElement.closest('li')).toBeNull();
+
+    /* Découpe croisée : chacune apparaît une fois, aucune ne disparaît. */
+    store.apply((scene) => ({
+      ...scene,
+      layers: [{ ...layer, elements: [{ ...gabarit, booleans: [{ with: forme.id, op: 'union' }] }, forme, libre] }],
+    }));
+    expect(list.querySelectorAll('li')).toHaveLength(3);
+  });
+});

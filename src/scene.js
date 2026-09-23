@@ -233,18 +233,27 @@ export const clampDash = (values) => {
 /** Saisie libre : nombres séparés par des espaces ou des virgules. */
 export const parseDash = (text) => clampDash(String(text).split(/[\s,]+/).filter(Boolean));
 
+/** Opérations booléennes entre une forme et ses outils, comme un pathfinder. */
+export const BOOLEAN_OPS = { union: 'Fusion', subtract: 'Découpe', intersect: 'Intersection' };
+export const DEFAULT_BOOLEAN_OP = 'intersect';
+export const clampBooleanOp = (value) => (Object.hasOwn(BOOLEAN_OPS, value) ? value : DEFAULT_BOOLEAN_OP);
+
 export const clampLinecap = (value) => (Object.hasOwn(LINECAPS, value) ? value : DEFAULT_LINECAP);
 
 const counters = { L: 0, E: 0, I: 0 };
 const nextId = (prefix) => `${prefix}${++counters[prefix]}`;
 
 /* `rotation` en degrés, autour du centre `x, y` : l'angle appartient à la
-   forme, deux formes d'un même dessin s'inclinent rarement pareil. */
+   forme, deux formes d'un même dessin s'inclinent rarement pareil.
+   `booleans` = pile d'opérations booléennes `{ with, op }`, appliquées dans
+   l'ordre : `with` désigne une autre forme du même calque, l'outil. L'outil
+   ne se dessine plus, la forme rend le résultat avec son propre style. */
 export const createElement = (type, x, y, overrides = {}) => ({
   id: nextId('E'),
   rotation: 0,
   dash: [],
   linecap: DEFAULT_LINECAP,
+  booleans: [],
   ...SHAPES[type].defaults,
   type,
   x,
@@ -421,6 +430,8 @@ export const getRenderedChildren = (layer) => {
         y,
         rotation: (angle * 180) / Math.PI + (flip ? -own : own),
         flip,
+        /* Rang de la copie : le booléen apparie chaque copie à celle de son outil. */
+        copy: i,
         ...properties,
       });
     }
@@ -537,13 +548,48 @@ export const updateElement = (scene, elementId, patch) =>
   );
 
 export const removeElement = (scene, elementId) => {
+  /* Un outil supprimé libère les formes qu'il travaillait. */
   const next = mapElement(scene, elementId, (elements) =>
-    elements.filter((element) => element.id !== elementId),
+    elements
+      .filter((element) => element.id !== elementId)
+      .map((element) =>
+        element.booleans.some((step) => step.with === elementId)
+          ? { ...element, booleans: element.booleans.filter((step) => step.with !== elementId) }
+          : element,
+      ),
   );
   if (scene.activeElementId !== elementId) return next;
   const layer = next.layers.find((candidate) => candidate.id === scene.activeLayerId);
   return { ...next, activeElementId: layer?.elements.at(-1)?.id ?? null };
 };
+
+/* ---- Pile booléenne d'une forme ---- */
+
+const mapBooleans = (scene, elementId, fn) =>
+  mapElement(scene, elementId, (elements) =>
+    elements.map((element) => (element.id === elementId ? { ...element, booleans: fn(element.booleans) } : element)),
+  );
+
+/**
+ * Ajoute une opération, outil = la première autre forme du calque pas encore
+ * employée (ou, toutes l'étant, la première autre). Sans autre forme, rien.
+ */
+export const addBoolean = (scene, elementId) => {
+  const layer = scene.layers.find((candidate) => candidate.elements.some((el) => el.id === elementId));
+  const element = layer?.elements.find((el) => el.id === elementId);
+  if (!element) return scene;
+  const others = layer.elements.filter((el) => el.id !== elementId);
+  const used = new Set(element.booleans.map((step) => step.with));
+  const tool = others.find((el) => !used.has(el.id)) ?? others[0];
+  if (!tool) return scene;
+  return mapBooleans(scene, elementId, (steps) => [...steps, { with: tool.id, op: DEFAULT_BOOLEAN_OP }]);
+};
+
+export const updateBoolean = (scene, elementId, index, patch) =>
+  mapBooleans(scene, elementId, (steps) => steps.map((step, i) => (i === index ? { ...step, ...patch } : step)));
+
+export const removeBoolean = (scene, elementId, index) =>
+  mapBooleans(scene, elementId, (steps) => steps.filter((_, i) => i !== index));
 
 /** Copie posée juste devant l'originale, décalée de `offset` pour qu'on la voie. */
 export const duplicateElement = (scene, elementId, offset) => {

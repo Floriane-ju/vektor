@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { clampCount, stackValues, t } from '../src/interpolate.js';
 import { createModifier, MODIFIERS, orients } from '../src/modifiers.js';
 import {
+  addBoolean,
   addElement,
   addInterpolation,
   clearInterpolations,
@@ -15,6 +16,7 @@ import {
   moveLayer,
   moveModifier,
   recenterTrace,
+  removeBoolean,
   removeElement,
   removeInterpolation,
   removeLayer,
@@ -24,6 +26,7 @@ import {
   setLayerStrokeWidth,
   snapToGrid,
   snapToPolarGrid,
+  updateBoolean,
   updateElement,
   updateInterpolation,
   updateInterpolationRange,
@@ -1219,5 +1222,67 @@ describe('grille ronde', () => {
   it('ramène au centre près du centre, au dernier cercle au-delà', () => {
     near(snapToPolarGrid({ x: 470, y: 440 }, 5, 4), { x: 450, y: 450 });
     near(snapToPolarGrid({ x: 450, y: -200 }, 5, 4), { x: 450, y: 0 });
+  });
+});
+
+describe('booléens', () => {
+  const trio = () => {
+    const disque = createElement('ellipse', 0, 0);
+    const carre = createElement('rect', 0, 0);
+    const forme = createElement('rect', 0, 0, {
+      booleans: [
+        { with: disque.id, op: 'union' },
+        { with: carre.id, op: 'subtract' },
+      ],
+    });
+    const layer = createLayer({ elements: [disque, carre, forme] });
+    return { disque, carre, forme, scene: { layers: [layer], activeLayerId: layer.id, activeElementId: forme.id } };
+  };
+  const shape = (scene, index) => scene.layers[0].elements[index];
+
+  it('une forme naît sans booléen', () => {
+    expect(createElement('rect', 0, 0).booleans).toEqual([]);
+  });
+
+  it('ajouter prend un outil pas encore employé, en intersection ; seule, rien', () => {
+    const { disque, carre, forme, scene } = trio();
+    const cleared = updateElement(scene, forme.id, { booleans: [{ with: disque.id, op: 'union' }] });
+    expect(shape(addBoolean(cleared, forme.id), 2).booleans[1]).toEqual({ with: carre.id, op: 'intersect' });
+    const alone = createElement('rect', 0, 0);
+    const lonely = { layers: [createLayer({ elements: [alone] })] };
+    expect(addBoolean(lonely, alone.id)).toBe(lonely);
+  });
+
+  it('chaque étape se règle et se retire à son rang', () => {
+    const { disque, forme, scene } = trio();
+    const changed = updateBoolean(scene, forme.id, 1, { op: 'intersect' });
+    expect(shape(changed, 2).booleans.map((step) => step.op)).toEqual(['union', 'intersect']);
+    expect(shape(removeBoolean(changed, forme.id, 1), 2).booleans).toEqual([{ with: disque.id, op: 'union' }]);
+  });
+
+  it('supprimer un outil retire ses étapes, pas les autres', () => {
+    const { disque, carre, scene } = trio();
+    expect(shape(removeElement(scene, disque.id), 1).booleans).toEqual([{ with: carre.id, op: 'subtract' }]);
+  });
+
+  it('les copies rendues savent leur rang de copie', () => {
+    const { scene } = trio();
+    const layer = { ...scene.layers[0], modifiers: [createModifier({ type: 'step', n: 2 })] };
+    expect(getRenderedChildren(layer).map((c) => c.copy)).toEqual([0, 0, 0, 1, 1, 1]);
+  });
+
+  it('survit à la sauvegarde ; outil absent, soi-même ou illisible retiré, mode inconnu ramené', () => {
+    const { forme, scene } = trio();
+    expect(shape(deserialize(serialize(scene)), 2).booleans).toEqual(forme.booleans);
+    const raw = JSON.parse(serialize(scene));
+    raw.layers[0].elements[2].booleans = [
+      { with: 'E999999', op: 'union' },
+      { with: forme.id, op: 'union' },
+      { with: 42 },
+      { with: forme.booleans[0].with, op: 'xor' },
+    ];
+    expect(shape(deserialize(JSON.stringify(raw)), 2).booleans).toEqual([
+      { with: forme.booleans[0].with, op: 'intersect' },
+    ]);
   });
 });

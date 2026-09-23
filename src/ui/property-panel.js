@@ -22,6 +22,7 @@ import {
 } from '../scene.js';
 import { iconButton, rebuildWithFocus, shapeName } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
+import { booleanSection } from './boolean-section.js';
 import { FIXED_COPIES, MODIFIER_LABELS, ORIENTING, orients } from '../modifiers.js';
 
 /**
@@ -302,6 +303,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     { event: 'change', parse: () => closed.checked },
   );
 
+  const booleans = booleanSection({ store });
+
   const radiusField = field('Rayon', radius);
   const widthField = field('Largeur', width);
   const heightField = field('Hauteur', height);
@@ -374,6 +377,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     strokeSeparator,
     strokeGroup,
     filledField,
+    separator(),
+    booleans.root,
   );
 
   /* ---- Calque ---- */
@@ -655,6 +660,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       polygonRow.hidden = geometry !== 'polygon';
       arcRow.hidden = geometry !== 'arc';
       closedField.hidden = !trace;
+      booleans.sync(owner, element);
       const [widthLabel, heightLabel] = spanLabels[signed ? 'signed' : 'default'];
       widthField.querySelector('label').textContent = widthLabel;
       heightField.querySelector('label').textContent = heightLabel;

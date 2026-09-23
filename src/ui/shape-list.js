@@ -16,6 +16,25 @@ import { icon } from './icons.js';
 const HOVER_LEAVE_DELAY = 120;
 
 /**
+ * Forme sous laquelle chaque outil booléen se range : la première, du premier plan
+ * vers le fond, qui l'emploie. Un seul niveau — une forme déjà rangée sous une
+ * autre ne reçoit pas d'outil, et un outil ne se range qu'une fois — pour
+ * qu'un booléen croisé ne fasse disparaître aucune ligne.
+ */
+const booleanParents = (displayed) => {
+  const ids = new Set(displayed.map((element) => element.id));
+  const parents = new Map();
+  for (const element of displayed) {
+    for (const { with: target } of element.booleans) {
+      if (!ids.has(target) || target === element.id || parents.has(target) || parents.has(element.id)) continue;
+      if ([...parents.values()].includes(target)) continue;
+      parents.set(target, element.id);
+    }
+  }
+  return parents;
+};
+
+/**
  * Liste des formes du calque actif, logée par l'arbre sous sa ligne.
  *
  * Un calque porte plusieurs formes et le modificateur s'applique au groupe : il
@@ -54,7 +73,7 @@ export const mountShapeList = ({
     return JSON.stringify([
       layer?.id ?? null,
       scene.activeElementId,
-      layer?.elements.map((element) => [element.id, element.type]) ?? [],
+      layer?.elements.map((element) => [element.id, element.type, element.booleans.map((step) => step.with)]) ?? [],
     ]);
   };
 
@@ -86,8 +105,10 @@ export const mountShapeList = ({
       list.className = 'layer-list';
       /* Affiché du premier plan vers le fond, comme le panneau calques : la
          liste se lit à l'envers du tableau, et « ↑ » veut dire « devant ». */
-      for (const element of [...layer.elements].reverse()) {
-        list.append(shapeRow(layer, element, scene.activeElementId));
+      const displayed = [...layer.elements].reverse();
+      const parents = booleanParents(displayed);
+      for (const element of displayed) {
+        if (!parents.has(element.id)) list.append(shapeRow(layer, element, scene.activeElementId, displayed, parents));
       }
 
       container.append(list, add);
@@ -100,7 +121,7 @@ export const mountShapeList = ({
     rebuild(scene);
   };
 
-  const shapeRow = (layer, element, activeElementId) => {
+  const shapeRow = (layer, element, activeElementId, displayed, parents) => {
     const index = layer.elements.indexOf(element);
     const isActive = element.id === activeElementId;
 
@@ -108,6 +129,11 @@ export const mountShapeList = ({
     card.className = 'layer-card';
     card.dataset.active = String(isActive);
     card.addEventListener('pointerenter', () => highlight(element.id));
+    /* Revenir d'un outil imbriqué sur sa forme ne rentre pas dans la card :
+       seul `pointerover` le dit. */
+    card.addEventListener('pointerover', (event) => {
+      if (event.target.closest('li') === card && hoveredId !== element.id) highlight(element.id);
+    });
     card.addEventListener('pointerleave', () => {
       leaveTimer = setTimeout(() => highlight(null), HOVER_LEAVE_DELAY);
     });
@@ -157,6 +183,22 @@ export const mountShapeList = ({
         onClick: () => remove(element, name.textContent),
       }),
     );
+
+    /* Outils de cette forme, rangés sous elle : ils ne se dessinent pas,
+       ils la façonnent. */
+    const templates = displayed.filter((candidate) => parents.get(candidate.id) === element.id);
+    if (templates.length > 0) {
+      const branch = document.createElement('ul');
+      branch.className = 'layer-list boolean-branch';
+      branch.setAttribute('aria-label', `Booléen de ${name.textContent}`);
+      for (const template of templates) {
+        const child = shapeRow(layer, template, activeElementId, displayed, parents);
+        child.dataset.template = 'true';
+        child.title = 'Outil booléen : ne se dessine pas';
+        branch.append(child);
+      }
+      card.append(branch);
+    }
 
     return card;
   };

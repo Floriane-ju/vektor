@@ -3,6 +3,7 @@ import { clampCount } from './interpolate.js';
 import {
   ARC_CLOSURES,
   clampAngle,
+  clampBooleanOp,
   clampDash,
   clampExtent,
   clampLinecap,
@@ -24,7 +25,7 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@15';
+export const FORMAT = 'illu/scene@16';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -46,7 +47,8 @@ export const FORMAT = 'illu/scene@15';
      plein, bout net, ce qui rend exactement le même dessin ;
    - `@1` à `@14` n'interpolaient ni la rotation ni l'épaisseur : rien à
      convertir. Le bump empêche surtout une version antérieure de relire une
-     vrille comme une opacité. */
+     vrille comme une opacité ;
+   - `@1` à `@15` ne connaissaient pas les booléens : aucune forme n'a d'outil. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -62,6 +64,7 @@ const READABLE_FORMATS = new Set([
   'illu/scene@12',
   'illu/scene@13',
   'illu/scene@14',
+  'illu/scene@15',
   FORMAT,
 ]);
 
@@ -185,6 +188,16 @@ const readPoints = (raw) => {
   });
 };
 
+/* Borne de la pile booléenne d'une forme : au-delà, un fichier hostile
+   multiplierait les masques sans fin. */
+const MAX_BOOLEANS = 16;
+
+const readBooleans = (raw) =>
+  (Array.isArray(raw) ? raw : [])
+    .slice(0, MAX_BOOLEANS)
+    .filter((step) => typeof step?.with === 'string')
+    .map((step) => ({ with: step.with, op: clampBooleanOp(step.op) }));
+
 const readElement = (input) => {
   if (input == null || typeof input !== 'object') fail('Une forme doit être un objet.');
   const raw = upgradeLegacyPoint(input);
@@ -203,6 +216,7 @@ const readElement = (input) => {
     filled: typeof raw.filled === 'boolean' ? raw.filled : isPainted(raw.fill),
     dash: clampDash(raw.dash),
     linecap: clampLinecap(raw.linecap),
+    booleans: readBooleans(raw.booleans),
     ...(raw.type === 'polygon'
       ? { sides: clampSides(num(raw.sides, defaults.sides)), inner: clampInner(num(raw.inner, defaults.inner)) }
       : {}),
@@ -248,7 +262,16 @@ const rawElements = (raw) => {
   return raw.baseElement == null ? [] : [raw.baseElement];
 };
 
-const readElements = (raw) => rawElements(raw).map(readElement);
+/* Un outil ne se cherche que parmi les autres formes du calque : absente,
+   l'opération tombe plutôt que de rendre une forme invisible. */
+const readElements = (raw) => {
+  const elements = rawElements(raw).map(readElement);
+  const ids = new Set(elements.map((element) => element.id));
+  return elements.map((element) => ({
+    ...element,
+    booleans: element.booleans.filter((step) => step.with !== element.id && ids.has(step.with)),
+  }));
+};
 
 /**
  * Épaisseur du calque. Avant `@4` elle vivait sur chaque forme : un ancien
@@ -320,7 +343,7 @@ export const deserialize = (text) => {
   if (!Array.isArray(raw.layers)) fail('`layers` doit être un tableau.');
 
   /* Avant `@13`, pas d'orientation des copies. */
-  const legacy = !['illu/scene@13', 'illu/scene@14', FORMAT].includes(raw.format);
+  const legacy = !['illu/scene@13', 'illu/scene@14', 'illu/scene@15', FORMAT].includes(raw.format);
   const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy));
   if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
     fail('Deux calques portent le même identifiant.');
