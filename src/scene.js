@@ -463,6 +463,36 @@ export const removeLayer = (scene, id) => {
   return { layers, activeLayerId, activeElementId: orphaned ? null : scene.activeElementId };
 };
 
+/**
+ * Copie posée juste au-dessus de l'original, pile complète comprise. Formes et
+ * interpolations reçoivent des ids neufs ; les booléens suivent leurs outils
+ * dans la copie. Les liaisons (rangs de modificateurs) restent valables telles
+ * quelles, la pile étant recopiée à l'identique.
+ */
+export const duplicateLayer = (scene, id) => {
+  const index = scene.layers.findIndex((layer) => layer.id === id);
+  if (index < 0) return scene;
+  const source = scene.layers[index];
+  const ids = new Map(source.elements.map((element) => [element.id, nextId('E')]));
+  const copy = {
+    ...source,
+    id: nextId('L'),
+    name: `${source.name} (copie)`,
+    elements: source.elements.map((element) => ({
+      ...element,
+      id: ids.get(element.id),
+      booleans: element.booleans.map((step) => ({ ...step, with: ids.get(step.with) ?? step.with })),
+    })),
+    interpolations: source.interpolations.map((interpolation) => ({ ...interpolation, id: nextId('I') })),
+  };
+  return {
+    ...scene,
+    layers: scene.layers.toSpliced(index + 1, 0, copy),
+    activeLayerId: copy.id,
+    activeElementId: null,
+  };
+};
+
 export const setActiveLayer = (scene, id) => ({ ...scene, activeLayerId: id });
 
 export const toggleVisibility = (scene, id) =>

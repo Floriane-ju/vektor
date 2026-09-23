@@ -1,6 +1,7 @@
 import {
   addElement,
   DEFAULT_SHAPE,
+  duplicateElement,
   getActiveLayer,
   moveElement,
   removeElement,
@@ -10,6 +11,7 @@ import {
 import { clearHover, showHover } from '../renderer-svg.js';
 import { iconButton, rebuildWithFocus, shapeName, whenChanged } from './list.js';
 import { icon } from './icons.js';
+import { DUPLICATE_OFFSET } from './shortcuts.js';
 
 /* Délai avant de rendre l'accent à la sélection quand le pointeur quitte une
    card, en millisecondes : assez pour traverser l'interstice entre deux. */
@@ -161,6 +163,12 @@ export const mountShapeList = ({
     actions.className = 'row-actions';
     row.append(icon(element.type, 18), name, actions);
     actions.append(
+      iconButton({
+        label: `Dupliquer ${name.textContent}`,
+        text: '⧉',
+        focusKey: `duplicate-${element.id}`,
+        onClick: () => store.apply(duplicateElement, element.id, DUPLICATE_OFFSET),
+      }),
       iconButton({
         label: `Monter ${name.textContent}`,
         text: '↑',

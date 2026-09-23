@@ -2,9 +2,11 @@
 {
   "id": "T-0034",
   "titre": "Dupliquer un calque ou une forme",
-  "colonne": "backlog",
+  "colonne": "en-cours",
   "priorite": "haute",
-  "tags": ["ui"],
+  "tags": [
+    "ui"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null,
@@ -24,10 +26,10 @@ identifiants pour ne pas entrer en collision avec l'original.
 
 ## Critères d'acceptation
 
-- [ ] Dupliquer un calque le recrée juste au-dessus, formes, modificateurs,
+- [x] Dupliquer un calque le recrée juste au-dessus, formes, modificateurs,
       interpolations et liaisons comprises.
-- [ ] Les identifiants de la copie sont neufs : modifier la copie ne touche pas
+- [x] Les identifiants de la copie sont neufs : modifier la copie ne touche pas
       l'original.
-- [ ] Dupliquer une forme la recrée dans le même calque, légèrement décalée et
+- [x] Dupliquer une forme la recrée dans le même calque, légèrement décalée et
       sélectionnée.
-- [ ] La copie devient le calque ou la forme active.
+- [x] La copie devient le calque ou la forme active.

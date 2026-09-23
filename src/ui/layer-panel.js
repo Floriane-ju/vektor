@@ -2,6 +2,7 @@ import { iconButton, rebuildWithFocus, whenChanged } from './list.js';
 import { icon } from './icons.js';
 import {
   addLayer,
+  duplicateLayer,
   moveLayer,
   removeLayer,
   renameLayer,
@@ -151,6 +152,12 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
         focusKey: `visible-${layer.id}`,
         pressed: layer.visible,
         onClick: () => store.apply(toggleVisibility, layer.id),
+      }),
+      iconButton({
+        label: `Dupliquer ${layer.name}`,
+        text: '⧉',
+        focusKey: `duplicate-${layer.id}`,
+        onClick: () => store.apply(duplicateLayer, layer.id),
       }),
       iconButton({
         label: `Monter ${layer.name}`,

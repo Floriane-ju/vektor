@@ -5,12 +5,14 @@ import {
   addBoolean,
   addElement,
   addInterpolation,
+  addModifier,
   clearInterpolations,
   createElement,
   createInterpolation,
   createLayer,
   dragPatch,
   duplicateElement,
+  duplicateLayer,
   getRenderedChildren,
   moveElement,
   moveLayer,
@@ -548,6 +550,36 @@ describe('formes d’un calque', () => {
     expect(next.activeElementId).toBe(copy.id);
     expect(scene.layers[0].elements).toEqual([first, second]);
     expect(duplicateElement(scene, 'inconnu', 10)).toBe(scene);
+  });
+
+  it('duplicateLayer recrée le calque juste au-dessus, ids neufs, liaisons et booléens suivis', () => {
+    let scene = withTwo();
+    const [first, second] = scene.layers[0].elements;
+    scene = addBoolean(scene, first.id);
+    scene = addModifier(scene, scene.layers[0].id);
+    scene = addInterpolation(scene, scene.layers[0].id);
+    scene = updateInterpolation(scene, scene.layers[0].id, scene.layers[0].interpolations[0].id, { binding: 0 });
+    scene = addLayer(scene);
+    scene = setActiveElement(scene, first.id);
+    const source = scene.layers[0];
+
+    const next = duplicateLayer(scene, source.id);
+    expect(next.layers).toHaveLength(3);
+    const copy = next.layers[1];
+    expect(next.layers[0]).toBe(source);
+    expect(next.activeLayerId).toBe(copy.id);
+    expect(next.activeElementId).toBeNull();
+    expect(copy.id).not.toBe(source.id);
+    expect(copy.modifiers).toEqual(source.modifiers);
+    expect(copy.interpolations[0].binding).toBe(0);
+    expect(copy.interpolations[0].id).not.toBe(source.interpolations[0].id);
+    const [a, b] = copy.elements;
+    expect([a.id, b.id]).not.toContain(first.id);
+    expect([a.id, b.id]).not.toContain(second.id);
+    expect(a.booleans).toEqual([{ with: b.id, op: source.elements[0].booleans[0].op }]);
+    expect(a).toEqual({ ...source.elements[0], id: a.id, booleans: a.booleans });
+    expect(scene.layers).toHaveLength(2);
+    expect(duplicateLayer(scene, 'inconnu')).toBe(scene);
   });
 });
 

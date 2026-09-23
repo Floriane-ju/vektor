@@ -1,5 +1,6 @@
 import {
   duplicateElement,
+  duplicateLayer,
   getActiveElement,
   removeElement,
   setActiveElement,
@@ -21,7 +22,7 @@ export const TOOL_KEYS = {
 
 const NUDGE = 1;
 const NUDGE_FAST = 10;
-const DUPLICATE_OFFSET = 10;
+export const DUPLICATE_OFFSET = 10;
 
 const ARROWS = {
   ArrowLeft: [-1, 0],
@@ -40,7 +41,7 @@ const toolLabel = (type) => (type === 'cursor' ? 'Curseur' : SHAPES[type].label)
 const LIST = [
   ...Object.entries(TOOL_KEYS).map(([key, type]) => [key.toUpperCase(), toolLabel(type)]),
   ['Suppr', 'Supprimer la forme sélectionnée'],
-  ['⌘/Ctrl + D', 'Dupliquer la forme sélectionnée'],
+  ['⌘/Ctrl + D', 'Dupliquer la forme sélectionnée (sinon le calque)'],
   ['Échap', 'Désélectionner'],
   ['Flèches', 'Déplacer de 1 px (Maj : 10 px)'],
   ['⌘/Ctrl + Z', 'Annuler (Maj : rétablir)'],
@@ -105,6 +106,7 @@ export const mountShortcuts = ({ store, container, status }) => {
       if (key !== 'd') return;
       event.preventDefault();
       if (element) store.apply(duplicateElement, element.id, DUPLICATE_OFFSET);
+      else if (store.get().activeLayerId) store.apply(duplicateLayer, store.get().activeLayerId);
       return;
     }
 
