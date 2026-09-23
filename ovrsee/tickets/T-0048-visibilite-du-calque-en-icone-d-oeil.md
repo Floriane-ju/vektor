@@ -2,9 +2,11 @@
 {
   "id": "T-0048",
   "titre": "Visibilité du calque en icône d'œil",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["ui"],
+  "tags": [
+    "ui"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null

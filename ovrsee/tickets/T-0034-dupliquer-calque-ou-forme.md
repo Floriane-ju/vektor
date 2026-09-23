@@ -2,7 +2,7 @@
 {
   "id": "T-0034",
   "titre": "Dupliquer un calque ou une forme",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": [
     "ui"

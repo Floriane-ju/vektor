@@ -20,7 +20,7 @@ import {
   updateElement,
   updateModifier,
 } from '../scene.js';
-import { iconButton, rebuildWithFocus, shapeName } from './list.js';
+import { iconButton, rebuildWithFocus, shapeName, whenChanged } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
 import { booleanSection } from './boolean-section.js';
 import { FIXED_COPIES, MODIFIER_LABELS, ORIENTING, orients } from '../modifiers.js';
@@ -129,13 +129,10 @@ const addButtonFor = (label, focusKey, onClick) => {
 const inspectorHead = (kind) => {
   const head = el('div', 'inspector-head');
   const eyebrow = el('div', 'inspector-kind');
-  const dot = el('span', 'layer-swatch');
-  dot.setAttribute('aria-hidden', 'true');
-  if (kind === 'Calque') eyebrow.append(dot);
   eyebrow.append(el('span', null, kind));
   const title = el('h2', 'inspector-title');
   head.append(eyebrow, title);
-  return { head, title, dot };
+  return { head, title };
 };
 
 export const mountPropertyPanel = ({ store, container = null }) => {
@@ -392,15 +389,37 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     if (layer) store.apply(setLayerStroke, layer.id, value);
   };
 
-  const swatches = PALETTE.map(([value, label]) => {
+  /* Palette fixe, puis les couleurs hors palette déjà portées par un calque :
+     réaccorder deux calques se fait d'un clic, sans recopier l'hexadécimal. */
+  const swatchColors = (scene) => {
+    const labels = new Map(PALETTE);
+    for (const { stroke: value } of scene.layers) {
+      const key = value.toLowerCase();
+      if (!labels.has(key)) labels.set(key, key.toUpperCase());
+    }
+    return [...labels];
+  };
+
+  const swatchButton = ([value, label]) => {
     const swatch = el('button', 'swatch');
     swatch.type = 'button';
-    swatch.setAttribute('aria-label', label);
-    swatch.title = label;
+    swatch.dataset.color = value;
+    swatch.dataset.focusKey = `swatch-${value}`;
+    swatch.dataset.label = label;
     swatch.style.setProperty('--swatch', value);
     swatch.addEventListener('click', () => setStroke(value));
     return swatch;
-  });
+  };
+
+  const swatchList = el('div', 'swatch-list');
+  const rebuildSwatches = whenChanged(
+    (scene) => JSON.stringify(swatchColors(scene)),
+    (scene) =>
+      rebuildWithFocus(swatchList, () => {
+        swatchList.append(...swatchColors(scene).map(swatchButton));
+        return null;
+      }),
+  );
   const stroke = bind(
     input('color'),
     (layer) => layer.stroke,
@@ -426,14 +445,26 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   controls.push({
     subject: 'layer',
     sync: (layer) => {
-      for (const [index, swatch] of swatches.entries()) {
-        swatch.setAttribute('aria-pressed', String(PALETTE[index][0] === layer.stroke.toLowerCase()));
+      const scene = store.get();
+      rebuildSwatches(scene);
+      const current = layer.stroke.toLowerCase();
+      for (const swatch of swatchList.children) {
+        const users = scene.layers.filter(
+          (other) => other.id !== layer.id && other.stroke.toLowerCase() === swatch.dataset.color,
+        );
+        swatch.setAttribute('aria-pressed', String(swatch.dataset.color === current));
+        swatch.toggleAttribute('data-used', users.length > 0);
+        const label = users.length
+          ? `${swatch.dataset.label} — sur ${users.map((other) => other.name).join(', ')}`
+          : swatch.dataset.label;
+        swatch.setAttribute('aria-label', label);
+        swatch.title = label;
       }
     },
   });
 
   const swatchRow = el('div', 'swatches');
-  swatchRow.append(...swatches, custom);
+  swatchRow.append(swatchList, custom);
   const hexRow = el('div', 'hex-row');
   const hexLabel = el('label', null, 'Hex');
   hexLabel.htmlFor = hex.id;
@@ -625,7 +656,6 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     layerDetail.setAttribute('aria-disabled', String(!layer));
 
     layerHead.title.textContent = layer?.name ?? 'Aucun calque';
-    if (layer) layerHead.dot.style.background = layer.stroke;
     const owner = element && scene.layers.find((candidate) => candidate.elements.includes(element));
     shapeHead.title.textContent = owner ? shapeName(owner, element, SHAPES) : '';
 

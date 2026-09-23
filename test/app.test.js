@@ -147,5 +147,21 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   pointer('pointerup', 460, 280);
   const rects = stage.querySelectorAll('rect[data-element-id]');
   expect([rects[1].getAttribute('x'), rects[1].getAttribute('y')]).toEqual(['380', '236.25']);
+
+  /* Nuancier : la couleur hors palette du calque y figure, cerclée ; celle
+     d'un autre calque y est marquée, et un clic l'applique. */
+  press({ key: 'Escape' });
+  const swatch = (color) => inspector.querySelector(`.swatch[data-color="${color}"]`);
+  expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('true');
+  expect(swatch('#7dd3c0').hasAttribute('data-used')).toBe(false);
+  document.querySelector('.add-layer').click();
+  swatch('#ee4722').click();
+  expect(swatch('#ee4722').getAttribute('aria-pressed')).toBe('true');
+  expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('false');
+  expect(swatch('#7dd3c0').hasAttribute('data-used')).toBe(true);
+  expect(swatch('#7dd3c0').title).toContain('Calque 1');
+  expect(inspector.querySelectorAll('.swatch[data-color="#ee4722"]')).toHaveLength(1);
+  swatch('#7dd3c0').click();
+  expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('true');
 });
 
