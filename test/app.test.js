@@ -46,7 +46,7 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   };
   stage.getScreenCTM = () => ({ inverse: () => ({}) });
   const pointer = (type, x, y) =>
-    stage.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y, button: 0 }));
+    stage.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true }));
   pointer('pointerdown', 450, 450);
   pointer('pointermove', 450, 520);
   pointer('pointerup', 450, 520);
@@ -91,5 +91,13 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
 
   document.querySelector('[data-focus-key="add-interpolation"]').click();
   expect(document.querySelectorAll('#layer-panel .interpolation-block')).toHaveLength(1);
+  expect(opacities()).toEqual(['1', '1', '0', '0']);
+
+  /* Cmd+Z défait l'interpolation, Cmd+Maj+Z la rétablit. */
+  const key = (shiftKey) =>
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: shiftKey ? 'Z' : 'z', metaKey: true, shiftKey }));
+  key(false);
+  expect(opacities()).toEqual(['1', '1', '1', '1']);
+  key(true);
   expect(opacities()).toEqual(['1', '1', '0', '0']);
 });

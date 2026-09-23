@@ -30,7 +30,7 @@ Pas de linter ni de formateur configuré.
 Flux unidirectionnel : **transition pure → store → render**.
 
 - `src/scene.js` — modèle + **toutes les transitions**, immuables, signature `(scene, ...args) -> scene`. Renvoyer la même référence = geste sans effet, le store ne notifie pas. Contient aussi les sources uniques : `SHAPES`, `RANGE_BOUNDS`, `STAGE`, `getRenderedChildren(layer)`.
-- `src/store.js` — store minimal ; l'UI appelle `store.apply(transition, ...args)`, jamais de mutation ni de type d'action.
+- `src/store.js` — store minimal ; l'UI appelle `store.apply(transition, ...args)`, jamais de mutation ni de type d'action. Porte l'historique (pile de scènes, `HISTORY_LIMIT`) : un changement de sélection seule n'y entre pas, `begin(key)`/`end(key)` regroupent un geste continu en un pas — câblés au niveau du document dans `ui/history.js` (pointerdown→pointerup, input→change).
 - `src/modifiers.js` — un modificateur transforme **un point** `(point, i, n, center, options) -> {x, y}`, appliqué au calque entier (le motif bouge en bloc). Les transformations doivent rester des similitudes, sinon le motif se disloque copie après copie. Pile = produit cartésien des indices (`stackCopies`), appliquée dans l'ordre (`applyStack`) — l'ordre change le dessin. `FIXED_COPIES` : miroirs = 2 copies, `none` = 1.
 - `src/interpolate.js` — rampe `t(i, n)` partagée (garde n ≤ 1 → 0, seul endroit), `clampCount` (n ≥ 1). Deux interpolations de la même propriété se composent **par produit** (neutre = 1). `binding` = rang d'un modificateur de la pile (la rampe ne suit que cet étage) ou `null` (rampe sur le total des copies). Réordonner/supprimer un modificateur doit remapper les bindings (`remapBindings` dans `scene.js`).
 - `src/renderer-svg.js` — `render(scene, svgRoot)` reconstruit le SVG depuis `getRenderedChildren`, plus les repères (`data-guides`) du calque actif. `toSvgDocument` clone le DOM et retire repères/survol pour l'export.
@@ -40,6 +40,7 @@ Flux unidirectionnel : **transition pure → store → render**.
 Conventions du modèle :
 - Style (couleur `stroke`, `strokeWidth`) sur le **calque**, pas la forme ; une forme n'a que `filled` (rempli = couleur du calque).
 - `x, y` = centre de la forme, `rx, ry` = demi-extensions (signées seulement pour `line`, via `clampExtent`). Le « point » est une ligne de longueur nulle à bout rond, dimensionné par l'épaisseur.
+- Le tracé (`polyline`) porte `points` relatifs à `x, y`, recentré sur sa boîte englobante (`recenterTrace`) après chaque geste. Import collé par `src/path.js` (segments droits M/L/H/V/Z seulement). Poignées de sommets (`data-handles`) = état d'écran, retirées à l'export comme les repères.
 - IDs préfixés `L`/`E`/`I` ; `reserveIds` après chargement pour éviter les collisions.
 - Commentaires `ponytail:` = simplification délibérée avec son plafond (ex. pas de mémoïsation de `getRenderedChildren`).
 

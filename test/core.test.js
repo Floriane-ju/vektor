@@ -23,6 +23,12 @@ import {
   updateInterpolationRange,
 } from '../src/scene.js';
 import { deserialize, serialize } from '../src/persistence.js';
+import { createStore, HISTORY_LIMIT } from '../src/store.js';
+import { parseTrace } from '../src/path.js';
+import { SHAPES } from '../src/scene.js';
+
+const SHAPES_DEFAULT_POINTS = SHAPES.polyline.defaults.points;
+import { addLayer, createScene, setActiveElement } from '../src/scene.js';
 
 const center = { x: 0, y: 0 };
 const dist = (p) => Math.hypot(p.x - center.x, p.y - center.y);
@@ -712,5 +718,167 @@ describe('persistance', () => {
       activeLayerId: 'L1',
     });
     expect(() => deserialize(duplicateElements)).toThrow(/formes portent le même/);
+  });
+});
+
+describe('ellipse et polygone', () => {
+  it('se sérialisent et se relisent, côtés et creux compris', () => {
+    const layer = createLayer({
+      elements: [
+        createElement('ellipse', 10, 20, { rx: 30, ry: 12 }),
+        createElement('polygon', 0, 0, { rx: 50, sides: 8, inner: 40 }),
+      ],
+    });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    expect(deserialize(serialize(scene)).layers[0].elements).toMatchObject([
+      { type: 'ellipse', rx: 30, ry: 12 },
+      { type: 'polygon', rx: 50, sides: 8, inner: 40 },
+    ]);
+  });
+
+  it('borne les côtés et le creux d’un polygone importé', () => {
+    const raw = JSON.stringify({
+      format: 'illu/scene@9',
+      layers: [
+        {
+          id: 'L1',
+          elements: [
+            { id: 'E1', type: 'polygon', x: 0, y: 0, sides: 1, inner: 300 },
+            { id: 'E2', type: 'polygon', x: 0, y: 0, sides: 'x' },
+            { id: 'E3', type: 'polygon', x: 0, y: 0, sides: 1e6, inner: -5 },
+          ],
+        },
+      ],
+    });
+    expect(deserialize(raw).layers[0].elements).toMatchObject([
+      { sides: 3, inner: 100 },
+      { sides: 6, inner: 100 },
+      { sides: 64, inner: 0 },
+    ]);
+  });
+});
+
+describe('lecture d’un tracé collé', () => {
+  const pts = (trace) => trace.points.map((p) => [p.x, p.y]);
+
+  it('lit M, L, H, V, Z en absolu et en relatif', () => {
+    const [a] = parseTrace('M10 10 L20 10 h5 v5 H10 z');
+    expect(a.closed).toBe(true);
+    expect(pts(a)).toEqual([[10, 10], [20, 10], [25, 10], [25, 15], [10, 15]]);
+    const [b] = parseTrace('m1,1 2,0 0,2');
+    expect(pts(b)).toEqual([[1, 1], [3, 1], [3, 3]]);
+  });
+
+  it('un chemin qui reprend après Z repart du point de départ', () => {
+    const traces = parseTrace('M0 0 L10 0 Z l0 10');
+    expect(traces.map(pts)).toEqual([[[0, 0], [10, 0]], [[0, 0], [0, 10]]]);
+  });
+
+  it('lit les points d’une balise polygon (fermée) ou polyline (ouverte)', () => {
+    expect(parseTrace('<polygon points="0,0 10,0 5,5"/>')[0].closed).toBe(true);
+    expect(parseTrace("<polyline points='0,0 10,0'/>")[0].closed).toBe(false);
+    expect(pts(parseTrace('0 0, 1e1 -2')[0])).toEqual([[0, 0], [10, -2]]);
+  });
+
+  it('refuse ce qui ne trace pas de segment droit', () => {
+    expect(() => parseTrace('M0 0 Q 1 1 2 2')).toThrow(/« Q »/);
+    expect(() => parseTrace('M0 0')).toThrow(/aucun segment/);
+    expect(() => parseTrace('L 1 1')).toThrow(/commencer par M/);
+    expect(() => parseTrace('0 0 1')).toThrow(/incomplète/);
+    expect(() => parseTrace('   ')).toThrow(/Rien/);
+  });
+});
+
+describe('tracé importé', () => {
+  it('se relit, et un sommet illisible fait refuser le fichier', () => {
+    const layer = createLayer({ elements: [createElement('polyline', 5, 5, { closed: false })] });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    const [element] = deserialize(serialize(scene)).layers[0].elements;
+    expect(element).toMatchObject({ type: 'polyline', closed: false, points: SHAPES_DEFAULT_POINTS });
+
+    const bad = (points) =>
+      JSON.stringify({
+        format: 'illu/scene@10',
+        layers: [{ id: 'L1', elements: [{ id: 'E1', type: 'polyline', x: 0, y: 0, points }] }],
+      });
+    expect(() => deserialize(bad([{ x: 0, y: 'a' }]))).toThrow(/illisible/);
+    expect(() => deserialize(bad([]))).toThrow(/sommets/);
+    expect(() => deserialize(bad(Array.from({ length: 5001 }, () => ({ x: 0, y: 0 }))))).toThrow(/5000/);
+  });
+});
+
+describe('historique', () => {
+  it('annule et rétablit une transition', () => {
+    const store = createStore(createScene());
+    const before = store.get();
+    store.apply(addLayer);
+    const after = store.get();
+    store.undo();
+    expect(store.get()).toBe(before);
+    store.redo();
+    expect(store.get()).toBe(after);
+  });
+
+  it('ignore un changement de sélection seule', () => {
+    const store = createStore(createScene());
+    const { id } = store.get().layers[0];
+    store.apply(addElement, id, 'circle', 0, 0);
+    const drawn = store.get();
+    store.apply(setActiveElement, null);
+    store.undo();
+    expect(store.get().layers).not.toBe(drawn.layers);
+    expect(store.get().layers[0].elements).toHaveLength(0);
+  });
+
+  it('compte un geste continu pour un seul pas', () => {
+    const store = createStore(createScene());
+    const before = store.get();
+    const { id } = before.layers[0];
+    store.begin('geste');
+    store.apply(addElement, id, 'circle', 0, 0);
+    const elementId = store.get().activeElementId;
+    for (let rx = 1; rx < 50; rx += 1) store.apply(updateElement, elementId, { rx });
+    store.end('geste');
+    store.apply(updateElement, elementId, { rx: 80 });
+    store.undo();
+    expect(store.get().layers[0].elements[0].rx).toBe(49);
+    store.undo();
+    expect(store.get()).toBe(before);
+  });
+
+  it('un end étranger ne ferme pas le geste en cours', () => {
+    const store = createStore(createScene());
+    const before = store.get();
+    store.begin('a');
+    store.apply(addLayer);
+    store.end('b');
+    store.apply(addLayer);
+    store.undo();
+    expect(store.get()).toBe(before);
+  });
+
+  it('une nouvelle transition vide la pile de rétablissement', () => {
+    const store = createStore(createScene());
+    store.apply(addLayer);
+    store.undo();
+    store.apply(addLayer);
+    const current = store.get();
+    store.redo();
+    expect(store.get()).toBe(current);
+  });
+
+  it('borne la profondeur à HISTORY_LIMIT', () => {
+    const store = createStore(createScene());
+    for (let i = 0; i < HISTORY_LIMIT + 10; i += 1) store.apply(addLayer);
+    for (let i = 0; i < HISTORY_LIMIT + 10; i += 1) store.undo();
+    expect(store.get().layers).toHaveLength(11);
+  });
+
+  it('annule un import', () => {
+    const store = createStore(createScene());
+    const before = store.get();
+    store.set(deserialize(serialize(addLayer(createScene()))));
+    store.undo();
+    expect(store.get()).toBe(before);
   });
 });

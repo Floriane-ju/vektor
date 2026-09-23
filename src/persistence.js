@@ -2,7 +2,10 @@ import { createModifier, MODIFIERS } from './modifiers.js';
 import { clampCount } from './interpolate.js';
 import {
   clampExtent,
+  clampInner,
+  clampSides,
   createElement,
+  MAX_POINTS,
   createInterpolation,
   createLayer,
   DEFAULT_STROKE,
@@ -17,7 +20,7 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@8';
+export const FORMAT = 'illu/scene@10';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -29,7 +32,9 @@ export const FORMAT = 'illu/scene@8';
      globales, ce qui rend exactement le même dessin ;
    - `@1` à `@7` n'avaient qu'une interpolation par propriété et par calque,
      dans `propertyRanges` : chaque plage non neutre se relit comme un étage de
-     la pile, ce qui rend exactement le même dessin. */
+     la pile, ce qui rend exactement le même dessin ;
+   - `@1` à `@8` ne connaissaient ni l'ellipse ni le polygone, `@1` à `@9`
+     pas le tracé : rien à convertir, ils se relisent tels quels. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -38,6 +43,8 @@ const READABLE_FORMATS = new Set([
   'illu/scene@5',
   'illu/scene@6',
   'illu/scene@7',
+  'illu/scene@8',
+  'illu/scene@9',
   FORMAT,
 ]);
 
@@ -146,6 +153,21 @@ const upgradeLegacyPoint = (raw) =>
 /** Une couleur absente ou explicitement « none » ne peint rien. */
 const isPainted = (value) => typeof value === 'string' && value !== '' && value !== 'none';
 
+/**
+ * Sommets d'un tracé, relatifs à son centre. Un sommet illisible lève plutôt
+ * que d'être sauté : le retirer déformerait le dessin en silence.
+ */
+const readPoints = (raw) => {
+  if (!Array.isArray(raw) || raw.length === 0) fail('Un tracé doit porter une liste de sommets.');
+  if (raw.length > MAX_POINTS) fail(`Tracé de plus de ${MAX_POINTS} sommets.`);
+  return raw.map((point) => {
+    const x = Number(point?.x);
+    const y = Number(point?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) fail('Sommet de tracé illisible.');
+    return { x, y };
+  });
+};
+
 const readElement = (input) => {
   if (input == null || typeof input !== 'object') fail('Une forme doit être un objet.');
   const raw = upgradeLegacyPoint(input);
@@ -160,6 +182,10 @@ const readElement = (input) => {
     ry: clampExtent(raw.type, num(raw.ry, legacyRadius ?? defaults.ry)),
     /* Avant `@6` le remplissage était une couleur : n'en reste que sa présence. */
     filled: typeof raw.filled === 'boolean' ? raw.filled : isPainted(raw.fill),
+    ...(raw.type === 'polygon'
+      ? { sides: clampSides(num(raw.sides, defaults.sides)), inner: clampInner(num(raw.inner, defaults.inner)) }
+      : {}),
+    ...(raw.type === 'polyline' ? { points: readPoints(raw.points), closed: Boolean(raw.closed) } : {}),
   });
 };
 

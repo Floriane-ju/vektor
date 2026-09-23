@@ -7,6 +7,7 @@ import { mountLayerPanel } from './ui/layer-panel.js';
 import { mountPropertyPanel } from './ui/property-panel.js';
 import { mountShapeList } from './ui/shape-list.js';
 import { mountZoom } from './ui/zoom.js';
+import { mountHistory } from './ui/history.js';
 
 const svgRoot = document.getElementById('stage');
 const hint = document.getElementById('stage-hint');
@@ -36,6 +37,7 @@ store.subscribe((next) => {
    notifications, une seule écriture suffit. */
 store.subscribe(debounce(saveLocal));
 
+mountHistory({ store });
 const { getTool } = mountToolbar({
   store,
   svgRoot,

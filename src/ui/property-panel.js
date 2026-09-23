@@ -1,6 +1,8 @@
 import {
   addModifier,
   clampExtent,
+  clampInner,
+  clampSides,
   getActiveElement,
   getActiveLayer,
   moveModifier,
@@ -120,6 +122,17 @@ export const mountPropertyPanel = ({ store }) => {
     (element, value) =>
       store.apply(updateElement, element.id, { ry: clampExtent(element.type, value) / 2 }),
   );
+  const sides = bind(
+    input('number', { min: '3', step: '1' }),
+    (element) => element.sides,
+    (element, value) => store.apply(updateElement, element.id, { sides: clampSides(value) }),
+    { event: 'change' },
+  );
+  const inner = bind(
+    input('number', { min: '0', max: '100', step: '1' }),
+    (element) => element.inner,
+    (element, value) => store.apply(updateElement, element.id, { inner: clampInner(value) }),
+  );
   /* La couleur est réglée sur le calque : ici on ne dit que rempli ou non, et
      le remplissage reprend cette couleur. */
   const filled = bind(
@@ -127,6 +140,13 @@ export const mountPropertyPanel = ({ store }) => {
     (element) => element.filled,
     (element, value) => store.apply(updateElement, element.id, { filled: value }),
     { event: 'change', parse: () => filled.checked },
+  );
+
+  const closed = bind(
+    input('checkbox'),
+    (element) => element.closed,
+    (element, value) => store.apply(updateElement, element.id, { closed: value }),
+    { event: 'change', parse: () => closed.checked },
   );
 
   const positionRow = document.createElement('div');
@@ -144,8 +164,14 @@ export const mountPropertyPanel = ({ store }) => {
   sizeRow.className = 'field-row';
   sizeRow.append(radiusField, widthField, heightField);
 
+  /* 100 % : polygone convexe ; en deçà, étoile. */
+  const polygonRow = document.createElement('div');
+  polygonRow.className = 'field-row';
+  polygonRow.append(field('Côtés', sides), field('Rayon intérieur (%)', inner));
+
   const filledField = field('Remplir', filled);
-  shape.append(positionRow, sizeRow, filledField);
+  const closedField = field('Fermé', closed);
+  shape.append(positionRow, sizeRow, polygonRow, closedField, filledField);
 
   /* ---- Calque ---- */
 
@@ -360,6 +386,11 @@ export const mountPropertyPanel = ({ store }) => {
     widthField.hidden = uniform;
     heightField.hidden = uniform;
     filledField.hidden = dot;
+    polygonRow.hidden = !element || SHAPES[element.type].geometry !== 'polygon';
+    /* Un tracé se dimensionne par ses sommets, pas par des champs. */
+    const trace = element ? SHAPES[element.type].geometry === 'polyline' : false;
+    sizeRow.hidden = trace;
+    closedField.hidden = !trace;
     const [widthLabel, heightLabel] =
       spanLabels[element && SHAPES[element.type].signed ? 'signed' : 'default'];
     widthField.querySelector('label').textContent = widthLabel;

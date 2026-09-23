@@ -45,6 +45,42 @@ export const SHAPES = {
     uniform: true,
     defaults: { rx: 60, ry: 60, filled: false },
   },
+  /* Un cercle qui cesse d'être uniforme : même nœud à deux rayons. */
+  ellipse: {
+    label: 'Ellipse',
+    geometry: 'ellipse',
+    uniform: false,
+    defaults: { rx: 80, ry: 45, filled: false },
+  },
+  /* `sides` sommets sur le cercle de rayon `rx`, le premier en haut. `inner`
+     place un sommet creux entre deux sommets, en % de la distance du centre au
+     milieu d'un côté : à 100 il tombe sur le côté et le polygone reste convexe,
+     en deçà il se creuse en étoile. */
+  polygon: {
+    label: 'Polygone',
+    geometry: 'polygon',
+    uniform: true,
+    defaults: { rx: 60, ry: 60, sides: 6, inner: 100, filled: false },
+  },
+  /* Sommets libres, relatifs au centre `x, y` : le tracé bouge, se met à
+     l'échelle et suit les modificateurs d'un bloc, comme les autres formes.
+     Défaut : un triangle, pour qu'un ajout sans geste montre quelque chose. */
+  polyline: {
+    label: 'Tracé',
+    geometry: 'polyline',
+    uniform: false,
+    defaults: {
+      rx: 0,
+      ry: 0,
+      points: [
+        { x: 0, y: -50 },
+        { x: 43.3, y: 25 },
+        { x: -43.3, y: 25 },
+      ],
+      closed: true,
+      filled: false,
+    },
+  },
   point: {
     label: 'Point',
     geometry: 'dot',
@@ -68,6 +104,35 @@ export const SHAPES = {
 };
 
 export const DEFAULT_SHAPE = 'circle';
+
+/* Au-delà, un polygone ne se distingue plus d'un cercle. */
+export const MAX_SIDES = 64;
+
+export const clampSides = (value) =>
+  Math.min(MAX_SIDES, Math.max(3, Math.round(Number.isFinite(value) ? value : 6)));
+
+/* Borne d'import : un tracé collé au-delà est plus probablement une erreur de
+   copie qu'un dessin. */
+export const MAX_POINTS = 5000;
+
+/**
+ * Centre d'une liste de sommets absolus : celui de leur boîte englobante, et
+ * les sommets rapportés à lui. C'est ce centre que l'échelle et les
+ * modificateurs prennent pour pivot.
+ */
+export const centerPoints = (absolute) => {
+  const xs = absolute.map((p) => p.x);
+  const ys = absolute.map((p) => p.y);
+  const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+  return { x, y, points: absolute.map((p) => ({ x: p.x - x, y: p.y - y })) };
+};
+
+export const absolutePoints = (element) =>
+  element.points.map((p) => ({ x: element.x + p.x, y: element.y + p.y }));
+
+/** `inner` en % : 100 = polygone convexe, 0 = étoile réduite à ses rayons. */
+export const clampInner = (value) => Math.min(100, Math.max(0, Number.isFinite(value) ? value : 100));
 
 /**
  * L'épaisseur du trait appartient au calque, pas à la forme : un calque est un
@@ -316,6 +381,25 @@ export const addElement = (scene, layerId, type, x, y, overrides = {}) => {
     ...mapLayer(scene, layerId, (layer) => ({ ...layer, elements: [...layer.elements, element] })),
     activeElementId: element.id,
   };
+};
+
+/**
+ * Ajoute des tracés donnés en coordonnées absolues, en une seule transition :
+ * un chemin collé à dix sous-tracés s'annule d'un seul geste.
+ */
+export const addTraces = (scene, layerId, traces) =>
+  traces.reduce((current, { points, closed }) => {
+    const { x, y, points: relative } = centerPoints(points);
+    return addElement(current, layerId, 'polyline', x, y, { points: relative, closed });
+  }, scene);
+
+/** Recalcule le centre d'un tracé sans le déplacer à l'écran. */
+export const recenterTrace = (scene, elementId) => {
+  const element = scene.layers.flatMap((layer) => layer.elements).find((el) => el.id === elementId);
+  if (!element?.points?.length) return scene;
+  const next = centerPoints(absolutePoints(element));
+  if (next.x === element.x && next.y === element.y) return scene;
+  return updateElement(scene, elementId, next);
 };
 
 export const setActiveElement = (scene, elementId) => ({ ...scene, activeElementId: elementId });

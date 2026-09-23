@@ -1,4 +1,12 @@
-import { clampExtent, getActiveLayer, getRenderedChildren, SHAPES, STAGE } from './scene.js';
+import {
+  absolutePoints,
+  clampExtent,
+  getActiveElement,
+  getActiveLayer,
+  getRenderedChildren,
+  SHAPES,
+  STAGE,
+} from './scene.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -25,6 +33,35 @@ export const render = (scene, svgRoot) => {
 
   const guides = createGuides(getActiveLayer(scene));
   if (guides) svgRoot.append(guides);
+  const handles = createHandles(scene);
+  if (handles) svgRoot.append(handles);
+};
+
+/* Rayon d'une poignée de sommet, en unités du dessin. */
+const HANDLE_RADIUS = 5;
+
+/**
+ * Poignées des sommets du tracé sélectionné, posées sur la forme source — la
+ * copie que la pile de modificateurs laisse en place. Glisser une poignée
+ * déplace le sommet (voir la toolbar) ; l'export les retire, comme les repères.
+ */
+const createHandles = (scene) => {
+  const element = getActiveElement(scene);
+  const layer = scene.layers.find((candidate) => candidate.elements.includes(element));
+  if (!element || SHAPES[element.type].geometry !== 'polyline' || !layer?.visible) return null;
+
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.dataset.handles = element.id;
+  group.setAttribute('fill', '#ffffff');
+  group.setAttribute('stroke', '#1f2430');
+  group.setAttribute('stroke-width', '1');
+  group.setAttribute('vector-effect', 'non-scaling-stroke');
+  absolutePoints(element).forEach((point, index) => {
+    const handle = guideNode('circle', { cx: point.x, cy: point.y, r: HANDLE_RADIUS });
+    handle.dataset.vertex = String(index);
+    group.append(handle);
+  });
+  return group;
 };
 
 /* Demi-longueur des branches de la croix qui marque un centre. */
@@ -106,13 +143,30 @@ const createGuides = (layer) => {
   return group;
 };
 
+/**
+ * Sommets d'un polygone régulier, le premier en haut. Sous 100 % de `inner`,
+ * un sommet creux s'intercale entre deux sommets : l'étoile. À 100 % il
+ * tomberait sur le côté, donc il est omis — même dessin, moitié moins de points.
+ */
+export const polygonPoints = (cx, cy, radius, sides, inner) => {
+  const star = inner < 100;
+  const count = star ? sides * 2 : sides;
+  const hollow = radius * Math.cos(Math.PI / sides) * (inner / 100);
+  return Array.from({ length: count }, (_, i) => {
+    const r = star && i % 2 === 1 ? hollow : radius;
+    const angle = -Math.PI / 2 + (i * Math.PI * 2) / count;
+    return `${round(cx + r * Math.cos(angle))},${round(cy + r * Math.sin(angle))}`;
+  }).join(' ');
+};
+
 const createNode = (child) => {
   const scale = child.scale ?? 1;
   const rx = clampExtent(child.type, child.rx * scale);
   const ry = clampExtent(child.type, child.ry * scale);
   const geometry = SHAPES[child.type].geometry;
 
-  const node = document.createElementNS(SVG_NS, geometry === 'dot' ? 'line' : geometry);
+  const tag = { dot: 'line', polyline: child.closed ? 'polygon' : 'polyline' }[geometry] ?? geometry;
+  const node = document.createElementNS(SVG_NS, tag);
   node.dataset.elementId = child.id;
   let strokeWidth = child.strokeWidth;
   if (geometry === 'dot') {
@@ -137,6 +191,19 @@ const createNode = (child) => {
     node.setAttribute('y', round(child.y - ry));
     node.setAttribute('width', round(rx * 2));
     node.setAttribute('height', round(ry * 2));
+  } else if (geometry === 'ellipse') {
+    node.setAttribute('cx', round(child.x));
+    node.setAttribute('cy', round(child.y));
+    node.setAttribute('rx', round(rx));
+    node.setAttribute('ry', round(ry));
+  } else if (geometry === 'polyline') {
+    /* Sommets relatifs au centre : l'échelle les rapproche de lui. */
+    node.setAttribute(
+      'points',
+      child.points.map((p) => `${round(child.x + p.x * scale)},${round(child.y + p.y * scale)}`).join(' '),
+    );
+  } else if (geometry === 'polygon') {
+    node.setAttribute('points', polygonPoints(child.x, child.y, rx, child.sides, child.inner));
   } else {
     node.setAttribute('cx', round(child.x));
     node.setAttribute('cy', round(child.y));
@@ -231,6 +298,7 @@ const round = (value) => String(Math.round(value * 1000) / 1000);
 export const toSvgDocument = (svgRoot) => {
   const clone = svgRoot.cloneNode(true);
   clone.querySelector('[data-guides]')?.remove();
+  clone.querySelector('[data-handles]')?.remove();
   clearHover(clone);
   clone.removeAttribute('id');
   clone.removeAttribute('role');

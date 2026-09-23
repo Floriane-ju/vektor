@@ -294,6 +294,33 @@ describe('dessin au glisser', () => {
     });
   });
 
+  it('l’ellipse prend deux demi-axes indépendants, le cercle reste rond', () => {
+    const { store, svg, shapes } = withLayer();
+    pick(shapes, 'ellipse');
+    pointer(svg, 'pointerdown', 300, 300);
+    pointer(svg, 'pointerup', 380, 330);
+    expect(store.get().layers[0].elements.at(-1)).toMatchObject({ type: 'ellipse', rx: 80, ry: 30 });
+
+    pick(shapes, 'circle');
+    pointer(svg, 'pointerdown', 300, 300);
+    pointer(svg, 'pointerup', 380, 330);
+    const circle = store.get().layers[0].elements.at(-1);
+    expect(circle.rx).toBe(circle.ry);
+  });
+
+  it('le polygone prend la distance du geste pour rayon et garde ses côtés', () => {
+    const { store, svg, shapes } = withLayer();
+    pick(shapes, 'polygon');
+    pointer(svg, 'pointerdown', 300, 300);
+    pointer(svg, 'pointerup', 300, 350);
+    expect(store.get().layers[0].elements.at(-1)).toMatchObject({
+      type: 'polygon',
+      rx: 50,
+      sides: 6,
+      inner: 100,
+    });
+  });
+
   it('le glissement pose le point sans lui donner d’étendue', () => {
     const { store, svg, shapes } = withLayer();
     pick(shapes, 'point');
@@ -571,6 +598,45 @@ describe('rendu des formes', () => {
     ]);
   });
 
+  it('l’ellipse se rend en <ellipse> à deux rayons, mis à l’échelle', () => {
+    const svg = stage();
+    const layer = createLayer({
+      elements: [createElement('ellipse', 100, 50, { rx: 40, ry: 20 })],
+      interpolations: [ramp('scale', [0.5, 0.5])],
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const node = svg.querySelector('ellipse');
+    expect(['cx', 'cy', 'rx', 'ry'].map((a) => node.getAttribute(a))).toEqual(['100', '50', '20', '10']);
+  });
+
+  it('le polygone se rend en un seul <polygon>, premier sommet en haut', () => {
+    const svg = stage();
+    const layer = createLayer({
+      elements: [createElement('polygon', 0, 0, { rx: 10, sides: 4 })],
+      interpolations: [ramp('scale', [2, 2])],
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    expect(svg.querySelectorAll('polygon')).toHaveLength(1);
+    expect(svg.querySelectorAll('line')).toHaveLength(0);
+    expect(svg.querySelector('polygon').getAttribute('points')).toBe('0,-20 20,0 0,20 -20,0');
+  });
+
+  it('sous 100 % de rayon intérieur, le polygone devient une étoile', () => {
+    const svg = stage();
+    const layer = createLayer({
+      elements: [createElement('polygon', 0, 0, { rx: 10, sides: 5, inner: 50 })],
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const points = svg
+      .querySelector('polygon')
+      .getAttribute('points')
+      .split(' ')
+      .map((pair) => Math.hypot(...pair.split(',').map(Number)));
+    expect(points).toHaveLength(10);
+    const hollow = 10 * Math.cos(Math.PI / 5) * 0.5;
+    points.forEach((r, i) => expect(r).toBeCloseTo(i % 2 ? hollow : 10, 2));
+  });
+
   it('la ligne va d’un bout à l’autre de ses demi-extensions signées', () => {
     const svg = stage();
     const layer = createLayer({
@@ -841,5 +907,172 @@ describe('accessibilité au clavier', () => {
       header().click();
       expect(header().closest('li').contains(detail)).toBe(true);
     }
+  });
+});
+
+describe('tracé', () => {
+  const mountTrace = (elements = []) => {
+    const layer = createLayer({ center: { x: 0, y: 0 }, elements });
+    const store = createStore({
+      layers: [layer],
+      activeLayerId: layer.id,
+      activeElementId: elements[0]?.id ?? null,
+    });
+    const svg = stage();
+    globalThis.DOMPoint = class {
+      constructor(x, y) {
+        Object.assign(this, { x, y });
+      }
+      matrixTransform() {
+        return { x: this.x, y: this.y };
+      }
+    };
+    svg.getScreenCTM = () => ({ inverse: () => ({}) });
+    const shapes = document.createElement('div');
+    const container = document.createElement('div');
+    const messages = [];
+    render(store.get(), svg);
+    store.subscribe((next) => render(next, svg));
+    mountToolbar({
+      store,
+      svgRoot: svg,
+      container,
+      shapeContainer: shapes,
+      status: { show: (message, tone) => messages.push([message, tone]) },
+    });
+    const pick = (type) => {
+      const radio = shapes.querySelector(`#shape-${type}`);
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change'));
+    };
+    return { store, svg, container, messages, pick };
+  };
+
+  const on = (node, type, x = 0, y = 0) =>
+    node.dispatchEvent(new MouseEvent(type, { button: 0, bubbles: true, clientX: x, clientY: y }));
+  const click = (svg, x, y) => {
+    on(svg, 'pointerdown', x, y);
+    on(svg, 'pointerup', x, y);
+  };
+  const absolute = (element) => element.points.map((p) => [element.x + p.x, element.y + p.y]);
+
+  it('se rend en <polyline> ouvert ou <polygon> fermé, mis à l’échelle depuis son centre', () => {
+    const svg = stage();
+    const points = [
+      { x: -10, y: 0 },
+      { x: 10, y: 0 },
+      { x: 0, y: 10 },
+    ];
+    const layer = createLayer({
+      elements: [
+        createElement('polyline', 100, 100, { points, closed: false }),
+        createElement('polyline', 200, 100, { points, closed: true }),
+      ],
+      interpolations: [ramp('scale', [2, 2])],
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    expect(svg.querySelector('polyline').getAttribute('points')).toBe('80,100 120,100 100,120');
+    expect(svg.querySelector('polygon').getAttribute('points')).toBe('180,100 220,100 200,120');
+  });
+
+  it('suit les modificateurs d’un bloc', () => {
+    const svg = stage();
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      elements: [createElement('polyline', 100, 0)],
+      modifiers: [{ type: 'step', n: 3, stepX: 50, stepY: 0 }],
+    });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const firsts = [...svg.querySelectorAll('polygon')].map((node) => node.getAttribute('points').split(' ')[0]);
+    expect(firsts).toEqual(['100,-50', '150,-50', '200,-50']);
+  });
+
+  it('chaque clic pose un sommet, cliquer sur le premier ferme le tracé', () => {
+    const { store, svg, pick } = mountTrace();
+    pick('polyline');
+    click(svg, 0, 0);
+    click(svg, 100, 0);
+    click(svg, 100, 100);
+    click(svg, 2, 1);
+    const element = store.get().layers[0].elements.at(-1);
+    expect(element).toMatchObject({ type: 'polyline', closed: true, x: 50, y: 50 });
+    expect(absolute(element)).toEqual([
+      [0, 0],
+      [100, 0],
+      [100, 100],
+    ]);
+  });
+
+  it('le double-clic termine un tracé ouvert sans sommet doublé', () => {
+    const { store, svg, pick } = mountTrace();
+    pick('polyline');
+    click(svg, 0, 0);
+    click(svg, 60, 20);
+    click(svg, 60, 20);
+    on(svg, 'dblclick', 60, 20);
+    const element = store.get().layers[0].elements.at(-1);
+    expect(element.closed).toBe(false);
+    expect(absolute(element)).toEqual([
+      [0, 0],
+      [60, 20],
+    ]);
+  });
+
+  it('un tracé d’un seul sommet disparaît à la fin du geste', () => {
+    const { store, svg, pick } = mountTrace();
+    pick('polyline');
+    click(svg, 10, 10);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(store.get().layers[0].elements).toHaveLength(0);
+  });
+
+  it('au curseur, glisser une poignée déplace ce seul sommet', () => {
+    const trace = createElement('polyline', 0, 0, {
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+      ],
+      closed: false,
+    });
+    const { store, svg, pick } = mountTrace([trace]);
+    pick('cursor');
+    const handle = svg.querySelectorAll('[data-vertex]')[1];
+    on(handle, 'pointerdown', 100, 0);
+    on(svg, 'pointermove', 100, 40);
+    on(svg, 'pointerup', 100, 40);
+    expect(absolute(store.get().layers[0].elements[0])).toEqual([
+      [0, 0],
+      [100, 40],
+    ]);
+  });
+
+  it('les poignées ne partent pas à l’export', () => {
+    const trace = createElement('polyline', 0, 0);
+    const { svg } = mountTrace([trace]);
+    expect(svg.querySelectorAll('[data-vertex]')).toHaveLength(3);
+    expect(toSvgDocument(svg)).not.toContain('data-vertex');
+  });
+
+  it('coller un chemin ajoute ses sous-tracés en un seul pas', () => {
+    const { store, container, messages } = mountTrace();
+    const before = store.get();
+    globalThis.prompt = () => '<path d="M0 0 H10 V10 Z M20 20 l5 5" />';
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Coller un tracé').click();
+    const elements = store.get().layers[0].elements;
+    expect(elements.map((e) => [e.closed, absolute(e)])).toEqual([
+      [true, [[0, 0], [10, 0], [10, 10]]],
+      [false, [[20, 20], [25, 25]]],
+    ]);
+    expect(messages.at(-1)[0]).toBe('2 tracés ajoutés.');
+    store.undo();
+    expect(store.get()).toBe(before);
+  });
+
+  it('refuse une courbe et le dit', () => {
+    const { store, container, messages } = mountTrace();
+    globalThis.prompt = () => 'M0 0 C 10 10 20 20 30 30';
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Coller un tracé').click();
+    expect(store.get().layers[0].elements).toHaveLength(0);
+    expect(messages.at(-1)).toEqual([expect.stringContaining('« C »'), 'error']);
   });
 });

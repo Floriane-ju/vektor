@@ -1,9 +1,13 @@
 import {
+  absolutePoints,
   addElement,
+  addTraces,
   DEFAULT_SHAPE,
   dragPatch,
   getActiveElement,
   getActiveLayer,
+  recenterTrace,
+  removeElement,
   setActiveElement,
   setActiveLayer,
   SHAPES,
@@ -11,12 +15,19 @@ import {
 } from '../scene.js';
 import { clearHover, renderedNodes, showHover, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
+import { parseTrace } from '../path.js';
 
 /** Outil de sélection : partage le groupe radio des formes, sans en être une. */
 const CURSOR = 'cursor';
 
 /** En deçà, le geste est lu comme un clic : la forme prend sa taille par défaut. */
 const DRAG_THRESHOLD = 3;
+
+/* Un clic à moins de cette distance du premier sommet ferme le tracé. */
+const CLOSE_DISTANCE = 10;
+
+const elementById = (scene, id) =>
+  scene.layers.flatMap((layer) => layer.elements).find((element) => element.id === id) ?? null;
 
 const button = (label, onClick, title) => {
   const node = document.createElement('button');
@@ -82,8 +93,11 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   /* Glissement en cours : le point de départ du geste, et la forme créée à ce
      moment-là, que les mouvements suivants se contentent de redimensionner. */
   let stroke = null;
+  /* Tracé en cours : la forme dont chaque clic ajoute un sommet. */
+  let trace = null;
 
   mountShapePicker(shapeContainer ?? container, (type) => {
+    finishTrace(false);
     selecting = type === CURSOR;
     if (!selecting) tool = type;
     svgRoot.dataset.tool = selecting ? CURSOR : 'draw';
@@ -126,7 +140,30 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     }
   });
 
-  container.append(exportSvg, exportJson, importJson, fileInput);
+  /* ponytail: `prompt` natif, comme le renommage des calques — un champ dédié
+     le jour où l'on veut prévisualiser avant d'importer. */
+  const pasteTrace = button(
+    'Coller un tracé',
+    () => {
+      const layer = getActiveLayer(store.get());
+      if (!layer) {
+        status.show('Sélectionner un calque avant de coller un tracé.', 'error');
+        return;
+      }
+      const text = prompt('Chemin SVG à coller (attribut d, points, ou la balise entière)');
+      if (text == null) return;
+      try {
+        const traces = parseTrace(text);
+        store.apply(addTraces, layer.id, traces);
+        status.show(`${traces.length} tracé${traces.length > 1 ? 's' : ''} ajouté${traces.length > 1 ? 's' : ''}.`);
+      } catch (error) {
+        status.show(`Tracé refusé — ${error.message}`, 'error');
+      }
+    },
+    'Segments droits seulement : M, L, H, V, Z',
+  );
+
+  container.append(exportSvg, exportJson, importJson, pasteTrace, fileInput);
 
   /* ---- Sélection au curseur ---- */
 
@@ -150,7 +187,21 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
      forme, il la sélectionne d'abord et c'est elle qui bouge. */
   let drag = null;
 
+  /* Glissement d'un sommet de tracé, par sa poignée. */
+  let vertexDrag = null;
+
   const startDrag = (event) => {
+    const handle = event.target.closest?.('[data-vertex]');
+    const selected = getActiveElement(store.get());
+    if (handle && selected?.points) {
+      vertexDrag = {
+        point: toStagePoint(svgRoot, event),
+        element: selected,
+        index: Number(handle.dataset.vertex),
+      };
+      svgRoot.setPointerCapture?.(event.pointerId);
+      return;
+    }
     const node = shapeAt(event);
     if (node) select(node);
     const element = getActiveElement(store.get());
@@ -179,8 +230,21 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     drag = null;
   };
 
+  const moveVertex = (event) => {
+    const { x, y } = toStagePoint(svgRoot, event);
+    const { element, index, point } = vertexDrag;
+    const points = element.points.map((p, i) =>
+      i === index ? { x: p.x + x - point.x, y: p.y + y - point.y } : p,
+    );
+    store.apply(updateElement, element.id, { points });
+  };
+
   svgRoot.addEventListener('pointermove', (event) => {
     if (!selecting) return;
+    if (vertexDrag) {
+      moveVertex(event);
+      return;
+    }
     if (drag) moveDrag(event);
     /* Sous le curseur, la forme sélectionnée ressort toujours, où que soit le
        pointeur ; celle survolée s'y ajoute. Pendant un glissement, seule la
@@ -204,6 +268,72 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     return dragPatch(tool, stroke, point.x - stroke.x, point.y - stroke.y);
   };
 
+  /* ---- Tracé au clic ---- */
+
+  /* Segment fantôme du dernier sommet au curseur : un état d'écran, posé comme
+     le survol pour que le rendu suivant et l'export l'effacent d'eux-mêmes. */
+  const previewTrace = (event) => {
+    const element = elementById(store.get(), trace.elementId);
+    if (!element) return;
+    const last = absolutePoints(element).at(-1);
+    const { x, y } = toStagePoint(svgRoot, event);
+    clearHover(svgRoot);
+    const ghost = document.createElementNS(svgRoot.namespaceURI, 'line');
+    for (const [name, value] of Object.entries({ x1: last.x, y1: last.y, x2: x, y2: y })) {
+      ghost.setAttribute(name, String(value));
+    }
+    ghost.dataset.hover = '';
+    ghost.setAttribute('stroke', 'currentColor');
+    ghost.setAttribute('stroke-dasharray', '4 4');
+    ghost.setAttribute('pointer-events', 'none');
+    svgRoot.append(ghost);
+  };
+
+  /**
+   * Chaque clic pose un sommet ; cliquer près du premier ferme le tracé.
+   * Double-clic, Entrée, Échap ou changement d'outil le laissent ouvert.
+   */
+  const traceClick = (layer, x, y) => {
+    const element = trace && elementById(store.get(), trace.elementId);
+    if (!element) {
+      store.apply(addElement, layer.id, 'polyline', x, y, { points: [{ x: 0, y: 0 }], closed: false });
+      trace = { elementId: store.get().activeElementId };
+      return;
+    }
+    const [first] = absolutePoints(element);
+    if (element.points.length >= 3 && Math.hypot(x - first.x, y - first.y) < CLOSE_DISTANCE) {
+      finishTrace(true);
+      return;
+    }
+    store.apply(updateElement, element.id, {
+      points: [...element.points, { x: x - element.x, y: y - element.y }],
+    });
+  };
+
+  /* Les deux clics d'un double-clic posent deux sommets confondus : on les
+     fond. Un tracé réduit à un sommet ne dessine rien et disparaît. */
+  function finishTrace(closed) {
+    if (!trace) return;
+    const { elementId } = trace;
+    trace = null;
+    clearHover(svgRoot);
+    const element = elementById(store.get(), elementId);
+    if (!element) return;
+    const points = element.points.filter(
+      (p, i, all) => i === 0 || Math.hypot(p.x - all[i - 1].x, p.y - all[i - 1].y) >= DRAG_THRESHOLD,
+    );
+    if (points.length < 2) {
+      store.apply(removeElement, elementId);
+      return;
+    }
+    store.apply((scene) => recenterTrace(updateElement(scene, elementId, { points, closed }), elementId));
+  }
+
+  svgRoot.addEventListener('dblclick', () => finishTrace(false));
+  window.addEventListener('keydown', (event) => {
+    if (trace && (event.key === 'Enter' || event.key === 'Escape')) finishTrace(false);
+  });
+
   svgRoot.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
     if (selecting) {
@@ -216,6 +346,10 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
       return;
     }
     const { x, y } = toStagePoint(svgRoot, event);
+    if (tool === 'polyline') {
+      traceClick(layer, x, y);
+      return;
+    }
     store.apply(addElement, layer.id, tool, x, y, { rx: 0, ry: 0 });
     stroke = { x, y, elementId: store.get().activeElementId };
     /* La capture garde les mouvements même quand le curseur sort du stage :
@@ -224,11 +358,18 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   });
 
   svgRoot.addEventListener('pointermove', (event) => {
+    if (trace) previewTrace(event);
     if (!stroke) return;
     store.apply(updateElement, stroke.elementId, patchAt(event));
   });
 
   svgRoot.addEventListener('pointerup', (event) => {
+    if (vertexDrag) {
+      moveVertex(event);
+      store.apply(recenterTrace, vertexDrag.element.id);
+      svgRoot.releasePointerCapture?.(event.pointerId);
+      vertexDrag = null;
+    }
     if (drag) endDrag(event);
     if (!stroke) return;
     const patch = patchAt(event);
@@ -248,6 +389,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   svgRoot.addEventListener('pointercancel', () => {
     stroke = null;
     drag = null;
+    vertexDrag = null;
     svgRoot.toggleAttribute('data-dragging', false);
   });
 
