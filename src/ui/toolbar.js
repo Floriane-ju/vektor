@@ -17,6 +17,11 @@ import {
 import { clearHover, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
 import { parseTrace } from '../path.js';
+import { icon } from './icons.js';
+import { TOOL_KEYS } from './shortcuts.js';
+
+/* Touche de chaque outil, pour l'infobulle. */
+const KEY_OF = Object.fromEntries(Object.entries(TOOL_KEYS).map(([key, type]) => [type, key.toUpperCase()]));
 
 /** Outil de sélection : partage le groupe radio des formes, sans en être une. */
 const CURSOR = 'cursor';
@@ -30,12 +35,18 @@ const CLOSE_DISTANCE = 10;
 const elementById = (scene, id) =>
   scene.layers.flatMap((layer) => layer.elements).find((element) => element.id === id) ?? null;
 
-const button = (label, onClick, title) => {
+/* Entrée du menu Exporter : le menu se referme avant l'action, qui peut ouvrir
+   un sélecteur de fichier ou un `prompt`. */
+const menuItem = (label, onClick, title) => {
   const node = document.createElement('button');
   node.type = 'button';
+  node.className = 'menu-item';
   node.textContent = label;
   if (title) node.title = title;
-  node.addEventListener('click', onClick);
+  node.addEventListener('click', (event) => {
+    node.closest('[popover]')?.hidePopover?.();
+    onClick(event);
+  });
   return node;
 };
 
@@ -76,9 +87,15 @@ const mountShapePicker = (container, onChange) => {
     radio.checked = type === DEFAULT_SHAPE;
     radio.addEventListener('change', () => radio.checked && onChange(type));
 
+    /* Pastille à icône : le nom reste dans le libellé, masqué à l'écran mais lu
+       par les lecteurs d'écran. */
     const label = document.createElement('label');
     label.htmlFor = id;
-    label.textContent = shape.label;
+    label.title = KEY_OF[type] ? `${shape.label} (${KEY_OF[type]})` : shape.label;
+    const text = document.createElement('span');
+    text.className = 'visually-hidden';
+    text.textContent = shape.label;
+    label.append(icon(type), text);
 
     group.append(radio, label);
   }
@@ -115,7 +132,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   fileInput.accept = 'application/json,.json';
   fileInput.hidden = true;
 
-  const exportSvg = button('Export SVG', (event) => {
+  const exportSvg = menuItem('Exporter en SVG', (event) => {
     const trigger = event.currentTarget;
     trigger.disabled = true;
     try {
@@ -126,12 +143,12 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     }
   });
 
-  const exportJson = button('Exporter JSON', () => {
+  const exportJson = menuItem('Exporter le projet (JSON)', () => {
     download(serialize(store.get()), 'illu.json', 'application/json');
     status.show('Projet exporté.');
   });
 
-  const importJson = button('Importer JSON', () => fileInput.click());
+  const importJson = menuItem('Importer un projet (JSON)…', () => fileInput.click());
 
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];
@@ -148,8 +165,8 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
 
   /* ponytail: `prompt` natif, comme le renommage des calques — un champ dédié
      le jour où l'on veut prévisualiser avant d'importer. */
-  const pasteTrace = button(
-    'Coller un tracé',
+  const pasteTrace = menuItem(
+    'Coller un tracé…',
     () => {
       const layer = getActiveLayer(store.get());
       if (!layer) {
@@ -169,7 +186,22 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     'Segments droits seulement : M, L, H, V, Z',
   );
 
-  container.append(exportSvg, exportJson, importJson, pasteTrace, fileInput);
+  /* ponytail: `popover` natif — Échap et clic extérieur ferment le menu, pas de
+     navigation aux flèches entre les entrées (Tab suffit). */
+  const menu = document.createElement('div');
+  menu.id = 'export-menu';
+  menu.className = 'menu';
+  menu.popover = 'auto';
+  menu.append(exportSvg, exportJson, importJson, pasteTrace);
+
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'pill-btn is-primary';
+  trigger.setAttribute('popovertarget', menu.id);
+  trigger.setAttribute('aria-haspopup', 'menu');
+  trigger.append('Exporter', icon('chevronDown', 12));
+
+  container.append(trigger, menu, fileInput);
 
   /* ---- Sélection au curseur ---- */
 

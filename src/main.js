@@ -39,36 +39,35 @@ store.subscribe((next) => {
    notifications, une seule écriture suffit. */
 store.subscribe(debounce(saveLocal));
 
-mountHistory({ store });
-const { snap } = mountSettings({ svgRoot, container: document.getElementById('toolbar-actions') });
+const actions = document.getElementById('toolbar-actions');
+const viewControls = document.getElementById('view-controls');
+const shapeList = document.getElementById('shape-list');
+
+/* Ordre de montage = ordre d'affichage dans les pastilles. */
+mountHistory({ store, container: actions });
+mountShortcuts({ store, container: actions, status });
+mountZoom({
+  svgRoot,
+  scroller: svgRoot.closest('.stage-wrap') ?? svgRoot.parentElement,
+  container: viewControls,
+});
+const { snap } = mountSettings({ svgRoot, container: viewControls });
 const { getTool } = mountToolbar({
   store,
   svgRoot,
   snap,
-  container: document.getElementById('toolbar-actions'),
+  container: actions,
   shapeContainer: document.getElementById('toolbar-shapes'),
   status,
 });
-mountZoom({
-  svgRoot,
-  scroller: svgRoot.parentElement,
-  container: document.getElementById('toolbar-actions'),
-});
-mountShortcuts({ store, container: document.getElementById('toolbar-actions'), status });
-const { layerDetail, shapeDetail } = mountPropertyPanel({ store });
+mountPropertyPanel({ store, container: document.getElementById('inspector') });
+mountShapeList({ store, container: shapeList, svgRoot, getTool, status });
+/* L'arbre loge la liste des formes sous le calque actif déplié. */
 mountLayerPanel({
   store,
   container: document.getElementById('layer-panel'),
   status,
-  detail: layerDetail,
-});
-mountShapeList({
-  store,
-  container: document.getElementById('shape-list'),
-  svgRoot,
-  getTool,
-  status,
-  detail: shapeDetail,
+  children: shapeList,
 });
 
 render(store.get(), svgRoot);

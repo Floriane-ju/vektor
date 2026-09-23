@@ -1,0 +1,26 @@
+/* Pictogrammes des outils et des formes, en trait `currentColor` : la couleur
+   suit le texte du bouton, pressé ou non. Tracés repris de la maquette E. */
+const PATHS = {
+  cursor: '<path d="M5 3 L16 11 L11 12 L14 18 L12 19 L9 13 L5 16 Z" fill="currentColor" stroke="none"/>',
+  circle: '<circle cx="10" cy="10" r="7"/>',
+  arc: '<path d="M3 13 A7 7 0 0 1 17 13 Z" stroke-linejoin="round"/>',
+  ellipse: '<ellipse cx="10" cy="10" rx="8" ry="5"/>',
+  polygon: '<path d="M10 2.5 L17 7.5 L14.5 16 L5.5 16 L3 7.5 Z" stroke-linejoin="round"/>',
+  rect: '<rect x="3.5" y="5" width="13" height="10"/>',
+  line: '<line x1="4" y1="16" x2="16" y2="4" stroke-linecap="round"/>',
+  point: '<circle cx="10" cy="10" r="3.5" fill="currentColor" stroke="none"/>',
+  polyline: '<path d="M3 15 L7 6 L11 13 L17 4" stroke-linejoin="round" stroke-linecap="round"/>',
+  grid: '<rect x="2.5" y="2.5" width="15" height="15"/><path d="M7.5 2.5V17.5M12.5 2.5V17.5M2.5 7.5H17.5M2.5 12.5H17.5"/>',
+  chevronDown: '<path d="M5 8 L10 13 L15 8" stroke-linecap="round" stroke-linejoin="round"/>',
+  chevronRight: '<path d="M8 5 L13 10 L8 15" stroke-linecap="round" stroke-linejoin="round"/>',
+};
+
+export const icon = (name, size = 20) => {
+  const wrap = document.createElement('span');
+  wrap.className = 'icon';
+  wrap.setAttribute('aria-hidden', 'true');
+  wrap.innerHTML =
+    `<svg width="${size}" height="${size}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8">` +
+    `${PATHS[name] ?? ''}</svg>`;
+  return wrap;
+};

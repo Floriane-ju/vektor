@@ -19,6 +19,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  */
 export const render = (scene, svgRoot) => {
   svgRoot.replaceChildren();
+  const bounds = new Map();
+  sourceBounds.set(svgRoot, bounds);
 
   for (const layer of scene.layers) {
     if (!layer.visible) continue;
@@ -27,7 +29,10 @@ export const render = (scene, svgRoot) => {
 
     const group = document.createElementNS(SVG_NS, 'g');
     group.dataset.layerId = layer.id;
-    for (const child of children) group.append(createNode(child));
+    for (const child of children) {
+      group.append(createNode(child));
+      if (!bounds.has(child.id)) bounds.set(child.id, childBounds(child));
+    }
     svgRoot.append(group);
   }
 
@@ -54,9 +59,9 @@ const createHandles = (scene) => {
 
   const group = document.createElementNS(SVG_NS, 'g');
   group.dataset.handles = element.id;
-  group.setAttribute('fill', '#ffffff');
-  group.setAttribute('stroke', '#1f2430');
-  group.setAttribute('stroke-width', '1');
+  group.setAttribute('fill', '#1b1b1b');
+  group.setAttribute('stroke', '#3ba2d6');
+  group.setAttribute('stroke-width', '2');
   group.setAttribute('vector-effect', 'non-scaling-stroke');
   if (element.rotation) group.setAttribute('transform', rotateAbout(element.rotation, element));
   absolutePoints(element).forEach((point, index) => {
@@ -266,102 +271,152 @@ const createNode = (child) => {
   return node;
 };
 
-/* Anneau de sélection : couleur, écart à la forme et épaisseur, en unités du
-   dessin. ponytail: il grossit avec le zoom, comme le dessin ; le diviser par
-   le facteur de zoom si ça gêne. */
-/* L'accent de l'interface : un attribut de présentation ne lit pas `var()`,
-   d'où la peinture posée en style dans `silhouette`. */
-const SELECTION_COLOR = 'var(--accent)';
-const SELECTION_GAP = 4;
-const SELECTION_WIDTH = 4;
-
-/* Une ligne ou un tracé ouvert n'a pas d'intérieur : le remplir fermerait la
-   forme d'une corde invisible. */
-const isClosed = (node) => {
-  const tag = node.tagName.toLowerCase();
-  if (tag === 'path') return /z\s*$/i.test(node.getAttribute('d') ?? '');
-  return tag !== 'line' && tag !== 'polyline';
+/* Cadre de sélection : écart à la forme, en unités du dessin ; son trait garde
+   la même épaisseur à l'écran quel que soit le zoom. Les couleurs viennent de
+   l'interface (`style.css`) : un attribut de présentation ne lit pas `var()`. */
+const SELECTION_GAP = 8;
+const FRAME_COLORS = {
+  selection: 'var(--select, #3ba2d6)',
+  layer: 'var(--accent, #ee4722)',
+  hover: 'var(--select, #3ba2d6)',
 };
+/* Échantillons d'un contour courbe : l'écart à la vraie boîte reste sous le
+   pixel pour les rayons du plan. */
+const CURVE_SAMPLES = 64;
 
-/* Copie nue d'un nœud rendu, grossie de `grow` de chaque côté et peinte d'une
-   seule couleur : le trait élargi déborde de la forme d'autant. */
-const silhouette = (node, color, grow) => {
-  const clone = node.cloneNode();
-  /* Sans tirets : l'anneau épouse la forme entière, pas ses morceaux. */
-  for (const name of ['data-element-id', 'transform', 'fill-opacity', 'stroke-opacity', 'stroke-dasharray']) {
-    clone.removeAttribute(name);
+const degrees = (value) => (value * Math.PI) / 180;
+
+/* Points du contour d'une copie rendue, avant rotation et reflet. */
+const outlinePoints = (child) => {
+  const scale = child.scale ?? 1;
+  const rx = clampExtent(child.type, child.rx * scale);
+  const ry = clampExtent(child.type, child.ry * scale);
+  const { x, y } = child;
+  const around = (from, to, radiusX, radiusY) =>
+    Array.from({ length: CURVE_SAMPLES + 1 }, (_, i) => {
+      const angle = degrees(from + ((to - from) * i) / CURVE_SAMPLES);
+      return { x: x + radiusX * Math.sin(angle), y: y - radiusY * Math.cos(angle) };
+    });
+  switch (SHAPES[child.type].geometry) {
+    case 'dot':
+      return [{ x, y }];
+    case 'line':
+    case 'rect':
+      return [
+        { x: x - rx, y: y - ry },
+        { x: x + rx, y: y + ry },
+        { x: x - rx, y: y + ry },
+        { x: x + rx, y: y - ry },
+      ];
+    case 'polyline':
+      return child.points.map((p) => ({ x: x + p.x * scale, y: y + p.y * scale }));
+    case 'polygon':
+      /* Les sommets creux d'une étoile sont dans l'enveloppe des pointes. */
+      return Array.from({ length: child.sides }, (_, i) => {
+        const angle = -Math.PI / 2 + (i * Math.PI * 2) / child.sides;
+        return { x: x + rx * Math.cos(angle), y: y + rx * Math.sin(angle) };
+      });
+    case 'arc': {
+      const span = Math.abs(child.end - child.start) >= 360 ? 360 : (((child.end - child.start) % 360) + 360) % 360;
+      const points = around(child.start, child.start + span, rx, rx);
+      return child.closure === 'sector' ? [...points, { x, y }] : points;
+    }
+    case 'ellipse':
+      return around(0, 360, rx, ry);
+    default:
+      return around(0, 360, rx, rx);
   }
-  const width = Number(node.getAttribute('stroke-width')) || 0;
-  clone.setAttribute('stroke-width', round(width + grow * 2));
-  clone.style.stroke = color;
-  clone.style.fill = isClosed(node) ? color : 'none';
-  return clone;
 };
 
 /**
- * Anneau détaché autour d'un nœud rendu : sa silhouette élargie, évidée par un
- * masque de la silhouette à peine moins large. Rien n'est repeint sur la forme
- * elle-même, ni couleur ni opacité, et ce qui est dessous reste visible par le
- * liseré.
- *
- * La rotation est portée par le groupe, pas par les silhouettes : le masque se
- * lit dans l'espace de l'élément qui le référence, elle s'appliquerait deux fois.
+ * Boîte englobante d'une copie rendue, dans le repère du plan : contour
+ * reflété puis tourné comme le fait `createNode`, élargi d'une demi-épaisseur.
  */
-const outline = (node, marker) => {
-  const id = `outline-${marker}`;
-  const wrapper = document.createElementNS(SVG_NS, 'g');
-  wrapper.dataset[marker] = '';
-  wrapper.setAttribute('pointer-events', 'none');
-
-  /* Bornes larges : sous une rotation, le repère du masque tourne aussi. */
-  const bounds = { x: -STAGE.width, y: -STAGE.height, width: STAGE.width * 3, height: STAGE.height * 3 };
-  const mask = guideNode('mask', bounds);
-  mask.id = id;
-  mask.setAttribute('maskUnits', 'userSpaceOnUse');
-  const keep = guideNode('rect', bounds);
-  keep.setAttribute('fill', '#fff');
-  mask.append(keep, silhouette(node, '#000', SELECTION_GAP));
-
-  const ring = document.createElementNS(SVG_NS, 'g');
-  const transform = node.getAttribute('transform');
-  if (transform) ring.setAttribute('transform', transform);
-  ring.setAttribute('mask', `url(#${id})`);
-  ring.append(silhouette(node, SELECTION_COLOR, SELECTION_GAP + SELECTION_WIDTH));
-
-  wrapper.append(mask, ring);
-  return wrapper;
+export const childBounds = (child) => {
+  const rotation = degrees(child.rotation ?? 0);
+  const [cos, sin] = [Math.cos(rotation), Math.sin(rotation)];
+  const placed = outlinePoints(child).map((p) => {
+    const dx = child.flip ? child.x - p.x : p.x - child.x;
+    const dy = p.y - child.y;
+    return { x: child.x + dx * cos - dy * sin, y: child.y + dx * sin + dy * cos };
+  });
+  const dot = SHAPES[child.type].geometry === 'dot';
+  const half = (child.strokeWidth * (dot ? (child.scale ?? 1) : 1)) / 2;
+  const xs = placed.map((p) => p.x);
+  const ys = placed.map((p) => p.y);
+  return {
+    minX: Math.min(...xs) - half,
+    minY: Math.min(...ys) - half,
+    maxX: Math.max(...xs) + half,
+    maxY: Math.max(...ys) + half,
+  };
 };
 
-/* Copie source d'une forme : la première rendue, que la pile de modificateurs
-   laisse en place. Le contour ne va que sur elle, pas sur les copies. */
-const sourceNode = (svgRoot, elementId) =>
-  elementId ? svgRoot.querySelector(`[data-element-id="${CSS.escape(elementId)}"]`) : null;
+const union = (boxes) => ({
+  minX: Math.min(...boxes.map((box) => box.minX)),
+  minY: Math.min(...boxes.map((box) => box.minY)),
+  maxX: Math.max(...boxes.map((box) => box.maxX)),
+  maxY: Math.max(...boxes.map((box) => box.maxY)),
+});
+
+/* ponytail: boîte alignée sur les axes, même pour une forme tournée ; un cadre
+   qui tourne avec la forme le jour où ça gêne. */
+const frame = (box, marker) => {
+  const node = guideNode('rect', {
+    x: box.minX - SELECTION_GAP,
+    y: box.minY - SELECTION_GAP,
+    width: box.maxX - box.minX + SELECTION_GAP * 2,
+    height: box.maxY - box.minY + SELECTION_GAP * 2,
+  });
+  node.dataset[marker === 'layer' ? 'selection' : marker] = marker;
+  node.setAttribute('fill', 'none');
+  node.setAttribute('stroke-width', '1.5');
+  node.setAttribute('stroke-dasharray', '6 4');
+  node.setAttribute('vector-effect', 'non-scaling-stroke');
+  node.setAttribute('pointer-events', 'none');
+  node.style.stroke = FRAME_COLORS[marker];
+  if (marker === 'hover') node.setAttribute('stroke-opacity', '0.6');
+  return node;
+};
+
+/* Boîte de la copie source de chaque forme — la première rendue, que la pile
+   de modificateurs laisse en place — retenue par rendu pour le survol, qui
+   n'a que l'identifiant sous la main. */
+const sourceBounds = new WeakMap();
 
 const createSelection = (scene, svgRoot) => {
-  const source = sourceNode(svgRoot, scene.activeElementId);
-  return source ? outline(source, 'selection') : null;
+  const bounds = sourceBounds.get(svgRoot);
+  if (scene.activeElementId) {
+    const box = bounds?.get(scene.activeElementId);
+    return box ? frame(box, 'selection') : null;
+  }
+  /* Calque sans forme sélectionnée : le cadre entoure toutes ses copies. */
+  const layer = getActiveLayer(scene);
+  if (!layer?.visible) return null;
+  const children = getRenderedChildren(layer);
+  return children.length > 0 ? frame(union(children.map(childBounds)), 'layer') : null;
 };
 
-/** Retire le contour de survol, où qu'il ait été posé, et rend la sélection. */
+/** Retire le cadre de survol, où qu'il ait été posé, et rend la sélection. */
 export const clearHover = (svgRoot) => {
   for (const node of svgRoot.querySelectorAll('[data-hover]')) node.remove();
   svgRoot.querySelector('[data-selection]')?.removeAttribute('visibility');
 };
 
 /**
- * Contour de survol sur la copie source d'une forme, dessiné comme la
- * sélection, qu'il masque le temps du survol.
+ * Cadre de survol autour de la copie source d'une forme, qui masque la
+ * sélection le temps du survol.
  *
  * Le survol est un état d'écran, pas de scène : le prochain rendu l'efface,
  * et c'est à l'appelant de le reposer.
  */
 export const showHover = (svgRoot, elementId) => {
   clearHover(svgRoot);
-  const source = sourceNode(svgRoot, elementId);
-  if (!source) return;
-  /* Un seul accent à la fois : la forme survolée, pas celle sélectionnée. */
+  const box = sourceBounds.get(svgRoot)?.get(elementId);
+  if (!box) return;
+  /* Un seul cadre à la fois : la forme survolée, pas celle sélectionnée. */
   svgRoot.querySelector('[data-selection]')?.setAttribute('visibility', 'hidden');
-  svgRoot.append(outline(source, 'hover'));
+  svgRoot.append(frame(box, 'hover'));
 };
 
 const round = (value) => String(Math.round(value * 1000) / 1000);

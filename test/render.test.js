@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, toSvgDocument } from '../src/renderer-svg.js';
+import { childBounds, render, toSvgDocument } from '../src/renderer-svg.js';
 import { createElement, createInterpolation, createLayer, STAGE } from '../src/scene.js';
 import { createStore } from '../src/store.js';
 import { mountToolbar } from '../src/ui/toolbar.js';
@@ -503,8 +503,33 @@ describe('outil curseur', () => {
   });
 });
 
+describe('cadre de sélection', () => {
+  it('la boîte d’un rectangle tourné de 90° échange ses côtés, épaisseur comprise', () => {
+    const box = childBounds({ ...createElement('rect', 100, 100, { rx: 40, ry: 10, rotation: 90 }), strokeWidth: 4 });
+    expect(box.minX).toBeCloseTo(88);
+    expect(box.maxX).toBeCloseTo(112);
+    expect(box.minY).toBeCloseTo(58);
+    expect(box.maxY).toBeCloseTo(142);
+  });
+
+  it('sans forme sélectionnée, le calque actif est encadré en entier, hors export', () => {
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      elements: [createElement('circle', 100, 100, { rx: 10, ry: 10 })],
+      modifiers: [{ type: 'step', n: 3, stepX: 100, stepY: 0, angleStep: 0, radiusStep: 0 }],
+    });
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: layer.id, activeElementId: null }, svg);
+    const frame = svg.querySelector('[data-selection="layer"]');
+    const half = layer.strokeWidth / 2;
+    /* Trois copies de 100 en 100 : de 90 à 310, plus la demi-épaisseur et l'écart. */
+    expect(Number(frame.getAttribute('width'))).toBeCloseTo(220 + 2 * half + 16);
+    expect(toSvgDocument(svg)).not.toContain('data-selection');
+  });
+});
+
 describe('survol depuis la liste des formes', () => {
-  it('entoure la seule copie source de la forme survolée, puis la retire', async () => {
+  it('encadre la seule copie source de la forme survolée, puis retire le cadre', async () => {
     const { mountShapeList } = await import('../src/ui/shape-list.js');
     const layer = createLayer({
       center: { x: 0, y: 0 },
@@ -521,8 +546,11 @@ describe('survol depuis la liste des formes', () => {
     row.dispatchEvent(new MouseEvent('pointerenter'));
     const outlines = svg.querySelectorAll('[data-hover]');
     expect(outlines).toHaveLength(1);
-    /* Anneau autour de la copie source (x = 10), pas des copies décalées. */
-    expect(outlines[0].querySelector('[mask] circle').getAttribute('cx')).toBe('10');
+    /* Cadre centré sur la copie source (x = 10), pas sur les copies décalées. */
+    const frame = outlines[0];
+    expect(frame.tagName.toLowerCase()).toBe('rect');
+    expect(Number(frame.getAttribute('x')) + Number(frame.getAttribute('width')) / 2).toBeCloseTo(10);
+    expect(Number(frame.getAttribute('y')) + Number(frame.getAttribute('height')) / 2).toBeCloseTo(10);
     expect(toSvgDocument(svg)).not.toContain('data-hover');
 
     vi.useFakeTimers();
@@ -823,13 +851,14 @@ describe('accessibilité au clavier', () => {
     binding.dispatchEvent(new Event('change'));
     expect(stack()[0].binding).toBe(1);
 
-    const [start] = block().querySelectorAll('input[type="range"]');
+    /* Les bornes se saisissent en pourcentage. */
+    const [start] = block().querySelectorAll('input[type="number"]');
     start.focus();
-    start.value = '0.2';
+    start.value = '20';
     start.dispatchEvent(new Event('input'));
     expect(stack()[0].range[0]).toBeCloseTo(0.2);
-    /* Un curseur réglé en plein glissement garde le focus : le bloc ne s'est
-       pas reconstruit sous la souris. */
+    /* Un champ réglé en pleine saisie garde le focus : le bloc ne s'est pas
+       reconstruit sous le curseur. */
     expect(document.activeElement).toBe(start);
 
     const remove = panel.querySelector(`[data-focus-key="delete-interpolation${id}"]`);
@@ -853,17 +882,21 @@ describe('accessibilité au clavier', () => {
     });
     const shapeList = document.createElement('div');
     const { shapeDetail } = mountPropertyPanel({ store });
-    mountShapeList({ store, container: shapeList, status: { show: () => {} }, detail: shapeDetail });
+    mountShapeList({ store, container: shapeList, status: { show: () => {} } });
 
     expect(store.get().layers[0].elements).toHaveLength(0);
+    expect(shapeDetail.hidden).toBe(true);
 
     /* Le glissement sur le plan de travail n'a pas d'équivalent clavier : ce
        bouton est le seul chemin vers la création d'une forme sans souris. */
     shapeList.querySelector('[data-focus-key="add-shape"]').click();
     expect(store.get().layers[0].elements).toHaveLength(1);
 
-    /* La forme ajoutée est sélectionnée : sa card s'ouvre sur ses réglages. */
-    const [x, y] = shapeList.querySelectorAll('input[type="number"]');
+    /* La forme ajoutée est sélectionnée : le panneau passe à ses réglages. */
+    expect(shapeDetail.hidden).toBe(false);
+    const byLabel = (text) =>
+      shapeDetail.querySelector(`#${[...shapeDetail.querySelectorAll('label')].find((l) => l.textContent === text).htmlFor}`);
+    const [x, y] = [byLabel('X'), byLabel('Y')];
     x.value = '210';
     x.dispatchEvent(new Event('change'));
     y.value = '340';
@@ -872,38 +905,36 @@ describe('accessibilité au clavier', () => {
     expect(store.get().layers[0].elements[0]).toMatchObject({ x: 210, y: 340 });
   });
 
-  it('les réglages suivent la card sélectionnée, sans reconstruire la liste', async () => {
+  it('le panneau suit le calque choisi dans l’arbre, sans reconstruire ses champs', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
-    const { createLayer, setActiveLayer } = await import('../src/scene.js');
+    const { createLayer, renameLayer } = await import('../src/scene.js');
     const [bottom, top] = [createLayer(), createLayer()];
     const store = createStore({ layers: [bottom, top], activeLayerId: bottom.id, activeElementId: null });
+    store.apply(renameLayer, top.id, 'Haut');
     const panel = document.createElement('div');
-    document.body.append(panel);
-    const { layerDetail } = mountPropertyPanel({ store });
-    mountLayerPanel({ store, container: panel, status: { show: () => {} }, detail: layerDetail });
-
-    const cardOf = (layer) =>
-      panel.querySelector(`[data-focus-key="name-${layer.id}"]`).closest('li');
-    expect(cardOf(bottom).contains(layerDetail)).toBe(true);
-    expect(cardOf(top).querySelector('fieldset')).toBeNull();
+    const inspector = document.createElement('div');
+    document.body.append(panel, inspector);
+    const { layerDetail } = mountPropertyPanel({ store, container: inspector });
+    mountLayerPanel({ store, container: panel, status: { show: () => {} } });
 
     /* Un champ réglé en pleine saisie reste en place, focus compris. */
-    const thickness = layerDetail.querySelector('input[type="number"]');
+    const thickness = layerDetail.querySelector('.slider-field input[type="number"]');
     thickness.focus();
     thickness.value = '4';
-    thickness.dispatchEvent(new Event('input'));
+    thickness.dispatchEvent(new Event('change'));
     expect(store.get().layers[0].strokeWidth).toBe(4);
     expect(document.activeElement).toBe(thickness);
-    expect(cardOf(bottom).contains(thickness)).toBe(true);
 
-    store.apply(setActiveLayer, top.id);
-    expect(cardOf(top).contains(layerDetail)).toBe(true);
-    expect(cardOf(bottom).querySelector('fieldset')).toBeNull();
+    panel.querySelector(`[data-focus-key="name-${top.id}"]`).click();
+    expect(store.get().activeLayerId).toBe(top.id);
+    expect(layerDetail.querySelector('.inspector-title').textContent).toBe('Haut');
+    expect(layerDetail.contains(thickness)).toBe(true);
     panel.remove();
+    inspector.remove();
   });
-  it('un clic sur l’entête de la card sélectionnée la replie, sans la désélectionner', async () => {
-    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+
+  it('choisir un calque relâche la forme ; son chevron replie ses formes sans le désélectionner', async () => {
     const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
     const { mountShapeList } = await import('../src/ui/shape-list.js');
     const { addElement, createLayer } = await import('../src/scene.js');
@@ -912,26 +943,25 @@ describe('accessibilité au clavier', () => {
     store.apply(addElement, layer.id, 'rect', 10, 10);
     const panel = document.createElement('div');
     const shapeList = document.createElement('div');
-    const { layerDetail, shapeDetail } = mountPropertyPanel({ store });
-    mountLayerPanel({ store, container: panel, status: { show: () => {} }, detail: layerDetail });
-    mountShapeList({ store, container: shapeList, status: { show: () => {} }, detail: shapeDetail });
+    mountShapeList({ store, container: shapeList, status: { show: () => {} } });
+    mountLayerPanel({ store, container: panel, status: { show: () => {} }, children: shapeList });
 
-    for (const [container, detail, id, activeKey] of [
-      [panel, layerDetail, layer.id, 'activeLayerId'],
-      [shapeList, shapeDetail, store.get().activeElementId, 'activeElementId'],
-    ]) {
-      const header = () => container.querySelector(`[data-focus-key="name-${id}"]`);
-      expect(header().closest('li').contains(detail)).toBe(true);
-      expect(header().getAttribute('aria-expanded')).toBe('true');
+    const card = () => panel.querySelector(`[data-layer-id="${layer.id}"]`);
+    const chevron = () => panel.querySelector(`[data-focus-key="chevron-${layer.id}"]`);
+    expect(card().contains(shapeList)).toBe(true);
+    expect(card().dataset.selected).toBe('parent');
 
-      header().click();
-      expect(store.get()[activeKey]).toBe(id);
-      expect(header().closest('li').contains(detail)).toBe(false);
-      expect(header().getAttribute('aria-expanded')).toBe('false');
+    panel.querySelector(`[data-focus-key="name-${layer.id}"]`).click();
+    expect(store.get().activeElementId).toBeNull();
+    expect(card().dataset.selected).toBe('layer');
 
-      header().click();
-      expect(header().closest('li').contains(detail)).toBe(true);
-    }
+    chevron().click();
+    expect(store.get().activeLayerId).toBe(layer.id);
+    expect(card().contains(shapeList)).toBe(false);
+    expect(chevron().getAttribute('aria-expanded')).toBe('false');
+
+    chevron().click();
+    expect(card().contains(shapeList)).toBe(true);
   });
 });
 
@@ -1082,7 +1112,7 @@ describe('tracé', () => {
     const { store, container, messages } = mountTrace();
     const before = store.get();
     globalThis.prompt = () => '<path d="M0 0 H10 V10 Z M20 20 l5 5" />';
-    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Coller un tracé').click();
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Coller un tracé…').click();
     const elements = store.get().layers[0].elements;
     expect(elements.map((e) => [e.closed, absolute(e)])).toEqual([
       [true, [[0, 0], [10, 0], [10, 10]]],
@@ -1096,7 +1126,7 @@ describe('tracé', () => {
   it('refuse une courbe et le dit', () => {
     const { store, container, messages } = mountTrace();
     globalThis.prompt = () => 'M0 0 C 10 10 20 20 30 30';
-    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Coller un tracé').click();
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Coller un tracé…').click();
     expect(store.get().layers[0].elements).toHaveLength(0);
     expect(messages.at(-1)).toEqual([expect.stringContaining('« C »'), 'error']);
   });
@@ -1195,25 +1225,38 @@ describe('style de trait', () => {
 });
 
 describe('panneau : motif de trait', () => {
-  it('le préréglage Points pose tirets et bout rond, la saisie libre s’affiche Libre', async () => {
+  it('le segment Points pose tirets et bout rond, la saisie libre garde son motif', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const element = createElement('circle', 0, 0);
     const layer = createLayer({ elements: [element, createElement('circle', 50, 0)] });
     const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: element.id });
-    const { shapeDetail, layerDetail } = mountPropertyPanel({ store });
-    expect(layerDetail.querySelector('input[type="text"]')).toBeNull();
-    const text = shapeDetail.querySelector('input[type="text"]');
-    const [preset, , cap] = text.closest('.field-row').querySelectorAll('select, input');
-    preset.value = 'dotted';
-    preset.dispatchEvent(new Event('change'));
+    const { shapeDetail } = mountPropertyPanel({ store });
+    const [trait, bout] = shapeDetail.querySelectorAll('fieldset.segmented');
+    const radio = (group, value) => group.querySelector(`input[value="${value}"]`);
+    expect(radio(trait, 'solid').checked).toBe(true);
+
+    radio(trait, 'dotted').checked = true;
+    radio(trait, 'dotted').dispatchEvent(new Event('change'));
     const shapes = () => store.get().layers[0].elements;
     expect(shapes()[0]).toMatchObject({ dash: [0, 2], linecap: 'round' });
     expect(shapes()[1]).toMatchObject({ dash: [], linecap: 'butt' });
-    expect(cap.value).toBe('round');
+    expect(radio(bout, 'round').checked).toBe(true);
 
+    /* Tirets : le curseur de longueur apparaît et ne touche que le premier tiret. */
+    const length = shapeDetail.querySelector('.slider-field');
+    expect(length.hidden).toBe(true);
+    radio(trait, 'dashed').checked = true;
+    radio(trait, 'dashed').dispatchEvent(new Event('change'));
+    expect(length.hidden).toBe(false);
+    const range = length.querySelector('input[type="range"]');
+    range.value = '6';
+    range.dispatchEvent(new Event('input'));
+    expect(shapes()[0].dash).toEqual([6, 2]);
+
+    const text = shapeDetail.querySelector('input[type="text"]');
     text.value = '3 1 1 1';
     text.dispatchEvent(new Event('change'));
     expect(shapes()[0].dash).toEqual([3, 1, 1, 1]);
-    expect(preset.value).toBe('custom');
+    expect(radio(trait, 'dashed').checked).toBe(true);
   });
 });

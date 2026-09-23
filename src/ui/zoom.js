@@ -38,6 +38,7 @@ export const mountZoom = ({ svgRoot, scroller, container }) => {
 
     zoom = next === null ? null : clampZoom(next);
     svgRoot.style.maxWidth = zoom === null ? '' : 'none';
+    svgRoot.style.maxHeight = zoom === null ? '' : 'none';
     svgRoot.style.width = zoom === null ? '' : `${STAGE.width * zoom}px`;
 
     const after = svgRoot.getBoundingClientRect();
@@ -49,6 +50,7 @@ export const mountZoom = ({ svgRoot, scroller, container }) => {
   const button = (text, title, onClick) => {
     const node = document.createElement('button');
     node.type = 'button';
+    node.className = text.length === 1 ? 'pill-btn is-square' : 'pill-btn';
     node.textContent = text;
     node.title = title;
     node.setAttribute('aria-label', title);

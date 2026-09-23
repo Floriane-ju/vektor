@@ -1,31 +1,34 @@
 import { iconButton, rebuildWithFocus, whenChanged } from './list.js';
+import { icon } from './icons.js';
 import {
   addLayer,
   moveLayer,
   removeLayer,
   renameLayer,
+  setActiveElement,
   setActiveLayer,
   toggleVisibility,
 } from '../scene.js';
 
 /**
- * `detail` : les réglages du calque actif, logés dans sa card. Ils sont
- * construits ailleurs, une seule fois ; la liste ne fait que les déplacer.
+ * Arbre des calques. `children` : la liste des formes du calque actif, logée
+ * sous sa ligne quand il est déplié. Elle est construite ailleurs, une seule
+ * fois ; l'arbre ne fait que la déplacer.
  */
-export const mountLayerPanel = ({ store, container, status, detail = null }) => {
+export const mountLayerPanel = ({ store, container, status, children = null }) => {
   /* Hors de la scène : c'est un état d'interface, pas une donnée du projet —
      il ne doit ni partir à l'export ni survivre à un rechargement. */
   let pendingDeleteId = null;
-  /* Calque dont la card est repliée. Ne vaut que tant qu'il reste actif :
-     en sélectionner un autre puis y revenir la rouvre. */
+  /* Calque replié. Ne vaut que tant qu'il reste actif : en sélectionner un
+     autre puis y revenir le rouvre. */
   let collapsedId = null;
 
-  /* Le nom, la visibilité, l'ordre et la sélection : tout ce que montrent les
-     cards. Les réglages du calque n'y figurent pas, ils se mettent à jour sur
-     place. */
+  /* Le nom, la visibilité, l'ordre et la sélection : tout ce que montre
+     l'arbre. Une forme sélectionnée change l'aspect de la ligne du calque. */
   const signature = (scene) =>
     JSON.stringify([
       scene.activeLayerId,
+      scene.activeElementId !== null,
       pendingDeleteId,
       collapsedId,
       scene.layers.map((layer) => [layer.id, layer.name, layer.visible]),
@@ -44,6 +47,7 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
 
       const add = document.createElement('button');
       add.type = 'button';
+      add.className = 'add-layer';
       add.textContent = '+ Ajouter un calque';
       add.dataset.focusKey = 'add-layer';
       add.addEventListener('click', () => store.apply(addLayer));
@@ -64,7 +68,7 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
     if (collapsedId !== scene.activeLayerId) collapsedId = null;
     rebuild(scene);
     /* La couleur change en continu pendant qu'on la règle : on la pose sur
-       place plutôt que de reconstruire les cards. */
+       place plutôt que de reconstruire l'arbre. */
     for (const layer of scene.layers) {
       container
         .querySelector(`[data-layer-id="${layer.id}"]`)
@@ -72,34 +76,59 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
     }
   };
 
+  /* Choisir un calque le montre seul dans les réglages : sa forme sélectionnée,
+     s'il en avait une, est relâchée. */
+  const selectLayer = (id) =>
+    store.apply((scene) => setActiveElement(setActiveLayer(scene, id), null));
+
   const layerRow = (scene, layer) => {
     const index = scene.layers.indexOf(layer);
     const isActive = layer.id === scene.activeLayerId;
     const isPending = layer.id === pendingDeleteId;
+    const isOpen = isActive && collapsedId !== layer.id;
 
     const card = document.createElement('li');
     card.className = 'layer-card';
+    /* `layer` : le calque seul est sélectionné ; `parent` : une de ses formes. */
     card.dataset.active = String(isActive);
+    if (isActive) card.dataset.selected = scene.activeElementId === null ? 'layer' : 'parent';
     card.dataset.layerId = layer.id;
+    card.dataset.visible = String(layer.visible);
     const row = document.createElement('div');
     row.className = 'layer-row';
     card.append(row);
-    const isOpen = isActive && collapsedId !== layer.id;
-    if (isOpen && detail) card.append(detail);
+    if (isOpen && children) card.append(children);
+
+    /* Sur le calque actif, le chevron replie ou rouvre ses formes ; sur un
+       autre, il le sélectionne et le déplie. */
+    const chevron = document.createElement('button');
+    chevron.type = 'button';
+    chevron.className = 'chevron';
+    chevron.dataset.focusKey = `chevron-${layer.id}`;
+    chevron.setAttribute('aria-label', `${isOpen ? 'Replier' : 'Déplier'} ${layer.name}`);
+    chevron.setAttribute('aria-expanded', String(isOpen));
+    chevron.append(icon(isOpen ? 'chevronDown' : 'chevronRight', 12));
+    chevron.addEventListener('click', () => {
+      if (!isActive) {
+        store.apply(setActiveLayer, layer.id);
+        return;
+      }
+      collapsedId = isOpen ? layer.id : null;
+      render(store.get());
+    });
+
+    const swatch = document.createElement('span');
+    swatch.className = 'layer-swatch';
+    swatch.setAttribute('aria-hidden', 'true');
 
     const name = document.createElement('button');
     name.type = 'button';
     name.className = 'layer-name';
     name.textContent = layer.name;
+    name.title = 'Double-clic pour renommer';
     name.dataset.focusKey = `name-${layer.id}`;
     name.setAttribute('aria-pressed', String(isActive));
-    name.setAttribute('aria-expanded', String(isOpen));
-    /* Sur la card active, l'entête replie ou rouvre les réglages. */
-    name.addEventListener('click', () => {
-      collapsedId = isOpen ? layer.id : null;
-      if (isActive) render(store.get());
-      else store.apply(setActiveLayer, layer.id);
-    });
+    name.addEventListener('click', () => selectLayer(layer.id));
     name.addEventListener('dblclick', () => {
       const next = prompt('Nom du calque', layer.name);
       if (next?.trim()) store.apply(renameLayer, layer.id, next.trim());
@@ -112,7 +141,10 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
       }
     });
 
-    row.append(
+    /* Visibles au survol, au focus et sur la ligne active (voir `style.css`). */
+    const actions = document.createElement('span');
+    actions.className = 'row-actions';
+    actions.append(
       iconButton({
         label: layer.visible ? `Masquer ${layer.name}` : `Afficher ${layer.name}`,
         text: layer.visible ? '◉' : '○',
@@ -120,7 +152,6 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
         pressed: layer.visible,
         onClick: () => store.apply(toggleVisibility, layer.id),
       }),
-      name,
       iconButton({
         label: `Monter ${layer.name}`,
         text: '↑',
@@ -151,7 +182,9 @@ export const mountLayerPanel = ({ store, container, status, detail = null }) => 
             onClick: () => askDelete(layer),
           }),
     );
+    if (isPending) actions.dataset.pending = '';
 
+    row.append(chevron, swatch, name, actions);
     return card;
   };
 

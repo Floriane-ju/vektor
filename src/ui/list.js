@@ -81,3 +81,7 @@ export const whenChanged = (signature, render) => {
     render(scene);
   };
 };
+
+/** Nom affiché d'une forme : son type et son rang dans le calque, compté depuis le fond. */
+export const shapeName = (layer, element, labels) =>
+  `${labels[element.type].label} ${layer.elements.indexOf(element) + 1}`;

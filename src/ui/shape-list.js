@@ -8,19 +8,19 @@ import {
   SHAPES,
 } from '../scene.js';
 import { clearHover, showHover } from '../renderer-svg.js';
-import { iconButton, rebuildWithFocus, whenChanged } from './list.js';
+import { iconButton, rebuildWithFocus, shapeName, whenChanged } from './list.js';
+import { icon } from './icons.js';
 
 /* Délai avant de rendre l'accent à la sélection quand le pointeur quitte une
    card, en millisecondes : assez pour traverser l'interstice entre deux. */
 const HOVER_LEAVE_DELAY = 120;
 
 /**
- * Liste des formes du calque actif.
+ * Liste des formes du calque actif, logée par l'arbre sous sa ligne.
  *
- * Un calque porte maintenant plusieurs formes et le modificateur s'applique au
- * groupe : il faut donc pouvoir désigner celle qu'on édite, la réordonner dans
- * le calque et la supprimer. La card de la forme sélectionnée loge `detail`,
- * ses réglages.
+ * Un calque porte plusieurs formes et le modificateur s'applique au groupe : il
+ * faut donc pouvoir désigner celle qu'on édite, la réordonner dans le calque et
+ * la supprimer. Ses réglages vivent dans le panneau de droite.
  */
 export const mountShapeList = ({
   store,
@@ -28,14 +28,11 @@ export const mountShapeList = ({
   svgRoot,
   getTool = () => DEFAULT_SHAPE,
   status,
-  detail = null,
 }) => {
   /* Forme dont la ligne est survolée. Gardée ici parce que chaque rendu du
      stage efface le surlignage : un clic sur la ligne le ferait disparaître
      sous le pointeur. Ce module s'abonne après le renderer, il le repose. */
   let hoveredId = null;
-  /* Forme dont la card est repliée, tant qu'elle reste sélectionnée. */
-  let collapsedId = null;
 
   /* Sortie d'une card différée : entre deux cards, le pointeur passe par
      l'interstice et la sélection reprendrait l'accent un instant. */
@@ -57,7 +54,6 @@ export const mountShapeList = ({
     return JSON.stringify([
       layer?.id ?? null,
       scene.activeElementId,
-      collapsedId,
       layer?.elements.map((element) => [element.id, element.type]) ?? [],
     ]);
   };
@@ -80,11 +76,9 @@ export const mountShapeList = ({
         status.show(`${SHAPES[getTool()].label} ajouté au centre du calque.`);
       });
 
+      add.className = 'add-shape';
       if (!layer || layer.elements.length === 0) {
-        const note = document.createElement('p');
-        note.className = 'empty-note';
-        note.textContent = layer ? 'Aucune forme sur ce calque.' : 'Aucun calque actif.';
-        container.append(note, add);
+        container.append(add);
         return add;
       }
 
@@ -103,7 +97,6 @@ export const mountShapeList = ({
 
   const render = (scene) => {
     if (hoveredId) highlight(hoveredId);
-    if (collapsedId !== scene.activeElementId) collapsedId = null;
     rebuild(scene);
   };
 
@@ -118,27 +111,19 @@ export const mountShapeList = ({
     card.addEventListener('pointerleave', () => {
       leaveTimer = setTimeout(() => highlight(null), HOVER_LEAVE_DELAY);
     });
-    /* Même ligne que le panneau calques, sans la bascule de visibilité : une
+    /* Même ligne que l'arbre des calques, sans la bascule de visibilité : une
        forme se masque en la supprimant ou en masquant son calque. */
     const row = document.createElement('div');
     row.className = 'layer-row is-shape';
     card.append(row);
-    const isOpen = isActive && collapsedId !== element.id;
-    if (isOpen && detail) card.append(detail);
 
     const name = document.createElement('button');
     name.type = 'button';
     name.className = 'layer-name';
-    name.textContent = `${SHAPES[element.type].label} ${index + 1}`;
+    name.textContent = shapeName(layer, element, SHAPES);
     name.dataset.focusKey = `name-${element.id}`;
     name.setAttribute('aria-pressed', String(isActive));
-    name.setAttribute('aria-expanded', String(isOpen));
-    /* Sur la card active, l'entête replie ou rouvre les réglages. */
-    name.addEventListener('click', () => {
-      collapsedId = isOpen ? element.id : null;
-      if (isActive) render(store.get());
-      else store.apply(setActiveElement, element.id);
-    });
+    name.addEventListener('click', () => store.apply(setActiveElement, element.id));
     name.addEventListener('keydown', (event) => {
       if (event.key === 'Delete') {
         event.preventDefault();
@@ -146,8 +131,10 @@ export const mountShapeList = ({
       }
     });
 
-    row.append(
-      name,
+    const actions = document.createElement('span');
+    actions.className = 'row-actions';
+    row.append(icon(element.type, 18), name, actions);
+    actions.append(
       iconButton({
         label: `Monter ${name.textContent}`,
         text: '↑',

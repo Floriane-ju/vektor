@@ -14,6 +14,8 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   document.body.innerHTML = `
     <div id="toolbar-shapes"></div>
     <div id="toolbar-actions"></div>
+    <div id="view-controls"></div>
+    <div id="inspector"></div>
     <svg id="stage" viewBox="0 0 900 900"></svg>
     <p class="stage-hint" id="stage-hint">Glisser depuis le centre pour dessiner</p>
     <div id="layer-panel"></div>
@@ -28,10 +30,10 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   expect(hint.hidden).toBe(false);
   expect(stage.childNodes).toHaveLength(0);
   expect(document.querySelectorAll('#layer-panel .layer-row')).toHaveLength(1);
-  /* La card du calque actif s'ouvre sur Calque, Modificateurs, Interpolations ;
-     sans forme sélectionnée, aucune card de forme n'est ouverte. */
-  expect(document.querySelectorAll('#layer-panel fieldset')).toHaveLength(3);
-  expect(document.querySelectorAll('#shape-list fieldset')).toHaveLength(0);
+  /* Sans forme sélectionnée, le panneau de droite ne montre que le calque. */
+  const inspector = document.getElementById('inspector');
+  const shown = () => [...inspector.children].filter((node) => !node.hidden).map((node) => node.dataset.kind);
+  expect(shown()).toEqual(['layer']);
   expect(document.querySelectorAll('#toolbar-shapes input[type="radio"]')).toHaveLength(
     Object.keys(SHAPES).length + 1,
   );
@@ -62,15 +64,23 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
 
   expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(2);
   expect(document.querySelectorAll('#shape-list .layer-row')).toHaveLength(2);
+  /* La forme dessinée est sélectionnée : le panneau passe à ses réglages, et
+     l'arbre loge la liste des formes sous le calque. */
+  expect(shown()).toEqual(['shape']);
+  expect(document.querySelector('#layer-panel #shape-list')).not.toBeNull();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(shown()).toEqual(['layer']);
+  /* La liste se lit du premier plan vers le fond : la première ligne est la
+     dernière forme dessinée. */
+  document.querySelector('#shape-list .layer-name').click();
+  expect(shown()).toEqual(['shape']);
 
   /* Deux modificateurs empilés sur le calque : leurs copies se multiplient. */
-  const addModifier = [...document.querySelectorAll('#layer-panel button')].find(
-    (node) => node.textContent.includes('Ajouter un modificateur'),
-  );
+  const addModifier = document.querySelector('[data-focus-key="add-modifier"]');
   addModifier.click();
   addModifier.click();
 
-  const blocks = document.querySelectorAll('#layer-panel .modifier-block');
+  const blocks = inspector.querySelectorAll('.modifier-block');
   expect(blocks).toHaveLength(2);
   /* Deux « Pas » de 6 copies sur un calque de deux formes. */
   expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(6 * 6 * 2);
@@ -81,7 +91,7 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(6 * 2 * 2);
 
   blocks[0].querySelector('.icon-btn.is-danger').click();
-  expect(document.querySelectorAll('#layer-panel .modifier-block')).toHaveLength(1);
+  expect(inspector.querySelectorAll('.modifier-block')).toHaveLength(1);
   expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(2 * 2);
 
   /* Une interpolation ajoutée depuis la card du calque éteint ses copies. */
@@ -90,7 +100,7 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   expect(opacities()).toEqual(['1', '1', '1', '1']);
 
   document.querySelector('[data-focus-key="add-interpolation"]').click();
-  expect(document.querySelectorAll('#layer-panel .interpolation-block')).toHaveLength(1);
+  expect(inspector.querySelectorAll('.interpolation-block')).toHaveLength(1);
   expect(opacities()).toEqual(['1', '1', '0', '0']);
 
   /* Cmd+Z défait l'interpolation, Cmd+Maj+Z la rétablit. */

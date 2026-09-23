@@ -1,3 +1,4 @@
+import { icon } from './icons.js';
 import { POLAR_GRID, snapToGrid, snapToPolarGrid, STAGE } from '../scene.js';
 
 /* Préférence d'écran, pas du dessin : hors de la scène, donc hors de
@@ -91,14 +92,14 @@ const numberInput = (id, name) => {
 };
 
 /**
- * Bouton Paramètres et son panneau.
+ * Bascule de la grille, bouton Paramètres et son panneau.
  *
  * ponytail: `popover` natif — non modal pour voir la grille changer en direct,
  * Échap et clic extérieur le ferment d'eux-mêmes.
  */
 export const mountSettings = ({ svgRoot, container }) => {
   let settings = load();
-  const color = getComputedStyle(document.documentElement).getPropertyValue('--line').trim() || '#2b2f37';
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--grid').trim() || '#303030';
 
   const panel = document.createElement('div');
   panel.id = 'settings-panel';
@@ -150,20 +151,29 @@ export const mountSettings = ({ svgRoot, container }) => {
 
   panel.append(
     title,
-    field('Grille (aimante les points)', gridToggle),
     field('Type', gridType),
     field('Divisions', divisions),
     circlesField,
   );
 
+  /* La case reste une vraie case : la pastille n'en est que l'habillage, pressée
+     quand la grille est affichée. */
+  const toggle = document.createElement('label');
+  toggle.className = 'pill-btn pill-toggle';
+  toggle.title = 'Grille (aimante les points)';
+  toggle.append(gridToggle, icon('grid', 16), 'Grille');
+
   const open = document.createElement('button');
   open.type = 'button';
+  open.className = 'pill-btn is-square';
   open.textContent = '⚙';
   open.title = 'Paramètres';
   open.setAttribute('aria-label', 'Paramètres');
   open.setAttribute('popovertarget', panel.id);
 
-  container.append(open, panel);
+  const separator = document.createElement('span');
+  separator.className = 'pill-sep';
+  container.append(separator, toggle, open, panel);
   apply();
 
   const snap = (point) => {

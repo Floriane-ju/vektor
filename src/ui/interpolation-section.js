@@ -8,11 +8,17 @@ import {
   updateInterpolation,
   updateInterpolationRange,
 } from '../scene.js';
-import { MODIFIER_LABELS } from '../modifiers.js';
+import { effectiveCount, MODIFIER_LABELS } from '../modifiers.js';
+import { lerp, t } from '../interpolate.js';
+
+/* Au-delà, l'aperçu de la rampe ne montre qu'un échantillon régulier. */
+const PREVIEW_DOTS = 12;
+/* Les bornes se saisissent en pourcentage : 1 = 100 %. */
+const PERCENT = 100;
 import { iconButton, rebuildWithFocus } from './list.js';
 
 /**
- * Section « Interpolations » de la card du calque : une card par interpolation,
+ * Section « Faire varier les itérations » du calque : un bloc par interpolation,
  * ajoutée, réglée et supprimée comme un modificateur.
  *
  * Elle vit à côté de la pile de modificateurs parce qu'elle appartient au même
@@ -65,24 +71,22 @@ export const interpolationSection = ({ store }) => {
   };
 
   /**
-   * Une borne de la plage. Le curseur prend les bornes de la propriété : passer
-   * une interpolation d'opacité à l'échelle rouvre la card, donc le `min` et le
-   * `max` suivent sans réglage à la main.
+   * Une borne de la plage, en pourcentage. Le champ prend les bornes de la
+   * propriété : passer une interpolation d'opacité à l'échelle reconstruit le
+   * bloc, donc le `min` et le `max` suivent sans réglage à la main.
    */
   const boundControl = (interpolation, index, labelText) => {
     const { min, max, step } = RANGE_BOUNDS[interpolation.property];
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.id = `interp-${++uid}`;
-    slider.min = String(min);
-    slider.max = String(max);
-    slider.step = String(step);
-    slider.addEventListener('input', () =>
-      apply(updateInterpolationRange, interpolation.id, index, Number(slider.value)),
-    );
-
-    const readout = document.createElement('span');
-    readout.className = 'range-value';
+    const number = document.createElement('input');
+    number.type = 'number';
+    number.id = `interp-${++uid}`;
+    number.min = String(min * PERCENT);
+    number.max = String(max * PERCENT);
+    number.step = String(step * PERCENT);
+    number.addEventListener('input', () => {
+      if (number.value === '') return;
+      apply(updateInterpolationRange, interpolation.id, index, Number(number.value) / PERCENT);
+    });
 
     bounds.push({
       sync: (layer) => {
@@ -90,15 +94,53 @@ export const interpolationSection = ({ store }) => {
           (candidate) => candidate.id === interpolation.id,
         );
         if (!current) return;
-        const value = current.range[index];
-        if (document.activeElement !== slider) slider.value = String(value);
-        readout.textContent = value.toFixed(2);
+        const value = Math.round(current.range[index] * PERCENT);
+        if (document.activeElement !== number) number.value = String(value);
       },
     });
 
-    const wrap = field(labelText, slider);
-    wrap.querySelector('label').append(' ', readout);
+    const unit = document.createElement('div');
+    unit.className = 'unit-input';
+    const suffix = document.createElement('span');
+    suffix.setAttribute('aria-hidden', 'true');
+    suffix.textContent = '%';
+    /* `field` pose le libellé et le champ ; le champ passe ensuite dans son
+       habillage à suffixe. */
+    const wrap = field(labelText, number);
+    unit.append(number, suffix);
+    wrap.append(unit);
     return wrap;
+  };
+
+  /**
+   * Aperçu de la rampe : une pastille par copie suivie, estompée ou réduite
+   * comme le fera le dessin. Il ne montre que cette interpolation, pas le
+   * produit de toute la pile.
+   */
+  const preview = (interpolation) => {
+    const root = document.createElement('div');
+    root.className = 'ramp-preview';
+    root.setAttribute('aria-hidden', 'true');
+    bounds.push({
+      sync: (layer) => {
+        const current = layer.interpolations.find((candidate) => candidate.id === interpolation.id);
+        if (!current) return;
+        const stage = current.binding == null ? null : layer.modifiers[current.binding];
+        const n = stage
+          ? effectiveCount(stage)
+          : layer.modifiers.reduce((total, modifier) => total * effectiveCount(modifier), 1);
+        const shown = Math.min(n, PREVIEW_DOTS);
+        const dots = Array.from({ length: shown }, (_, i) => {
+          const value = lerp(current.range[0], current.range[1], t(Math.round((i * (n - 1)) / Math.max(1, shown - 1)), n));
+          const dot = document.createElement('span');
+          if (current.property === 'opacity') dot.style.opacity = String(value);
+          else dot.style.transform = `scale(${Math.min(value, 1.6)})`;
+          return dot;
+        });
+        root.replaceChildren(...dots);
+      },
+    });
+    return root;
   };
 
   /**
@@ -155,31 +197,37 @@ export const interpolationSection = ({ store }) => {
     range.append(boundControl(interpolation, 0, 'Début'), boundControl(interpolation, 1, 'Fin'));
 
     const binding = bindingField(interpolation, modifiers);
-    root.append(head, ...(binding ? [binding] : []), range);
+    root.append(head, ...(binding ? [binding] : []), range, preview(interpolation));
     return root;
   };
 
-  const set = document.createElement('fieldset');
-  const legend = document.createElement('legend');
-  legend.textContent = 'Interpolations';
+  const set = document.createElement('section');
+  set.className = 'group';
+  const head = document.createElement('div');
+  head.className = 'section-head';
+  const title = document.createElement('h3');
+  title.textContent = 'Faire varier les itérations';
   const host = document.createElement('div');
+  host.className = 'stack';
 
   const addButton = document.createElement('button');
   addButton.type = 'button';
-  addButton.textContent = '+ Ajouter une interpolation';
+  addButton.className = 'text-btn';
+  addButton.textContent = '+ Ajouter';
+  addButton.title = 'Ajouter une interpolation';
+  addButton.setAttribute('aria-label', 'Ajouter une interpolation');
   addButton.dataset.focusKey = 'add-interpolation';
   addButton.addEventListener('click', () => apply(addInterpolation));
+  head.append(title, addButton);
 
   const clearButton = document.createElement('button');
   clearButton.type = 'button';
+  clearButton.className = 'text-btn is-dim';
   clearButton.textContent = 'Tout retirer';
   clearButton.dataset.focusKey = 'clear-interpolations';
   clearButton.addEventListener('click', () => apply(clearInterpolations));
 
-  const actions = document.createElement('div');
-  actions.className = 'interpolation-actions';
-  actions.append(addButton, clearButton);
-  set.append(legend, host, actions);
+  set.append(head, host, clearButton);
 
   /* Tout ce que les blocs affichent, sauf les valeurs des curseurs : les types
      des modificateurs en font partie, ils nomment les options de la rampe. */
@@ -197,8 +245,6 @@ export const interpolationSection = ({ store }) => {
   let last = null;
 
   const sync = (layer) => {
-    set.disabled = !layer;
-    set.setAttribute('aria-disabled', String(!layer));
     if (!layer) return;
 
     const next = signature(layer);
@@ -213,7 +259,7 @@ export const interpolationSection = ({ store }) => {
       });
     }
 
-    clearButton.disabled = layer.interpolations.length === 0;
+    clearButton.hidden = layer.interpolations.length === 0;
     for (const control of bounds) control.sync(layer);
   };
 

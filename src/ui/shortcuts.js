@@ -70,18 +70,22 @@ const mountHelp = (container) => {
   const form = document.createElement('form');
   form.method = 'dialog';
   const close = document.createElement('button');
+  close.className = 'pill-btn is-primary';
   close.textContent = 'Fermer';
   form.append(close);
   dialog.append(title, list, form);
 
   const open = document.createElement('button');
   open.type = 'button';
+  open.className = 'pill-btn is-square';
   open.textContent = '?';
   open.title = 'Raccourcis clavier (?)';
   open.setAttribute('aria-label', 'Raccourcis clavier');
   open.addEventListener('click', () => dialog.showModal?.());
 
-  container.append(open, dialog);
+  const separator = document.createElement('span');
+  separator.className = 'pill-sep';
+  container.append(separator, open, dialog);
   return () => dialog.showModal?.();
 };
 

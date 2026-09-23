@@ -1,15 +1,28 @@
-/* Thème sombre monochrome, accent unique. Contrastes visés : AA (4.5:1) sur tout
-   le texte, mesurés contre --bg-panel. */
+/* Thème « E sombre » : plan de travail plein écran, panneaux flottants arrondis,
+   un accent chaud pour le calque, un bleu pour la forme. Contrastes visés : AA
+   (4.5:1) sur tout le texte, mesurés contre --bg-panel. */
 :root {
-  --bg: #0c0d10;
-  --bg-panel: #131519;
-  --bg-field: #1c1f25;
-  --line: #2b2f37;
-  --text: #e6e8ec;      /* 14.2:1 sur --bg-panel */
-  --text-dim: #a2a8b4;  /* 6.4:1  sur --bg-panel */
-  --accent: #7dd3c0;    /* 9.1:1  sur --bg-panel */
-  --danger: #ff8f7a;    /* 7.3:1  sur --bg-panel */
-  --radius: 4px;
+  --bg: #121212;
+  --bg-panel: #282828;
+  --bg-field: #3a3a3a;
+  --stage: #1b1b1b;
+  --line: #484848;
+  --grid: #303030;
+  --text: #fcfaf3;      /* 13.4:1 sur --bg-panel */
+  --text-dim: #aaaaaa;  /* 6.0:1  sur --bg-panel */
+  --accent: #ee4722;    /* calque sélectionné, outil actif */
+  --select: #3ba2d6;    /* forme sélectionnée */
+  --ink: #1b1b1b;       /* texte posé sur un accent */
+  --danger: #f5917a;    /* 6.6:1  sur --bg-panel */
+  --radius: 8px;
+  --radius-panel: 16px;
+  --pill: 100px;
+  --font: 'General Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  /* Réserve autour du plan pour les panneaux flottants. */
+  --gutter-left: 336px;
+  --gutter-right: 360px;
+  --gutter-top: 104px;
+  --gutter-bottom: 88px;
   color-scheme: dark;
 }
 
@@ -18,54 +31,13 @@
 body {
   margin: 0;
   height: 100vh;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font: 13px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font: 400 14px/1.4 var(--font);
 }
 
-/* ---- Topbar ---- */
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-panel);
-}
-
-.topbar h1 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.topbar-actions { display: flex; gap: 8px; }
-
-.zoom-controls { display: flex; align-items: center; gap: 4px; }
-.zoom-level { min-width: 4.5ch; text-align: center; font-variant-numeric: tabular-nums; }
-
-/* Sélecteur de forme : des radios natifs, masqués visuellement mais toujours
-   focalisables — c'est le navigateur qui fournit la navigation aux flèches et
-   l'exclusivité du groupe. */
-.shape-picker {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.shape-picker legend {
+.visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -74,33 +46,86 @@ body {
   white-space: nowrap;
 }
 
-.shape-picker input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
+/* ---- Contrôles de base ---- */
+
+button,
+select,
+input {
+  font: 500 14px/1 var(--font);
+  color: var(--text);
+  background: var(--bg-field);
+  border: 0;
+  border-radius: var(--radius);
 }
 
-.shape-picker label {
-  padding: 5px 12px;
-  cursor: pointer;
+button { cursor: pointer; }
+
+select,
+input:is([type="number"], [type="text"]) {
+  height: 36px;
+  padding: 0 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+:is(button, select, input, label, [tabindex]):focus-visible {
+  outline: 2px solid var(--select);
+  outline-offset: 2px;
+}
+
+:disabled { opacity: 0.45; cursor: not-allowed; }
+
+input[type="range"] {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: none;
+  accent-color: var(--accent);
+}
+
+/* ---- Plan de travail ---- */
+
+.stage-wrap {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  overflow: auto;
+  padding: var(--gutter-top) var(--gutter-right) var(--gutter-bottom) var(--gutter-left);
+}
+
+.artboard {
+  /* Centré par marges auto : zoomé plus grand que la zone, les marges tombent
+     à 0 et tout le plan reste défilable. */
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.artboard-caption {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
   color: var(--text-dim);
-  border-left: 1px solid var(--line);
 }
+.artboard-caption strong { color: var(--text); font-weight: 500; }
 
-.shape-picker label:first-of-type { border-left: 0; }
-.shape-picker label:hover { color: var(--text); }
-
-.shape-picker input:checked + label {
-  color: var(--bg);
-  background: var(--accent);
+#stage {
+  display: block;
+  background: var(--stage);
+  box-shadow: 0 0 0 1px var(--line);
+  cursor: crosshair;
+  /* Ajusté : le plan tient dans la zone libre entre les panneaux. */
+  max-width: 100%;
+  max-height: calc(100vh - var(--gutter-top) - var(--gutter-bottom) - 30px);
+  width: auto;
+  height: auto;
+  aspect-ratio: 1;
+  /* Un glissement sur le stage dessine : il ne doit pas aussi faire défiler la
+     page ou sélectionner du texte. */
+  touch-action: none;
+  user-select: none;
 }
-
-.shape-picker input:focus-visible + label {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-/* ---- Outil curseur ---- */
 
 #stage[data-tool="cursor"] [data-element-id] { cursor: pointer; }
 
@@ -111,300 +136,486 @@ body {
 #stage[data-tool="cursor"][data-dragging],
 #stage[data-tool="cursor"][data-dragging] * { cursor: grabbing; }
 
-/* ---- Layout ---- */
-
-.workspace {
-  display: grid;
-  grid-template-columns: 280px 1fr 240px;
-  min-height: 0;
-}
-
-.panel {
-  overflow-y: auto;
-  padding: 14px;
-  background: var(--bg-panel);
-}
-
-.panel-left { border-right: 1px solid var(--line); }
-.panel-right { border-left: 1px solid var(--line); }
-
-.panel h2 {
-  margin: 0 0 12px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-
-
-.stage-wrap {
-  position: relative;
-  display: grid;
-  place-items: center;
-  overflow: auto;
-  padding: 24px;
-  background:
-    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 30px 30px,
-    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 30px 30px,
-    var(--bg);
-}
-
-#stage {
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  cursor: crosshair;
-  max-width: 100%;
-  /* Centré par marges auto plutôt que par `place-items` : zoomé plus grand que
-     le conteneur, les marges tombent à 0 et tout le stage reste défilable. */
-  place-self: start;
-  margin: auto;
-  height: auto;
-  /* Un glissement sur le stage dessine : il ne doit pas aussi faire défiler la
-     page ou sélectionner du texte. */
-  touch-action: none;
-  user-select: none;
-}
-
-.stage-hint {
-  position: absolute;
-  margin: 0;
-  padding: 6px 12px;
-  border: 1px dashed var(--line);
-  border-radius: var(--radius);
-  color: var(--text-dim);
-  pointer-events: none;
-}
-
-.stage-hint[hidden] { display: none; }
-
-.status {
-  margin: 0;
-  padding: 6px 16px;
-  min-height: 28px;
-  border-top: 1px solid var(--line);
-  background: var(--bg-panel);
-  color: var(--text-dim);
-}
-
-.status[data-tone="error"] { color: var(--danger); }
-
-/* ---- Contrôles ---- */
-
-button,
-select,
-input {
-  font: inherit;
-  color: var(--text);
-  background: var(--bg-field);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 5px 8px;
-}
-
-button { cursor: pointer; }
-button:hover:not(:disabled) { border-color: var(--accent); }
-
-:is(button, select, input, [tabindex]):focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-:disabled { opacity: 0.45; cursor: not-allowed; }
-
-input[type="color"] { padding: 2px; width: 100%; height: 28px; }
-input[type="range"] { padding: 0; border: 0; background: none; width: 100%; }
-
-.field {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 4px;
-  margin-bottom: 10px;
-}
-
-.field label { color: var(--text-dim); }
-.field-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
-/* Largeur intrinsèque des input (~20 caractères) : sans ça, ils élargissent
-   les colonnes et le panneau défile horizontalement. */
-.field :is(input:not([type="checkbox"]), select) { min-width: 0; width: 100%; }
-.field[hidden], .field-row[hidden] { display: none; }
-
-fieldset {
-  min-width: 0; /* défaut navigateur : min-content, qui déborde du panneau */
-  margin: 0 0 14px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-
-fieldset legend {
-  padding: 0 6px;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-
-.range-value {
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ---- Pile de modificateurs ---- */
-
-.modifier-block {
-  margin-bottom: 8px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg-field);
-}
-
-.modifier-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-/* Les champs du bloc sont masqués selon le type : le dernier visible ne doit
-   pas rajouter de marge au bas du bloc. */
-.modifier-block .field:last-child,
-.modifier-block .field-row:last-child { margin-bottom: 0; }
-
-/* ---- Pile d'interpolations ---- */
-
-/* Une interpolation se règle comme un modificateur : même bloc, même entête. */
-.interpolation-block {
-  margin-bottom: 8px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg-field);
-}
-
-.interpolation-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-.interpolation-block .field:last-child,
-.interpolation-block .field-row:last-child { margin-bottom: 0; }
-
-.interpolation-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* ---- Panneau calques ---- */
-
-.layer-list {
-  list-style: none;
-  margin: 0 0 10px;
-  padding: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.layer-card {
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  background: var(--bg-field);
-}
-
-.layer-card[data-active="true"] { border-color: var(--accent); }
-
-/* Survoler une forme de la liste lui prend l'accent, comme sur le dessin. */
-#shape-list .layer-card:hover { border-color: var(--accent); }
-/* `data-hovering` tombe avec un léger délai (voir `shape-list.js`) : passer
-   d'une card à l'autre ne rend pas l'accent à la sélection entre les deux. */
-#shape-list[data-hovering] .layer-card[data-active="true"]:not(:hover) { border-color: transparent; }
-
-.layer-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-}
-
-.layer-row.is-shape { grid-template-columns: 1fr auto auto auto; }
-
-/* Réglages de la card sélectionnée, sous sa ligne. */
-.card-detail {
-  padding: 6px 8px 8px;
-  border-top: 1px solid var(--line);
-}
-
-.card-detail fieldset:last-child { margin-bottom: 0; }
-
-.layer-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: left;
-  background: none;
-  border: 0;
-  padding: 2px 4px;
-}
-
-.icon-btn {
-  padding: 2px 6px;
-  line-height: 1;
-  background: none;
-  border: 0;
-  color: var(--text-dim);
-}
-
-.icon-btn[aria-pressed="true"] { color: var(--accent); }
-/* Seul le bouton de visibilité est « pressé » dans l'entête d'un calque. */
-.layer-row > .icon-btn[aria-pressed="true"] { color: var(--layer-color, var(--accent)); }
-.icon-btn:hover:not(:disabled) { color: var(--text); }
-.icon-btn.is-danger { color: var(--danger); }
-
-.empty-note { color: var(--text-dim); margin: 0 0 10px; }
-
-
-
-/* ---- Raccourcis clavier ---- */
-
-.shortcuts {
-  max-width: 28rem;
-  padding: 16px 20px;
-  color: var(--text);
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.shortcuts::backdrop { background: rgb(0 0 0 / 0.5); }
-.shortcuts h2 { margin: 0 0 12px; font-size: 1rem; }
-.shortcuts dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 16px; }
-.shortcuts dd { margin: 0; color: var(--text-dim); }
-.shortcuts kbd {
-  padding: 1px 6px;
-  font: inherit;
-  background: var(--bg-field);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.shortcuts form { text-align: right; }
-
-/* ---- Paramètres ---- */
-
 /* L'image de la grille (posée par `ui/settings.js`) couvre le plan à l'échelle
    de son viewBox, donc elle suit le zoom. */
 #stage[data-grid] { background-size: 100% 100%; background-repeat: no-repeat; }
 
+.stage-hint {
+  position: fixed;
+  left: calc((var(--gutter-left) + 100vw - var(--gutter-right)) / 2);
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: var(--pill);
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+/* ---- Éléments flottants ---- */
+
+.float {
+  position: fixed;
+  z-index: 1;
+  background: var(--bg-panel);
+}
+
+.brand {
+  position: fixed;
+  left: 32px;
+  top: 34px;
+  margin: 0;
+  font: 600 28px/1 var(--font);
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--pill);
+}
+
+.top-actions { right: 24px; top: 24px; }
+.tools {
+  left: calc((var(--gutter-left) + 100vw - var(--gutter-right)) / 2);
+  bottom: 16px;
+  transform: translateX(-50%);
+}
+.view-controls { left: 24px; bottom: 16px; padding: 4px; }
+
+.pill-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--line);
+}
+
+.pill-btn {
+  height: 36px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--pill);
+  background: transparent;
+  white-space: nowrap;
+}
+.pill-btn:hover:not(:disabled) { background: var(--bg-field); }
+.pill-btn.is-square { width: 36px; padding: 0; justify-content: center; }
+.pill-btn.is-primary { background: var(--text); color: var(--ink); padding-right: 14px; }
+.pill-btn.is-primary:hover { background: #fff; }
+
+/* Bascule : la case native, cachée, pilote l'aspect pressé de la pastille. */
+.pill-toggle { cursor: pointer; font: 500 13px/1 var(--font); padding: 0 14px; }
+.pill-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.pill-toggle:has(input:checked) { background: var(--text); color: var(--ink); }
+.pill-toggle:has(input:focus-visible) { outline: 2px solid var(--select); outline-offset: 2px; }
+
+.zoom-controls { display: flex; align-items: center; gap: 4px; }
+.zoom-level { min-width: 44px; text-align: center; font: 500 13px/1 var(--font); font-variant-numeric: tabular-nums; }
+
+.icon { display: inline-flex; }
+
+/* ---- Outils ---- */
+
+/* Des radios natifs, masqués visuellement mais toujours focalisables : c'est
+   le navigateur qui fournit la navigation aux flèches et l'exclusivité. */
+.shape-picker {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.shape-picker legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.shape-picker input { position: absolute; opacity: 0; pointer-events: none; }
+.shape-picker label {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--pill);
+  cursor: pointer;
+}
+.shape-picker label:hover { background: var(--bg-field); }
+.shape-picker input:checked + label { background: var(--accent); color: var(--ink); }
+.shape-picker input:focus-visible + label { outline: 2px solid var(--select); outline-offset: 2px; }
+
+/* ---- Panneaux ---- */
+
+.panel {
+  top: var(--gutter-top);
+  max-height: calc(100vh - var(--gutter-top) - var(--gutter-bottom));
+  overflow-y: auto;
+  border-radius: var(--radius-panel);
+}
+
+.panel-left { left: 24px; width: 288px; padding: 16px 12px; }
+.panel-left > h2 { margin: 0; padding: 0 8px 12px; font: 600 14px/1 var(--font); }
+/* Tant que l'arbre ne l'a pas logée sous un calque, la liste ne s'affiche pas. */
+.panel-left > #shape-list { display: none; }
+
+.panel-right { right: 24px; width: 312px; }
+
+.empty-note { color: var(--text-dim); margin: 0 8px 10px; }
+
+/* ---- Arbre des calques ---- */
+
+.layer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+}
+.layer-row:hover { background: var(--bg-field); }
+
+.layer-card[data-selected="layer"] > .layer-row { background: var(--accent); color: var(--ink); }
+.layer-card[data-selected="parent"] > .layer-row { box-shadow: inset 0 0 0 1.5px var(--line); }
+.layer-card[data-visible="false"] > .layer-row .layer-name { opacity: 0.5; }
+
+.chevron {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-dim);
+}
+[data-selected="layer"] > .layer-row .chevron { color: var(--ink); }
+
+.layer-swatch {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: var(--pill);
+  background: var(--layer-color, var(--text));
+}
+[data-selected="layer"] > .layer-row .layer-swatch { box-shadow: 0 0 0 1.5px var(--ink); }
+
+.layer-name {
+  flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  padding: 4px 0;
+  background: none;
+  color: inherit;
+  font-weight: 600;
+}
+
+/* Formes du calque déplié. */
+#shape-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px 32px; }
+#shape-list .layer-row { height: 36px; }
+#shape-list .layer-name { font-weight: 400; }
+#shape-list .layer-card[data-active="true"] > .layer-row { background: var(--select); color: var(--ink); }
+#shape-list .layer-card[data-active="true"] .layer-name { font-weight: 600; }
+/* Survoler une forme de la liste l'encadre sur le dessin (voir `shape-list.js`). */
+#shape-list .layer-card:hover > .layer-row { box-shadow: inset 0 0 0 1.5px var(--select); }
+
+/* Actions de ligne : au survol, au focus et sur la ligne active. Un calque
+   masqué les garde visibles, sinon on ne saurait plus le réafficher. */
+.row-actions { display: flex; gap: 0; opacity: 0; }
+.layer-row:hover .row-actions,
+.layer-row:focus-within .row-actions,
+.row-actions[data-pending],
+.layer-card[data-active="true"] > .layer-row .row-actions { opacity: 1; }
+.layer-card[data-visible="false"] > .layer-row .row-actions { opacity: 1; }
+
+.icon-btn {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  line-height: 1;
+  background: none;
+  color: inherit;
+  opacity: 0.75;
+}
+.icon-btn:hover:not(:disabled) { opacity: 1; }
+.icon-btn.is-danger { color: var(--danger); }
+.layer-card[data-active="true"] > .layer-row .icon-btn.is-danger { color: inherit; }
+
+.add-shape {
+  height: 32px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font: 400 13px/1 var(--font);
+  text-align: left;
+}
+.add-shape:hover:not(:disabled) { color: var(--text); }
+
+.add-layer {
+  width: 100%;
+  height: 40px;
+  margin-top: 8px;
+  border-radius: var(--pill);
+}
+.add-layer:hover { background: #4a4a4a; }
+
+/* ---- Réglages (panneau droit) ---- */
+
+.inspector-body {
+  margin: 0;
+  min-width: 0;
+  padding: 20px;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.inspector-body[hidden] { display: none; }
+
+.inspector-head { display: flex; flex-direction: column; gap: 8px; }
+.inspector-kind { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-dim); }
+.inspector-kind .layer-swatch { width: 10px; height: 10px; }
+.inspector-title { margin: 0; font: 600 20px/1.1 var(--font); overflow-wrap: anywhere; }
+
+.separator { width: 100%; height: 1px; margin: 0; border: 0; background: var(--line); }
+
+.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.field[hidden], .field-row[hidden], .group[hidden], .separator[hidden] { display: none; }
+.field > label,
+.field-label,
+.slider-head label,
+.segmented legend { font-size: 12px; line-height: 1; color: var(--text-dim); }
+
+.field-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+
+.slider-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.range-value {
+  width: 64px !important;
+  height: 28px !important;
+  padding: 0 8px !important;
+  text-align: right;
+  font: 600 13px/1 var(--font);
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+}
+.range-value:hover, .range-value:focus { background: var(--bg-field); }
+
+.group { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: 8px; }
+
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.section-head h3 { margin: 0; font: 600 14px/1 var(--font); }
+
+.text-btn {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--pill);
+  background: transparent;
+  font-size: 13px;
+}
+.text-btn:hover:not(:disabled) { background: var(--bg-field); }
+.text-btn.is-dim { align-self: flex-start; color: var(--text-dim); }
+.text-btn[hidden] { display: none; }
+
+/* Interrupteur : une case native redessinée. */
+.switch-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  cursor: pointer;
+}
+.switch-field[hidden] { display: none; }
+.switch {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 24px;
+  margin: 0;
+  border-radius: var(--pill);
+  background: var(--bg-field);
+  cursor: pointer;
+}
+.switch::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--pill);
+  background: var(--text-dim);
+  transition: left 0.12s;
+}
+.switch:checked { background: var(--text); }
+.switch:checked::before { left: 19px; background: var(--ink); }
+
+/* Segments : radios natifs dans une pastille. */
+.segmented { margin: 0; padding: 0; border: 0; min-width: 0; }
+.segmented legend { padding: 0; margin-bottom: 8px; }
+.segments { display: flex; gap: 4px; padding: 4px; border-radius: var(--pill); background: var(--bg-field); }
+.segment {
+  flex: 1 1 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--pill);
+  font: 500 13px/1 var(--font);
+  cursor: pointer;
+}
+.segment input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.segment:has(input:checked) { background: var(--text); color: var(--ink); }
+.segment:has(input:focus-visible) { outline: 2px solid var(--select); outline-offset: 2px; }
+
+/* Couleur du calque. */
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.swatch {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--pill);
+  background: transparent;
+}
+.swatch::before {
+  content: '';
+  width: 24px;
+  height: 24px;
+  border-radius: var(--pill);
+  background: var(--swatch);
+}
+.swatch[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--text); }
+.swatch.is-custom { box-shadow: inset 0 0 0 1.5px var(--text-dim); font: 500 18px/1 var(--font); cursor: pointer; }
+.swatch.is-custom::before { display: none; }
+.swatch.is-custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.hex-row { display: flex; align-items: center; gap: 8px; }
+.hex-row label { font-size: 12px; color: var(--text-dim); }
+.hex { width: 104px !important; }
+
+/* Pile de modificateurs. */
+.modifier-block,
+.interpolation-block {
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--bg-field);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.modifier-block :is(select, input:is([type="number"], [type="text"])),
+.interpolation-block :is(select, input:is([type="number"], [type="text"])) { background: #4a4a4a; }
+.modifier-block .range-value { background: transparent; }
+
+.modifier-head,
+.interpolation-head { display: flex; align-items: center; gap: 6px; }
+.modifier-head select,
+.interpolation-head select { flex-grow: 1; }
+
+
+.unit-input { position: relative; display: flex; align-items: center; }
+.unit-input input { padding-right: 28px; }
+.unit-input span { position: absolute; right: 12px; color: var(--text-dim); pointer-events: none; }
+
+.ramp-preview { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ramp-preview span {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--pill);
+  box-shadow: inset 0 0 0 2px var(--layer-color, var(--accent));
+}
+
+/* ---- Statut ---- */
+
+.status {
+  right: 24px;
+  bottom: 16px;
+  max-width: calc(var(--gutter-right) - 48px);
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: var(--radius-panel);
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.status:empty { display: none; }
+.status[data-tone="error"] { color: var(--danger); }
+
+/* ---- Menus et fenêtres ---- */
+
+.menu,
 .settings {
-  min-width: 16rem;
-  padding: 16px 20px;
+  position: fixed;
+  margin: 0;
+  padding: 8px;
   color: var(--text);
   background: var(--bg-panel);
   border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+.menu { inset: 72px 24px auto auto; min-width: 240px; }
+.menu:popover-open { display: flex; flex-direction: column; }
+.menu-item {
+  height: 36px;
+  padding: 0 12px;
+  text-align: left;
+  background: transparent;
   border-radius: var(--radius);
 }
-.settings h2 { margin: 0 0 12px; font-size: 1rem; }
-.settings-field { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.menu-item:hover { background: var(--bg-field); }
+
+.settings { inset: auto auto 72px 24px; min-width: 16rem; padding: 16px 20px; }
+.settings h2 { margin: 0 0 12px; font: 600 16px/1 var(--font); }
+.settings-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 8px; }
 .settings-field[hidden] { display: none; }
-.settings-field input[type="number"] { width: 5rem; }
+.settings-field :is(input[type="number"], select) { width: 7rem; }
+
+.shortcuts {
+  max-width: 28rem;
+  padding: 20px 24px;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+.shortcuts::backdrop { background: rgb(0 0 0 / 0.5); }
+.shortcuts h2 { margin: 0 0 12px; font: 600 16px/1 var(--font); }
+.shortcuts dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 16px; }
+.shortcuts dd { margin: 0; color: var(--text-dim); }
+.shortcuts kbd {
+  padding: 2px 6px;
+  font: 500 12px/1.4 var(--font);
+  background: var(--bg-field);
+  border-radius: 6px;
+}
+.shortcuts form { text-align: right; }

@@ -2,6 +2,7 @@ import {
   addModifier,
   ARC_CLOSURES,
   clampAngle,
+  clampDash,
   clampLinecap,
   clampExtent,
   clampInner,
@@ -19,47 +20,124 @@ import {
   updateElement,
   updateModifier,
 } from '../scene.js';
-import { iconButton, rebuildWithFocus } from './list.js';
+import { iconButton, rebuildWithFocus, shapeName } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
 import { FIXED_COPIES, MODIFIER_LABELS, ORIENTING, orients } from '../modifiers.js';
 
 /**
- * Réglages de la forme et du calque actifs, construits une seule fois et
- * ensuite synchronisés. Ils n'ont pas de panneau à eux : les listes les logent
- * dans la card sélectionnée.
+ * Panneau de droite : les réglages du calque actif, ou ceux de la forme
+ * sélectionnée — jamais les deux. Construits une seule fois et ensuite
+ * synchronisés.
  *
  * Les reconstruire à chaque notification arracherait le focus du curseur en
  * cours de glissement : chaque `input` notifie le store, qui redessine — et le
  * slider disparaîtrait sous la souris au premier pixel.
  */
 
+/* Pastilles de couleur proposées d'office ; le sélecteur libre et le champ hex
+   restent là pour tout le reste. */
+const PALETTE = [
+  ['#ee4722', 'Rouge-orangé'],
+  ['#fcb911', 'Orange'],
+  ['#f5ed62', 'Jaune'],
+  ['#3ba2d6', 'Bleu'],
+  ['#fcfaf3', 'Crème'],
+];
+
+/* Bornes des curseurs. Le champ numérique voisin accepte au-delà : le curseur
+   couvre l'usage courant sans plafonner le modèle. */
+const STROKE_SLIDER = { min: '0', max: '20', step: '0.5' };
+const COUNT_SLIDER = { min: '1', max: '64', step: '1' };
+const DASH_SLIDER = { min: '0.5', max: '16', step: '0.5' };
+
+const HEX = /^#?([0-9a-f]{6})$/i;
+
+let uid = 0;
+const nextId = () => `prop-${++uid}`;
+
+const el = (tag, className, text) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+};
+
 const field = (labelText, control) => {
-  const wrap = document.createElement('div');
-  wrap.className = 'field';
-  const label = document.createElement('label');
-  label.textContent = labelText;
+  const wrap = el('div', 'field');
+  const label = el('label', null, labelText);
   label.htmlFor = control.id;
   wrap.append(label, control);
   return wrap;
 };
 
-const option = (value, label) => {
-  const node = document.createElement('option');
-  node.value = value;
-  node.textContent = label;
+const row = (...children) => {
+  const node = el('div', 'field-row');
+  node.append(...children);
   return node;
 };
 
-let uid = 0;
+const separator = () => el('hr', 'separator');
+
+const option = (value, label) => {
+  const node = el('option', null, label);
+  node.value = value;
+  return node;
+};
+
 const input = (type, attrs = {}) => {
   const node = document.createElement('input');
   node.type = type;
-  node.id = `prop-${++uid}`;
+  node.id = nextId();
   Object.assign(node, attrs);
   return node;
 };
 
-export const mountPropertyPanel = ({ store }) => {
+const select = (entries) => {
+  const node = document.createElement('select');
+  node.id = nextId();
+  for (const [value, label] of entries) node.append(option(value, label));
+  return node;
+};
+
+/* Case à cocher habillée en interrupteur ; la case reste native. */
+const switchField = (labelText, checkbox) => {
+  checkbox.classList.add('switch');
+  const label = el('label', 'switch-field');
+  label.append(el('span', null, labelText), checkbox);
+  return label;
+};
+
+/* Entête d'une section : titre, et son bouton d'ajout à droite. */
+const sectionHead = (title, addButton) => {
+  const head = el('div', 'section-head');
+  head.append(el('h3', null, title), addButton);
+  return head;
+};
+
+const addButtonFor = (label, focusKey, onClick) => {
+  const node = el('button', 'text-btn', '+ Ajouter');
+  node.type = 'button';
+  node.setAttribute('aria-label', label);
+  node.title = label;
+  node.dataset.focusKey = focusKey;
+  node.addEventListener('click', onClick);
+  return node;
+};
+
+/* Entête du panneau : ce qu'on règle (« Calque », « Forme ») et son nom. */
+const inspectorHead = (kind) => {
+  const head = el('div', 'inspector-head');
+  const eyebrow = el('div', 'inspector-kind');
+  const dot = el('span', 'layer-swatch');
+  dot.setAttribute('aria-hidden', 'true');
+  if (kind === 'Calque') eyebrow.append(dot);
+  eyebrow.append(el('span', null, kind));
+  const title = el('h2', 'inspector-title');
+  head.append(eyebrow, title);
+  return { head, title, dot };
+};
+
+export const mountPropertyPanel = ({ store, container = null }) => {
   const controls = [];
 
   /**
@@ -84,12 +162,60 @@ export const mountPropertyPanel = ({ store }) => {
     return node;
   };
 
+  /**
+   * Curseur doublé d'un champ numérique : le curseur pour le geste, le champ
+   * pour une valeur précise ou hors des bornes du curseur.
+   */
+  const slider = (labelText, attrs, read, write, options = {}) => {
+    const range = bind(input('range', attrs), read, write, options);
+    const number = bind(input('number', { step: attrs.step, min: attrs.min }), read, write, {
+      ...options,
+      event: 'change',
+    });
+    number.className = 'range-value';
+    number.setAttribute('aria-label', labelText);
+    const wrap = el('div', 'field slider-field');
+    const head = el('div', 'slider-head');
+    const label = el('label', null, labelText);
+    label.htmlFor = range.id;
+    head.append(label, number);
+    wrap.append(head, range);
+    return wrap;
+  };
+
+  /**
+   * Choix exclusif en segments : des radios natifs, donc flèches et annonce du
+   * groupe par le navigateur. `read` rend la valeur cochée, ou rien.
+   */
+  const segmented = (legendText, entries, read, pick, { subject = 'element' } = {}) => {
+    const root = el('fieldset', 'segmented');
+    const track = el('div', 'segments');
+    root.append(el('legend', null, legendText), track);
+    const name = nextId();
+    const radios = entries.map(([value, label]) => {
+      const radio = input('radio', { name, value });
+      radio.addEventListener('change', () => {
+        const target = getActiveElement(store.get());
+        if (radio.checked && target) pick(target, value);
+      });
+      const wrap = el('label', 'segment');
+      wrap.append(radio, el('span', null, label));
+      track.append(wrap);
+      return radio;
+    });
+    controls.push({
+      subject,
+      sync: (target) => {
+        const value = read(target);
+        for (const radio of radios) radio.checked = radio.value === value;
+      },
+    });
+    return root;
+  };
+
   /* ---- Forme ---- */
 
-  const shape = document.createElement('fieldset');
-  const shapeLegend = document.createElement('legend');
-  shapeLegend.textContent = 'Forme';
-  shape.append(shapeLegend);
+  const shapeHead = inspectorHead('Forme');
 
   const posX = bind(
     input('number', { step: '1' }),
@@ -154,9 +280,7 @@ export const mountPropertyPanel = ({ store }) => {
     (element) => element.end,
     (element, value) => store.apply(updateElement, element.id, { end: clampAngle(value) }),
   );
-  const closure = document.createElement('select');
-  closure.id = `prop-${++uid}`;
-  for (const [value, label] of Object.entries(ARC_CLOSURES)) closure.append(option(value, label));
+  const closure = select(Object.entries(ARC_CLOSURES));
   bind(
     closure,
     (element) => element.closure,
@@ -171,17 +295,12 @@ export const mountPropertyPanel = ({ store }) => {
     (element, value) => store.apply(updateElement, element.id, { filled: value }),
     { event: 'change', parse: () => filled.checked },
   );
-
   const closed = bind(
     input('checkbox'),
     (element) => element.closed,
     (element, value) => store.apply(updateElement, element.id, { closed: value }),
     { event: 'change', parse: () => closed.checked },
   );
-
-  const positionRow = document.createElement('div');
-  positionRow.className = 'field-row';
-  positionRow.append(field('Position X', posX), field('Position Y', posY));
 
   const radiusField = field('Rayon', radius);
   const widthField = field('Largeur', width);
@@ -190,44 +309,39 @@ export const mountPropertyPanel = ({ store }) => {
      entre ses extrémités, signe compris. */
   const spanLabels = { signed: ['Écart X', 'Écart Y'], default: ['Largeur', 'Hauteur'] };
 
-  const sizeRow = document.createElement('div');
-  sizeRow.className = 'field-row';
-  sizeRow.append(radiusField, widthField, heightField);
-
-  /* 100 % : polygone convexe ; en deçà, étoile. */
-  const polygonRow = document.createElement('div');
-  polygonRow.className = 'field-row';
-  polygonRow.append(field('Côtés', sides), field('Rayon intérieur (%)', inner));
-
-  /* 0° en haut, sens horaire ; de 0 à 360 l'arc fait le tour complet. */
-  const arcRow = document.createElement('div');
-  arcRow.className = 'field-row';
-  arcRow.append(field('Début (°)', arcStart), field('Fin (°)', arcEnd), field('Fermeture', closure));
-
+  const geometryRow = row(radiusField, widthField, heightField, field('X', posX), field('Y', posY));
   const rotationField = field('Rotation (°)', rotation);
-  const filledField = field('Remplir', filled);
-  const closedField = field('Fermé', closed);
-  shape.append(positionRow, sizeRow, rotationField, polygonRow, arcRow, closedField, filledField);
+  /* 100 % : polygone convexe ; en deçà, étoile. */
+  const polygonRow = row(field('Côtés', sides), field('Rayon intérieur (%)', inner));
+  /* 0° en haut, sens horaire ; de 0 à 360 l'arc fait le tour complet. */
+  const arcRow = row(field('Début (°)', arcStart), field('Fin (°)', arcEnd), field('Fermeture', closure));
+  const closedField = switchField('Fermé', closed);
+  const filledField = switchField('Remplir de la couleur du calque', filled);
 
-  /* Motif : un préréglage remplit la saisie libre, une saisie qui n'en reprend
-     aucun s'affiche « Libre ». Les valeurs sont des multiples de l'épaisseur du
-     calque. */
-  const presetOf = (dash) =>
-    Object.keys(DASH_PRESETS).find((key) => DASH_PRESETS[key].dash.join(' ') === dash.join(' ')) ??
-    'custom';
-  const dashPreset = document.createElement('select');
-  dashPreset.id = `prop-${++uid}`;
-  for (const [value, { label }] of Object.entries(DASH_PRESETS)) dashPreset.append(option(value, label));
-  dashPreset.append(option('custom', 'Libre'));
-  bind(
-    dashPreset,
-    (element) => presetOf(element.dash),
+  /* Trait : le type de motif se lit sur le tableau de tirets — vide, plein ;
+     un premier tiret nul, des points ; sinon des tirets. La saisie libre garde
+     tous les motifs que les segments ne nomment pas. Valeurs en multiples de
+     l'épaisseur du calque. */
+  const dashKind = (dash) => (dash.length === 0 ? 'solid' : dash[0] === 0 ? 'dotted' : 'dashed');
+  const dashSegments = segmented(
+    'Trait',
+    Object.entries(DASH_PRESETS).map(([value, { label }]) => [value, label]),
+    (element) => dashKind(element.dash),
     (element, value) => {
-      if (!DASH_PRESETS[value]) return dashText.focus();
       const { label, ...patch } = DASH_PRESETS[value];
       store.apply(updateElement, element.id, patch);
     },
-    { event: 'change', parse: String },
+  );
+  const dashLength = slider(
+    'Longueur des tirets — × épaisseur',
+    DASH_SLIDER,
+    (element) => element.dash[0] ?? 0,
+    (element, value) => {
+      const [, ...rest] = element.dash;
+      store.apply(updateElement, element.id, {
+        dash: clampDash([Math.max(0, value), ...(rest.length ? rest : [2])]),
+      });
+    },
   );
   const dashText = bind(
     input('text', { placeholder: 'ex. 4 2' }),
@@ -235,43 +349,100 @@ export const mountPropertyPanel = ({ store }) => {
     (element, value) => store.apply(updateElement, element.id, { dash: value }),
     { event: 'change', parse: parseDash },
   );
-  const linecap = document.createElement('select');
-  linecap.id = `prop-${++uid}`;
-  for (const [value, label] of Object.entries(LINECAPS)) linecap.append(option(value, label));
-  bind(
-    linecap,
+  const dashTextField = field('Motif libre (× épaisseur)', dashText);
+  const linecapSegments = segmented(
+    'Bout',
+    Object.entries(LINECAPS),
     (element) => element.linecap,
     (element, value) => store.apply(updateElement, element.id, { linecap: clampLinecap(value) }),
-    { event: 'change', parse: String },
   );
-  const dashRow = document.createElement('div');
-  dashRow.className = 'field-row';
-  dashRow.append(field('Motif', dashPreset), field('Tirets (× épaisseur)', dashText), field('Bout', linecap));
-  shape.append(dashRow);
+  const strokeGroup = el('div', 'group');
+  strokeGroup.append(dashSegments, dashLength, dashTextField, linecapSegments);
+
+  const shapeDetail = el('div', 'inspector-body');
+  shapeDetail.dataset.kind = 'shape';
+  shapeDetail.setAttribute('aria-label', 'Réglages de la forme');
+  const strokeSeparator = separator();
+  shapeDetail.append(
+    shapeHead.head,
+    separator(),
+    geometryRow,
+    rotationField,
+    polygonRow,
+    arcRow,
+    closedField,
+    strokeSeparator,
+    strokeGroup,
+    filledField,
+  );
 
   /* ---- Calque ---- */
 
+  const layerHead = inspectorHead('Calque');
+
   /* L'épaisseur et la couleur appartiennent au calque : toutes ses formes
      sortent du même outil, et un point y trouve son diamètre. */
-  const layerSet = document.createElement('fieldset');
-  const layerLegend = document.createElement('legend');
-  layerLegend.textContent = 'Calque';
-  layerSet.append(layerLegend);
+  const setStroke = (value) => {
+    const layer = getActiveLayer(store.get());
+    if (layer) store.apply(setLayerStroke, layer.id, value);
+  };
 
-  const strokeWidth = bind(
-    input('number', { min: '0', step: '0.5' }),
-    (layer) => layer.strokeWidth,
-    (layer, value) => store.apply(setLayerStrokeWidth, layer.id, value),
-    { subject: 'layer' },
-  );
+  const swatches = PALETTE.map(([value, label]) => {
+    const swatch = el('button', 'swatch');
+    swatch.type = 'button';
+    swatch.setAttribute('aria-label', label);
+    swatch.title = label;
+    swatch.style.setProperty('--swatch', value);
+    swatch.addEventListener('click', () => setStroke(value));
+    return swatch;
+  });
   const stroke = bind(
     input('color'),
     (layer) => layer.stroke,
     (layer, value) => store.apply(setLayerStroke, layer.id, value),
     { subject: 'layer', parse: String },
   );
-  layerSet.append(field('Épaisseur', strokeWidth), field('Couleur', stroke));
+  stroke.setAttribute('aria-label', 'Autre couleur');
+  const custom = el('label', 'swatch is-custom', '+');
+  custom.title = 'Autre couleur';
+  custom.append(stroke);
 
+  const hex = bind(
+    input('text', { spellcheck: false, maxLength: 7 }),
+    (layer) => layer.stroke.toUpperCase(),
+    (layer, value) => {
+      const match = HEX.exec(value.trim());
+      if (match) store.apply(setLayerStroke, layer.id, `#${match[1].toLowerCase()}`);
+      else hex.value = layer.stroke.toUpperCase();
+    },
+    { subject: 'layer', event: 'change', parse: String },
+  );
+  hex.className = 'hex';
+  controls.push({
+    subject: 'layer',
+    sync: (layer) => {
+      for (const [index, swatch] of swatches.entries()) {
+        swatch.setAttribute('aria-pressed', String(PALETTE[index][0] === layer.stroke.toLowerCase()));
+      }
+    },
+  });
+
+  const swatchRow = el('div', 'swatches');
+  swatchRow.append(...swatches, custom);
+  const hexRow = el('div', 'hex-row');
+  const hexLabel = el('label', null, 'Hex');
+  hexLabel.htmlFor = hex.id;
+  hexRow.append(hexLabel, hex);
+  const colorGroup = el('div', 'field');
+  colorGroup.append(el('span', 'field-label', 'Couleur'), swatchRow, hexRow);
+
+  const strokeWidth = slider(
+    'Épaisseur',
+    STROKE_SLIDER,
+    (layer) => layer.strokeWidth,
+    (layer, value) => store.apply(setLayerStrokeWidth, layer.id, value),
+    { subject: 'layer' },
+  );
 
   /* ---- Modificateurs ---- */
 
@@ -283,48 +454,39 @@ export const mountPropertyPanel = ({ store }) => {
    * pile change : reconstruire à chaque notification arracherait le curseur des
    * champs, comme ailleurs dans ce panneau.
    */
-  const modifierSet = document.createElement('fieldset');
-  const modifierLegend = document.createElement('legend');
-  modifierLegend.textContent = 'Modificateurs';
-  const modifierHost = document.createElement('div');
-  const addModifierButton = document.createElement('button');
-  addModifierButton.type = 'button';
-  addModifierButton.textContent = '+ Ajouter un modificateur';
-  addModifierButton.dataset.focusKey = 'add-modifier';
-  addModifierButton.addEventListener('click', () => {
+  const modifierSet = el('section', 'group');
+  const modifierHost = el('div', 'stack');
+  const addModifierButton = addButtonFor('Ajouter un modificateur', 'add-modifier', () => {
     const layer = getActiveLayer(store.get());
     if (layer) store.apply(addModifier, layer.id);
   });
-  modifierSet.append(modifierLegend, modifierHost, addModifierButton);
+  modifierSet.append(sectionHead('Répéter', addModifierButton), modifierHost);
 
   let blocks = [];
 
   const modifierBlock = (index, stackSize) => {
     const blockControls = [];
     /* Tout contrôle du bloc écrit le même modificateur : son rang dans la pile. */
+    const modifierOptions = (options = {}) => ({ subject: 'layer', into: blockControls, ...options });
+    const write = (toPatch) => (layer, value) =>
+      store.apply(updateModifier, layer.id, index, toPatch(value));
     const bindModifier = (node, read, toPatch, options = {}) =>
-      bind(
-        node,
-        read,
-        (layer, value) => store.apply(updateModifier, layer.id, index, toPatch(value)),
-        { subject: 'layer', into: blockControls, ...options },
-      );
+      bind(node, read, write(toPatch), modifierOptions(options));
 
     const rank = index + 1;
-    const type = document.createElement('select');
-    type.id = `prop-${++uid}`;
+    const type = select(Object.entries(MODIFIER_LABELS));
     type.setAttribute('aria-label', `Type du modificateur ${rank}`);
-    for (const [value, label] of Object.entries(MODIFIER_LABELS)) type.append(option(value, label));
     bindModifier(type, (layer) => layer.modifiers[index].type, (value) => ({ type: value }), {
       event: 'change',
       parse: String,
     });
 
-    const count = bindModifier(
-      input('number', { min: '1', step: '1' }),
+    const countField = slider(
+      'Copies',
+      COUNT_SLIDER,
       (layer) => layer.modifiers[index].n,
-      (value) => ({ n: value }),
-      { event: 'change' },
+      write((value) => ({ n: value })),
+      modifierOptions(),
     );
     const stepX = bindModifier(
       input('number', { step: '1' }),
@@ -360,8 +522,7 @@ export const mountPropertyPanel = ({ store }) => {
       if (layer) store.apply(transition, layer.id, ...args);
     };
 
-    const head = document.createElement('div');
-    head.className = 'modifier-head';
+    const head = el('div', 'modifier-head');
     head.append(
       type,
       /* L'ordre de la pile change le dessin : un pas puis un miroir donne deux
@@ -389,17 +550,12 @@ export const mountPropertyPanel = ({ store }) => {
       }),
     );
 
-    const countField = field('Nombre (N)', count);
-    const stepRow = document.createElement('div');
-    stepRow.className = 'field-row';
-    stepRow.append(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
-    const angleField = field('Pas angulaire (rad)', angleStep);
-    const radiusStepField = field('Croissance par copie (%)', radiusStep);
-    const orientField = field('Orienter les copies', orient);
+    const stepRow = row(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
+    const spiralRow = row(field('Pas angulaire (rad)', angleStep), field('Croissance (%)', radiusStep));
+    const orientField = switchField('Orienter les copies', orient);
 
-    const root = document.createElement('div');
-    root.className = 'modifier-block';
-    root.append(head, countField, stepRow, angleField, radiusStepField, orientField);
+    const root = el('div', 'modifier-block');
+    root.append(head, countField, stepRow, spiralRow, orientField);
 
     const sync = (layer) => {
       const modifier = layer.modifiers[index];
@@ -409,11 +565,10 @@ export const mountPropertyPanel = ({ store }) => {
         else if (document.activeElement !== node) node.value = read(layer);
       }
       /* `none` et les miroirs décident eux-mêmes de leur nombre de copies : leur
-         proposer un « Nombre » promettrait un réglage sans effet. */
+         proposer un « Copies » promettrait un réglage sans effet. */
       countField.hidden = Object.hasOwn(FIXED_COPIES, modifier.type);
       stepRow.hidden = modifier.type !== 'step';
-      angleField.hidden = modifier.type !== 'spiral';
-      radiusStepField.hidden = modifier.type !== 'spiral';
+      spiralRow.hidden = modifier.type !== 'spiral';
       /* Un pas ne tourne rien : rien à orienter. */
       orientField.hidden = !ORIENTING.has(modifier.type);
     };
@@ -430,16 +585,26 @@ export const mountPropertyPanel = ({ store }) => {
 
   /* ---- Interpolations ---- */
 
-  /* Même calque, même card : la rampe d'une interpolation se lie à un étage de
-     la pile voisine. */
+  /* Même calque, même panneau : la rampe d'une interpolation se lie à un étage
+     de la pile voisine. */
   const interpolations = interpolationSection({ store });
 
-  const layerDetail = document.createElement('div');
-  layerDetail.className = 'card-detail';
-  layerDetail.append(layerSet, modifierSet, interpolations.root);
-  const shapeDetail = document.createElement('div');
-  shapeDetail.className = 'card-detail';
-  shapeDetail.append(shape);
+  /* Un `fieldset` pour tout désactiver d'un coup quand il n'y a plus de calque. */
+  const layerDetail = el('fieldset', 'inspector-body');
+  layerDetail.dataset.kind = 'layer';
+  layerDetail.setAttribute('aria-label', 'Réglages du calque');
+  layerDetail.append(
+    layerHead.head,
+    separator(),
+    colorGroup,
+    strokeWidth,
+    separator(),
+    modifierSet,
+    separator(),
+    interpolations.root,
+  );
+
+  container?.append(layerDetail, shapeDetail);
 
   /* ---- Synchronisation ---- */
 
@@ -448,47 +613,52 @@ export const mountPropertyPanel = ({ store }) => {
     const element = getActiveElement(scene);
     const subjects = { layer, element };
 
-    /* Les champs de forme suivent la forme sélectionnée, les modificateurs
-       suivent le calque : sans forme sélectionnée on peut encore régler la pile
-       du calque. */
-    shape.disabled = !element;
-    shape.setAttribute('aria-disabled', String(!element));
-    for (const set of [layerSet, modifierSet]) {
-      set.disabled = !layer;
-      set.setAttribute('aria-disabled', String(!layer));
-    }
+    /* Une forme sélectionnée prend tout le panneau ; sinon, son calque. */
+    layerDetail.hidden = Boolean(element);
+    shapeDetail.hidden = !element;
+    layerDetail.disabled = !layer;
+    layerDetail.setAttribute('aria-disabled', String(!layer));
 
-    for (const { node, read, subject } of controls) {
+    layerHead.title.textContent = layer?.name ?? 'Aucun calque';
+    if (layer) layerHead.dot.style.background = layer.stroke;
+    const owner = element && scene.layers.find((candidate) => candidate.elements.includes(element));
+    shapeHead.title.textContent = owner ? shapeName(owner, element, SHAPES) : '';
+
+    for (const { node, read, subject, sync: custom } of controls) {
       const target = subjects[subject];
       if (!target) continue;
+      if (custom) {
+        custom(target);
+        continue;
+      }
       const value = read(target);
       if (node.type === 'checkbox') node.checked = Boolean(value);
-      else if (node.tagName === 'SPAN') node.textContent = value;
       else if (document.activeElement !== node) node.value = value;
     }
 
-    const uniform = element ? SHAPES[element.type].uniform : true;
-    /* Un point n'a ni taille ni remplissage : l'épaisseur du calque lui donne
-       son diamètre. */
-    const dot = element ? SHAPES[element.type].geometry === 'dot' : false;
-    radiusField.hidden = !uniform || dot;
-    widthField.hidden = uniform;
-    heightField.hidden = uniform;
-    filledField.hidden = dot;
-    /* Un point est déjà un bout rond sans longueur : rien à découper. */
-    dashRow.hidden = dot;
-    /* Un cercle et un point tournés restent identiques : rien à régler. */
-    rotationField.hidden = !element || dot || SHAPES[element.type].geometry === 'circle';
-    polygonRow.hidden = !element || SHAPES[element.type].geometry !== 'polygon';
-    arcRow.hidden = !element || SHAPES[element.type].geometry !== 'arc';
-    /* Un tracé se dimensionne par ses sommets, pas par des champs. */
-    const trace = element ? SHAPES[element.type].geometry === 'polyline' : false;
-    sizeRow.hidden = trace;
-    closedField.hidden = !trace;
-    const [widthLabel, heightLabel] =
-      spanLabels[element && SHAPES[element.type].signed ? 'signed' : 'default'];
-    widthField.querySelector('label').textContent = widthLabel;
-    heightField.querySelector('label').textContent = heightLabel;
+    if (element) {
+      const { geometry, uniform, signed } = SHAPES[element.type];
+      /* Un point n'a ni taille ni remplissage : l'épaisseur du calque lui donne
+         son diamètre, et c'est déjà un bout rond sans longueur à découper. */
+      const dot = geometry === 'dot';
+      /* Un tracé se dimensionne par ses sommets, pas par des champs. */
+      const trace = geometry === 'polyline';
+      radiusField.hidden = !uniform || dot || trace;
+      widthField.hidden = uniform || trace;
+      heightField.hidden = uniform || trace;
+      filledField.hidden = dot;
+      strokeGroup.hidden = dot;
+      strokeSeparator.hidden = dot;
+      dashLength.hidden = dashKind(element.dash) !== 'dashed';
+      /* Un cercle et un point tournés restent identiques : rien à régler. */
+      rotationField.hidden = dot || geometry === 'circle';
+      polygonRow.hidden = geometry !== 'polygon';
+      arcRow.hidden = geometry !== 'arc';
+      closedField.hidden = !trace;
+      const [widthLabel, heightLabel] = spanLabels[signed ? 'signed' : 'default'];
+      widthField.querySelector('label').textContent = widthLabel;
+      heightField.querySelector('label').textContent = heightLabel;
+    }
 
     /* Seule la longueur de la pile impose une reconstruction : un changement de
        type ne fait que masquer ou montrer des champs du bloc concerné. */
