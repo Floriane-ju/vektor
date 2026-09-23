@@ -18,7 +18,7 @@ const stage = () => {
 const repeatLayer = (overrides = {}) =>
   createLayer({
     center: { x: 0, y: 0 },
-    elements: [createElement('circle', 100, 0)],
+    elements: [createElement('ellipse', 100, 0)],
     modifiers: [{ type: 'step', n: 5, stepX: -50, stepY: 0, angleStep: 0.4, radiusStep: 12 }],
     ...overrides,
   });
@@ -36,7 +36,7 @@ describe('renderer SVG', () => {
       { layers: [repeatLayer({ interpolations: [ramp('opacity', [1, 0])] })] },
       svg,
     );
-    const circles = [...svg.querySelectorAll('circle')];
+    const circles = [...svg.querySelectorAll('ellipse')];
     expect(circles).toHaveLength(5);
     expect(circles.map((c) => c.getAttribute('fill-opacity'))).toEqual([
       '1',
@@ -56,10 +56,10 @@ describe('renderer SVG', () => {
       interpolations: [ramp('scale', [1, 2])],
     });
     render({ layers: [layer] }, svg);
-    expect([...svg.querySelectorAll('circle')].map((c) => c.getAttribute('r'))).toEqual([
-      '60',
-      '90',
+    expect([...svg.querySelectorAll('ellipse')].map((c) => c.getAttribute('rx'))).toEqual([
+      '80',
       '120',
+      '160',
     ]);
   });
 
@@ -82,7 +82,7 @@ describe('renderer SVG', () => {
     const scene = { layers: [repeatLayer()], activeLayerId: null, activeElementId: null };
     render(scene, svg);
     render(scene, svg);
-    expect(svg.querySelectorAll('circle')).toHaveLength(5);
+    expect(svg.querySelectorAll('ellipse')).toHaveLength(5);
   });
 });
 
@@ -172,13 +172,13 @@ describe('export SVG', () => {
     render({ layers: [repeatLayer()], activeLayerId: null, activeElementId: null }, svg);
     const document_ = toSvgDocument(svg);
 
-    const preview = [...svg.querySelectorAll('circle')].map((c) => [
+    const preview = [...svg.querySelectorAll('ellipse')].map((c) => [
       c.getAttribute('cx'),
       c.getAttribute('cy'),
-      c.getAttribute('r'),
+      c.getAttribute('rx'),
     ]);
-    const exported = [...document_.matchAll(/<circle[^>]*>/g)].map((match) =>
-      ['cx', 'cy', 'r'].map((name) => match[0].match(new RegExp(`${name}="([^"]*)"`))?.[1]),
+    const exported = [...document_.matchAll(/<ellipse[^>]*>/g)].map((match) =>
+      ['cx', 'cy', 'rx'].map((name) => match[0].match(new RegExp(`${name}="([^"]*)"`))?.[1]),
     );
     expect(exported).toEqual(preview);
   });
@@ -266,13 +266,14 @@ describe('dessin au glisser', () => {
   });
 
   it('le glissement prend le point de départ pour centre et la distance pour taille', () => {
-    const { store, svg } = withLayer();
+    const { store, svg, shapes } = withLayer();
+    pick(shapes, 'polygon');
     pointer(svg, 'pointerdown', 400, 300);
     pointer(svg, 'pointermove', 400, 350);
     pointer(svg, 'pointerup', 400, 350);
 
     expect(store.get().layers[0].elements.at(-1)).toMatchObject({
-      type: 'circle',
+      type: 'polygon',
       x: 400,
       y: 300,
       rx: 50,
@@ -281,7 +282,8 @@ describe('dessin au glisser', () => {
   });
 
   it('l’aperçu suit le curseur pendant le geste', () => {
-    const { store, svg } = withLayer();
+    const { store, svg, shapes } = withLayer();
+    pick(shapes, 'polygon');
     pointer(svg, 'pointerdown', 100, 100);
     pointer(svg, 'pointermove', 100, 120);
     expect(store.get().layers[0].elements.at(-1).rx).toBe(20);
@@ -295,7 +297,7 @@ describe('dessin au glisser', () => {
     pointer(svg, 'pointerdown', 450, 450);
     pointer(svg, 'pointerup', 451, 450);
 
-    expect(store.get().layers[0].elements.at(-1)).toMatchObject({ rx: 60, ry: 60 });
+    expect(store.get().layers[0].elements.at(-1)).toMatchObject({ rx: 80, ry: 45 });
   });
 
   it('le rectangle prend deux dimensions indépendantes', () => {
@@ -311,16 +313,15 @@ describe('dessin au glisser', () => {
     });
   });
 
-  it('l’ellipse prend deux demi-axes indépendants, le cercle reste rond', () => {
+  it('l’ellipse prend deux demi-axes indépendants, ronde sous Maj', () => {
     const { store, svg, shapes } = withLayer();
     pick(shapes, 'ellipse');
     pointer(svg, 'pointerdown', 300, 300);
     pointer(svg, 'pointerup', 380, 330);
     expect(store.get().layers[0].elements.at(-1)).toMatchObject({ type: 'ellipse', rx: 80, ry: 30 });
 
-    pick(shapes, 'circle');
     pointer(svg, 'pointerdown', 300, 300);
-    pointer(svg, 'pointerup', 380, 330);
+    svg.dispatchEvent(new MouseEvent('pointerup', { clientX: 380, clientY: 330, button: 0, shiftKey: true }));
     const circle = store.get().layers[0].elements.at(-1);
     expect(circle.rx).toBe(circle.ry);
   });
@@ -403,7 +404,7 @@ describe('dessin au glisser', () => {
 
 describe('outil curseur', () => {
   const mountWithShape = () => {
-    const layer = createLayer({ elements: [createElement('circle', 100, 100, { filled: true })] });
+    const layer = createLayer({ elements: [createElement('ellipse', 100, 100, { filled: true })] });
     const other = createLayer();
     const store = createStore({ layers: [layer, other], activeLayerId: other.id, activeElementId: null });
     const svg = stage();
@@ -437,17 +438,17 @@ describe('outil curseur', () => {
 
   it('glisser une forme la déplace du même écart que le pointeur', () => {
     const { store, svg } = mountWithShape();
-    on(svg.querySelector('circle'), 'pointerdown', 100, 100);
+    on(svg.querySelector('ellipse'), 'pointerdown', 100, 100);
     on(svg, 'pointermove', 130, 90);
     on(svg, 'pointerup', 150, 80);
 
     expect(store.get().layers[0].elements).toHaveLength(1);
-    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 150, y: 80, rx: 60 });
+    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 150, y: 80, rx: 80 });
   });
 
   it('glisser ailleurs dans le dessin déplace la forme sélectionnée', () => {
     const { store, svg, layer } = mountWithShape();
-    on(svg.querySelector('circle'), 'pointerdown', 100, 100);
+    on(svg.querySelector('ellipse'), 'pointerdown', 100, 100);
     on(svg, 'pointerup', 100, 100);
 
     on(svg, 'pointermove', 600, 600);
@@ -465,13 +466,13 @@ describe('outil curseur', () => {
 
   it('survoler une forme non sélectionnée ne la surligne pas', () => {
     const { svg } = mountWithShape();
-    on(svg.querySelector('circle'), 'pointermove');
+    on(svg.querySelector('ellipse'), 'pointermove');
     expect(svg.querySelector('[data-hover]')).toBeNull();
   });
 
   it('la forme sélectionnée porte un contour, sans changer sa peinture', () => {
     const { store, svg, layer } = mountWithShape();
-    const circle = svg.querySelector('circle');
+    const circle = svg.querySelector('ellipse');
     const paint = ['fill', 'stroke', 'fill-opacity', 'stroke-opacity'].map((a) => circle.getAttribute(a));
     on(circle, 'pointerdown', 100, 100);
     on(svg, 'pointerup', 100, 100);
@@ -486,7 +487,7 @@ describe('outil curseur', () => {
 
   it('un clic sélectionne la forme et son calque, sans en créer', () => {
     const { store, svg, layer } = mountWithShape();
-    on(svg.querySelector('circle'), 'pointerdown');
+    on(svg.querySelector('ellipse'), 'pointerdown');
 
     expect(store.get()).toMatchObject({
       activeLayerId: layer.id,
@@ -515,7 +516,7 @@ describe('cadre de sélection', () => {
   it('sans forme sélectionnée, le calque actif est encadré en entier, hors export', () => {
     const layer = createLayer({
       center: { x: 0, y: 0 },
-      elements: [createElement('circle', 100, 100, { rx: 10, ry: 10 })],
+      elements: [createElement('ellipse', 100, 100, { rx: 10, ry: 10 })],
       modifiers: [{ type: 'step', n: 3, stepX: 100, stepY: 0, angleStep: 0, radiusStep: 0 }],
     });
     const svg = stage();
@@ -533,7 +534,7 @@ describe('survol depuis la liste des formes', () => {
     const { mountShapeList } = await import('../src/ui/shape-list.js');
     const layer = createLayer({
       center: { x: 0, y: 0 },
-      elements: [createElement('circle', 10, 10), createElement('rect', 50, 50)],
+      elements: [createElement('ellipse', 10, 10), createElement('rect', 50, 50)],
       modifiers: [{ type: 'step', n: 3, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 }],
     });
     const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
@@ -564,7 +565,7 @@ describe('survol depuis la liste des formes', () => {
     const { mountShapeList } = await import('../src/ui/shape-list.js');
     const layer = createLayer({
       center: { x: 0, y: 0 },
-      elements: [createElement('circle', 10, 10), createElement('rect', 50, 50)],
+      elements: [createElement('ellipse', 10, 10), createElement('rect', 50, 50)],
     });
     const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: layer.elements[0].id });
     const svg = stage();
@@ -592,11 +593,11 @@ describe('rendu des formes', () => {
     const layer = createLayer({
       strokeWidth: 7,
       center: { x: 0, y: 0 },
-      elements: [createElement('circle', 10, 10), createElement('rect', 50, 50)],
+      elements: [createElement('ellipse', 10, 10), createElement('rect', 50, 50)],
       modifiers: [{ type: 'step', n: 2, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 }],
     });
     render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
-    const widths = [...svg.querySelectorAll('circle, rect')].map((node) =>
+    const widths = [...svg.querySelectorAll('ellipse, rect')].map((node) =>
       node.getAttribute('stroke-width'),
     );
     expect(widths).toEqual(['7', '7', '7', '7']);
@@ -608,13 +609,13 @@ describe('rendu des formes', () => {
       stroke: '#ff0000',
       center: { x: 0, y: 0 },
       elements: [
-        createElement('circle', 10, 10),
+        createElement('ellipse', 10, 10),
         createElement('rect', 50, 50, { filled: true }),
       ],
       modifiers: [{ type: 'none', n: 1, angleStep: 0, radiusStep: 0 }],
     });
     render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
-    const [circle, rect] = svg.querySelectorAll('circle, rect');
+    const [circle, rect] = svg.querySelectorAll('ellipse, rect');
     expect([circle, rect].map((node) => node.getAttribute('stroke'))).toEqual([
       '#ff0000',
       '#ff0000',
@@ -633,9 +634,9 @@ describe('rendu des formes', () => {
         modifiers: [{ type: 'none', n: 1, angleStep: 0, radiusStep: 0 }],
       });
 
-    render({ layers: [shaped('circle'), shaped('point'), shaped('rect')], activeElementId: null }, svg);
+    render({ layers: [shaped('ellipse'), shaped('point'), shaped('rect')], activeElementId: null }, svg);
 
-    expect(svg.querySelectorAll('circle')).toHaveLength(1);
+    expect(svg.querySelectorAll('ellipse')).toHaveLength(1);
     /* Le point est un trait nul à bout rond : son diamètre est l'épaisseur. */
     const dot = svg.querySelector('line');
     expect(dot.getAttribute('x1')).toBe(dot.getAttribute('x2'));
@@ -1203,12 +1204,12 @@ describe('style de trait', () => {
     const svg = stage();
     const layer = createLayer({
       strokeWidth: 2,
-      elements: [createElement('circle', 0, 0, { dash: [0, 2], linecap: 'round' })],
+      elements: [createElement('ellipse', 0, 0, { dash: [0, 2], linecap: 'round' })],
       modifiers: [{ type: 'step', n: 2, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
       interpolations: [ramp('scale', [1, 0.5])],
     });
     render({ layers: [layer] }, svg);
-    const [big, small] = svg.querySelectorAll('circle');
+    const [big, small] = svg.querySelectorAll('ellipse');
     expect(big.getAttribute('stroke-dasharray')).toBe('0 4');
     expect(big.getAttribute('stroke-linecap')).toBe('round');
     expect(small.getAttribute('stroke-dasharray')).toBe('0 2');
@@ -1217,8 +1218,8 @@ describe('style de trait', () => {
 
   it('un trait plein à bout net n’ajoute rien', () => {
     const svg = stage();
-    render({ layers: [createLayer({ elements: [createElement('circle', 0, 0)] })] }, svg);
-    const circle = svg.querySelector('circle');
+    render({ layers: [createLayer({ elements: [createElement('ellipse', 0, 0)] })] }, svg);
+    const circle = svg.querySelector('ellipse');
     expect(circle.hasAttribute('stroke-dasharray')).toBe(false);
     expect(circle.hasAttribute('stroke-linecap')).toBe(false);
   });
@@ -1227,8 +1228,8 @@ describe('style de trait', () => {
 describe('panneau : motif de trait', () => {
   it('le segment Points pose tirets et bout rond, la saisie libre garde son motif', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
-    const element = createElement('circle', 0, 0);
-    const layer = createLayer({ elements: [element, createElement('circle', 50, 0)] });
+    const element = createElement('ellipse', 0, 0);
+    const layer = createLayer({ elements: [element, createElement('ellipse', 50, 0)] });
     const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: element.id });
     const { shapeDetail } = mountPropertyPanel({ store });
     const [trait, bout] = shapeDetail.querySelectorAll('fieldset.segmented');

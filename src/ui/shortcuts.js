@@ -10,7 +10,6 @@ import {
 /* Une touche par outil. `cursor` n'est pas une forme mais partage le sélecteur. */
 export const TOOL_KEYS = {
   v: 'cursor',
-  c: 'circle',
   a: 'arc',
   e: 'ellipse',
   p: 'polygon',

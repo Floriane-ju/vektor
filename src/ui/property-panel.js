@@ -650,8 +650,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       strokeGroup.hidden = dot;
       strokeSeparator.hidden = dot;
       dashLength.hidden = dashKind(element.dash) !== 'dashed';
-      /* Un cercle et un point tournés restent identiques : rien à régler. */
-      rotationField.hidden = dot || geometry === 'circle';
+      /* Un point tourné reste identique : rien à régler. */
+      rotationField.hidden = dot;
       polygonRow.hidden = geometry !== 'polygon';
       arcRow.hidden = geometry !== 'arc';
       closedField.hidden = !trace;

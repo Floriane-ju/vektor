@@ -299,7 +299,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
      de remplacer la précédente. */
   const patchAt = (event) => {
     const point = stagePoint(event);
-    return dragPatch(tool, stroke, point.x - stroke.x, point.y - stroke.y);
+    return dragPatch(tool, stroke, point.x - stroke.x, point.y - stroke.y, event.shiftKey);
   };
 
   /* ---- Tracé au clic ---- */

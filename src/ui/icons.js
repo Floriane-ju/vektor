@@ -2,7 +2,6 @@
    suit le texte du bouton, pressé ou non. Tracés repris de la maquette E. */
 const PATHS = {
   cursor: '<path d="M5 3 L16 11 L11 12 L14 18 L12 19 L9 13 L5 16 Z" fill="currentColor" stroke="none"/>',
-  circle: '<circle cx="10" cy="10" r="7"/>',
   arc: '<path d="M3 13 A7 7 0 0 1 17 13 Z" stroke-linejoin="round"/>',
   ellipse: '<ellipse cx="10" cy="10" rx="8" ry="5"/>',
   polygon: '<path d="M10 2.5 L17 7.5 L14.5 16 L5.5 16 L3 7.5 Z" stroke-linejoin="round"/>',

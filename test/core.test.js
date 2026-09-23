@@ -8,6 +8,7 @@ import {
   createElement,
   createInterpolation,
   createLayer,
+  dragPatch,
   duplicateElement,
   getRenderedChildren,
   moveElement,
@@ -181,7 +182,7 @@ describe('composition', () => {
   const layer = (overrides = {}) =>
     createLayer({
       center,
-      elements: [createElement('circle', 100, 0)],
+      elements: [createElement('ellipse', 100, 0)],
       modifiers: [{ type: 'step', n: 5, stepX: -50, stepY: 0, angleStep: 0.4, radiusStep: 12 }],
       ...overrides,
     });
@@ -237,7 +238,7 @@ describe('composition', () => {
      forme séparément. */
   it('le modificateur transforme le groupe, pas chaque forme isolément', () => {
     const group = layer({
-      elements: [createElement('circle', 100, 0), createElement('point', 140, 0)],
+      elements: [createElement('ellipse', 100, 0), createElement('point', 140, 0)],
       modifiers: [{ type: 'axial', n: 4, angleStep: 0, radiusStep: 0 }],
     });
     const children = getRenderedChildren({ ...group, interpolations: [fade()] });
@@ -334,15 +335,15 @@ describe('composition', () => {
 
   it('rend n × formes, groupées par copie', () => {
     const group = layer({
-      elements: [createElement('circle', 10, 0), createElement('rect', 20, 0)],
+      elements: [createElement('ellipse', 10, 0), createElement('rect', 20, 0)],
       modifiers: [{ type: 'step', n: 3, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 }],
     });
     expect(getRenderedChildren(group).map((c) => c.type)).toEqual([
-      'circle',
+      'ellipse',
       'rect',
-      'circle',
+      'ellipse',
       'rect',
-      'circle',
+      'ellipse',
       'rect',
     ]);
   });
@@ -429,8 +430,8 @@ describe('formes d’un calque', () => {
   const withTwo = () => {
     const layer = createLayer();
     let scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
-    scene = addElement(scene, layer.id, 'circle', 10, 10);
-    scene = addElement(scene, layer.id, 'circle', 20, 20);
+    scene = addElement(scene, layer.id, 'ellipse', 10, 10);
+    scene = addElement(scene, layer.id, 'ellipse', 20, 20);
     return scene;
   };
 
@@ -443,7 +444,7 @@ describe('formes d’un calque', () => {
   it('une nouvelle forme reprend le remplissage de la forme active', () => {
     let scene = withTwo();
     scene = updateElement(scene, scene.activeElementId, { filled: true });
-    scene = addElement(scene, scene.layers[0].id, 'circle', 30, 30);
+    scene = addElement(scene, scene.layers[0].id, 'ellipse', 30, 30);
     expect(scene.layers[0].elements.at(-1).filled).toBe(true);
   });
 
@@ -513,7 +514,7 @@ describe('persistance', () => {
   it('un aller-retour JSON reconstruit une scène identique', () => {
     const layer = createLayer({
       elements: [
-        createElement('circle', 120, 340, { rx: 42, ry: 42, filled: true }),
+        createElement('ellipse', 120, 340, { rx: 42, ry: 42, filled: true }),
         createElement('rect', 200, 100, { rx: 30, ry: 15 }),
       ],
       modifiers: [
@@ -683,7 +684,7 @@ describe('persistance', () => {
         {
           id: 'L1',
           name: 'Ancien calque',
-          baseElement: { type: 'circle', x: 10, y: 20, radius: 33, stroke: '#abcdef' },
+          baseElement: { type: 'ellipse', x: 10, y: 20, radius: 33, stroke: '#abcdef' },
           modifier: { type: 'axial', n: 8 },
         },
       ],
@@ -692,7 +693,7 @@ describe('persistance', () => {
     const [layer] = deserialize(v1).layers;
     const { elements } = layer;
     expect(elements).toHaveLength(1);
-    expect(elements[0]).toMatchObject({ type: 'circle', x: 10, y: 20, rx: 33, ry: 33 });
+    expect(elements[0]).toMatchObject({ type: 'ellipse', x: 10, y: 20, rx: 33, ry: 33 });
     expect(layer.stroke).toBe('#abcdef');
     expect(elements[0].radius).toBeUndefined();
   });
@@ -731,12 +732,36 @@ describe('persistance', () => {
     const duplicateElements = JSON.stringify({
       format: 'illu/scene@3',
       layers: [
-        { id: 'L1', elements: [{ id: 'E1', type: 'circle', x: 0, y: 0 }] },
-        { id: 'L2', elements: [{ id: 'E1', type: 'circle', x: 0, y: 0 }] },
+        { id: 'L1', elements: [{ id: 'E1', type: 'ellipse', x: 0, y: 0 }] },
+        { id: 'L2', elements: [{ id: 'E1', type: 'ellipse', x: 0, y: 0 }] },
       ],
       activeLayerId: 'L1',
     });
     expect(() => deserialize(duplicateElements)).toThrow(/formes portent le même/);
+  });
+});
+
+describe('dessin contraint (Maj)', () => {
+  const origin = { x: 100, y: 100 };
+
+  it('ellipse et rectangle deviennent cercle et carré', () => {
+    expect(dragPatch('ellipse', origin, 30, -80, true)).toEqual({ rx: 80, ry: 80 });
+    expect(dragPatch('rect', origin, -50, 20, true)).toEqual({ rx: 50, ry: 50 });
+    expect(dragPatch('rect', origin, -50, 20)).toEqual({ rx: 50, ry: 20 });
+  });
+
+  it('la ligne s’aimante par pas de 45° en gardant sa longueur', () => {
+    const patch = dragPatch('line', origin, 100, 10, true);
+    expect(patch.ry).toBeCloseTo(0);
+    expect(patch.rx).toBeCloseTo(Math.hypot(100, 10) / 2);
+    const diagonal = dragPatch('line', origin, -40, 45, true);
+    expect(Math.abs(diagonal.rx)).toBeCloseTo(Math.abs(diagonal.ry));
+    expect(diagonal.rx).toBeLessThan(0);
+    expect(diagonal.x).toBeCloseTo(origin.x + diagonal.rx);
+  });
+
+  it('les formes uniformes ne changent pas', () => {
+    expect(dragPatch('polygon', origin, 30, 40, true)).toEqual(dragPatch('polygon', origin, 30, 40));
   });
 });
 
@@ -841,7 +866,7 @@ describe('historique', () => {
   it('ignore un changement de sélection seule', () => {
     const store = createStore(createScene());
     const { id } = store.get().layers[0];
-    store.apply(addElement, id, 'circle', 0, 0);
+    store.apply(addElement, id, 'ellipse', 0, 0);
     const drawn = store.get();
     store.apply(setActiveElement, null);
     store.undo();
@@ -854,7 +879,7 @@ describe('historique', () => {
     const before = store.get();
     const { id } = before.layers[0];
     store.begin('geste');
-    store.apply(addElement, id, 'circle', 0, 0);
+    store.apply(addElement, id, 'ellipse', 0, 0);
     const elementId = store.get().activeElementId;
     for (let rx = 1; rx < 50; rx += 1) store.apply(updateElement, elementId, { rx });
     store.end('geste');
@@ -1070,8 +1095,8 @@ describe('style de trait de la forme', () => {
   });
 
   it('reste propre à chaque forme et survit à la sauvegarde', () => {
-    const dotted = createElement('circle', 0, 0, { dash: [0, 2], linecap: 'round' });
-    const layer = createLayer({ elements: [dotted, createElement('circle', 50, 0)] });
+    const dotted = createElement('ellipse', 0, 0, { dash: [0, 2], linecap: 'round' });
+    const layer = createLayer({ elements: [dotted, createElement('ellipse', 50, 0)] });
     const [first, second] = getRenderedChildren(layer);
     expect(first).toMatchObject({ dash: [0, 2], linecap: 'round' });
     expect(second).toMatchObject({ dash: [], linecap: 'butt' });
@@ -1080,7 +1105,7 @@ describe('style de trait de la forme', () => {
   });
 
   it('un ancien fichier se relit en trait plein, et un import est borné', () => {
-    const shape = { id: 'E1', type: 'circle', x: 0, y: 0 };
+    const shape = { id: 'E1', type: 'ellipse', x: 0, y: 0 };
     const old = JSON.stringify({ format: 'illu/scene@13', layers: [{ id: 'L1', elements: [shape] }] });
     expect(deserialize(old).layers[0].elements[0]).toMatchObject({ dash: [], linecap: 'butt' });
 

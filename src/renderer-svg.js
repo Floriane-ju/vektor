@@ -240,10 +240,6 @@ const createNode = (child) => {
     node.setAttribute('d', arcPath(child.x, child.y, rx, child.start, child.end, child.closure));
   } else if (geometry === 'polygon') {
     node.setAttribute('points', polygonPoints(child.x, child.y, rx, child.sides, child.inner));
-  } else {
-    node.setAttribute('cx', round(child.x));
-    node.setAttribute('cy', round(child.y));
-    node.setAttribute('r', round(rx));
   }
 
   /* Orientation de la copie et rotation propre, autour du centre de la forme
@@ -321,10 +317,8 @@ const outlinePoints = (child) => {
       const points = around(child.start, child.start + span, rx, rx);
       return child.closure === 'sector' ? [...points, { x, y }] : points;
     }
-    case 'ellipse':
-      return around(0, 360, rx, ry);
     default:
-      return around(0, 360, rx, rx);
+      return around(0, 360, rx, ry);
   }
 };
 

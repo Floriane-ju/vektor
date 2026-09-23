@@ -53,8 +53,8 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   pointer('pointermove', 450, 520);
   pointer('pointerup', 450, 520);
 
-  expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(1);
-  expect(stage.querySelector('circle').getAttribute('r')).toBe('70');
+  expect(stage.querySelectorAll('ellipse[data-element-id]')).toHaveLength(1);
+  expect(stage.querySelector('ellipse').getAttribute('ry')).toBe('70');
   expect(hint.hidden).toBe(true);
 
   /* Un second geste ajoute une forme au même calque au lieu de remplacer la
@@ -62,7 +62,7 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   pointer('pointerdown', 200, 200);
   pointer('pointerup', 230, 200);
 
-  expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(2);
+  expect(stage.querySelectorAll('ellipse[data-element-id]')).toHaveLength(2);
   expect(document.querySelectorAll('#shape-list .layer-row')).toHaveLength(2);
   /* La forme dessinée est sélectionnée : le panneau passe à ses réglages, et
      l'arbre loge la liste des formes sous le calque. */
@@ -83,20 +83,20 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   const blocks = inspector.querySelectorAll('.modifier-block');
   expect(blocks).toHaveLength(2);
   /* Deux « Pas » de 6 copies sur un calque de deux formes. */
-  expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(6 * 6 * 2);
+  expect(stage.querySelectorAll('ellipse[data-element-id]')).toHaveLength(6 * 6 * 2);
 
   const [type] = blocks[1].querySelectorAll('select');
   type.value = 'mirrorH';
   type.dispatchEvent(new Event('change'));
-  expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(6 * 2 * 2);
+  expect(stage.querySelectorAll('ellipse[data-element-id]')).toHaveLength(6 * 2 * 2);
 
   blocks[0].querySelector('.icon-btn.is-danger').click();
   expect(inspector.querySelectorAll('.modifier-block')).toHaveLength(1);
-  expect(stage.querySelectorAll('circle[data-element-id]')).toHaveLength(2 * 2);
+  expect(stage.querySelectorAll('ellipse[data-element-id]')).toHaveLength(2 * 2);
 
   /* Une interpolation ajoutée depuis la card du calque éteint ses copies. */
   const opacities = () =>
-    [...stage.querySelectorAll('circle[data-element-id]')].map((node) => node.getAttribute('fill-opacity'));
+    [...stage.querySelectorAll('ellipse[data-element-id]')].map((node) => node.getAttribute('fill-opacity'));
   expect(opacities()).toEqual(['1', '1', '1', '1']);
 
   document.querySelector('[data-focus-key="add-interpolation"]').click();
@@ -113,7 +113,7 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
 
   /* Raccourcis : outil, dupliquer, supprimer, rien pendant la saisie. */
   const press = (init) => window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ...init }));
-  const circles = () => stage.querySelectorAll('circle[data-element-id]').length;
+  const circles = () => stage.querySelectorAll('ellipse[data-element-id]').length;
   press({ key: 'r' });
   expect(document.getElementById('shape-rect').checked).toBe(true);
   press({ key: 'd', metaKey: true });

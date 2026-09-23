@@ -66,12 +66,6 @@ export const RANGE_LABELS = { opacity: 'Opacité', scale: 'Échelle' };
  * modificateurs axial et spirale.
  */
 export const SHAPES = {
-  circle: {
-    label: 'Cercle',
-    geometry: 'circle',
-    uniform: true,
-    defaults: { rx: 60, ry: 60, filled: false },
-  },
   /* Portion du cercle de rayon `rx`, de `start` à `end` en degrés — 0 en haut,
      sens horaire, comme le premier sommet du polygone. `closure` choisit ce
      qu'on voit de la même paire d'angles : l'arc nu, la corde ou le secteur.
@@ -82,7 +76,7 @@ export const SHAPES = {
     uniform: true,
     defaults: { rx: 60, ry: 60, start: 0, end: 180, closure: 'sector', filled: false },
   },
-  /* Un cercle qui cesse d'être uniforme : même nœud à deux rayons. */
+  /* Maj au dessin la rend ronde : pas d'outil cercle à part. */
   ellipse: {
     label: 'Ellipse',
     geometry: 'ellipse',
@@ -140,7 +134,7 @@ export const SHAPES = {
   },
 };
 
-export const DEFAULT_SHAPE = 'circle';
+export const DEFAULT_SHAPE = 'ellipse';
 
 /* Au-delà, un polygone ne se distingue plus d'un cercle. */
 export const MAX_SIDES = 64;
@@ -268,15 +262,27 @@ export const clampExtent = (type, value) => (SHAPES[type].signed ? value : Math.
  * geste ; comme `x, y` doit rester le milieu de la forme — c'est ce que le
  * modèle suppose partout ailleurs, de l'échelle aux modificateurs — le centre
  * suit le curseur à mi-chemin et les demi-extensions valent la moitié du
- * déplacement.
+ * déplacement. `constrained` (Maj) équilibre le geste : carré, cercle, 45°.
  */
-export const dragPatch = (type, origin, dx, dy) => {
+export const dragPatch = (type, origin, dx, dy, constrained = false) => {
   /* Un point n'a pas d'étendue : le geste le pose, l'épaisseur le dimensionne. */
   if (SHAPES[type].geometry === 'dot') return { rx: 0, ry: 0 };
   if (SHAPES[type].signed) {
+    if (constrained) {
+      /* Maj : l'angle s'aimante par pas de 45°, la longueur reste celle du geste. */
+      const step = Math.PI / 4;
+      const angle = Math.round(Math.atan2(dy, dx) / step) * step;
+      const length = Math.hypot(dx, dy);
+      [dx, dy] = [length * Math.cos(angle), length * Math.sin(angle)];
+    }
     return { x: origin.x + dx / 2, y: origin.y + dy / 2, rx: dx / 2, ry: dy / 2 };
   }
-  if (!SHAPES[type].uniform) return { rx: Math.abs(dx), ry: Math.abs(dy) };
+  if (!SHAPES[type].uniform) {
+    if (!constrained) return { rx: Math.abs(dx), ry: Math.abs(dy) };
+    /* Maj : ellipse → cercle, rectangle → carré, sur la plus grande extension. */
+    const side = Math.max(Math.abs(dx), Math.abs(dy));
+    return { rx: side, ry: side };
+  }
   const radius = Math.hypot(dx, dy);
   return { rx: radius, ry: radius };
 };
