@@ -23,9 +23,10 @@ import {
 
 /* La clé ne suit pas la version du format : la changer orphelinerait
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
-   relire les anciens formats. */
+   relire les anciens formats. Même raison pour le préfixe `illu` : c'est
+   l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@16';
+export const FORMAT = 'vektor/scene@16';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -65,6 +66,7 @@ const READABLE_FORMATS = new Set([
   'illu/scene@13',
   'illu/scene@14',
   'illu/scene@15',
+  'illu/scene@16',
   FORMAT,
 ]);
 
@@ -343,7 +345,7 @@ export const deserialize = (text) => {
   if (!Array.isArray(raw.layers)) fail('`layers` doit être un tableau.');
 
   /* Avant `@13`, pas d'orientation des copies. */
-  const legacy = !['illu/scene@13', 'illu/scene@14', 'illu/scene@15', FORMAT].includes(raw.format);
+  const legacy = !['illu/scene@13', 'illu/scene@14', 'illu/scene@15', 'illu/scene@16', FORMAT].includes(raw.format);
   const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy));
   if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
     fail('Deux calques portent le même identifiant.');

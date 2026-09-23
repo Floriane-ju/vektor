@@ -136,7 +136,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     const trigger = event.currentTarget;
     trigger.disabled = true;
     try {
-      download(toSvgDocument(svgRoot), 'illu.svg', 'image/svg+xml');
+      download(toSvgDocument(svgRoot), 'vektor.svg', 'image/svg+xml');
       status.show('SVG exporté.');
     } finally {
       trigger.disabled = false;
@@ -144,7 +144,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   });
 
   const exportJson = menuItem('Exporter le projet (JSON)', () => {
-    download(serialize(store.get()), 'illu.json', 'application/json');
+    download(serialize(store.get()), 'vektor.json', 'application/json');
     status.show('Projet exporté.');
   });
 

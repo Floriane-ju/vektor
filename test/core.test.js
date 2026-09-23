@@ -1194,6 +1194,16 @@ describe('rotation et épaisseur interpolées', () => {
     });
     expect(deserialize(old).layers[0].interpolations.map((i) => i.property)).toEqual(['scale']);
   });
+
+  it('une scène `illu/scene@16` (ancien nom) se relit, orientation comprise', () => {
+    const old = JSON.stringify({
+      format: 'illu/scene@16',
+      layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
+    });
+    const again = deserialize(serialize(deserialize(old)));
+    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@16');
+    expect(orients(again.layers[0].modifiers[0])).toBe(true);
+  });
 });
 
 describe('grille', () => {
