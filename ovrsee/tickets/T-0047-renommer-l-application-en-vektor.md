@@ -2,7 +2,7 @@
 {
   "id": "T-0047",
   "titre": "Renommer l'application en Vektor",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["marque"],
   "cree": "2026-09-23",
