@@ -2,7 +2,7 @@
 {
   "id": "T-0027",
   "titre": "Pointillés et bouts de trait",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "rendu"

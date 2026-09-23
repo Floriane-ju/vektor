@@ -2,9 +2,11 @@
 {
   "id": "T-0041",
   "titre": "Interface « design E » : panneaux flottants sombres",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
-  "tags": ["ui"],
+  "tags": [
+    "ui"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null
