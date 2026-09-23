@@ -366,3 +366,26 @@ fieldset legend {
 .empty-note { color: var(--text-dim); margin: 0 0 10px; }
 
 
+
+/* ---- Raccourcis clavier ---- */
+
+.shortcuts {
+  max-width: 28rem;
+  padding: 16px 20px;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.shortcuts::backdrop { background: rgb(0 0 0 / 0.5); }
+.shortcuts h2 { margin: 0 0 12px; font-size: 1rem; }
+.shortcuts dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 16px; }
+.shortcuts dd { margin: 0; color: var(--text-dim); }
+.shortcuts kbd {
+  padding: 1px 6px;
+  font: inherit;
+  background: var(--bg-field);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.shortcuts form { text-align: right; }

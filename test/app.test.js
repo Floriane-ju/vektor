@@ -100,4 +100,18 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   expect(opacities()).toEqual(['1', '1', '1', '1']);
   key(true);
   expect(opacities()).toEqual(['1', '1', '0', '0']);
+
+  /* Raccourcis : outil, dupliquer, supprimer, rien pendant la saisie. */
+  const press = (init) => window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ...init }));
+  const circles = () => stage.querySelectorAll('circle[data-element-id]').length;
+  press({ key: 'r' });
+  expect(document.getElementById('shape-rect').checked).toBe(true);
+  press({ key: 'd', metaKey: true });
+  expect(circles()).toBe(3 * 2);
+  press({ key: 'Delete' });
+  expect(circles()).toBe(2 * 2);
+  const field = document.createElement('input');
+  document.body.append(field);
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+  expect(circles()).toBe(2 * 2);
 });

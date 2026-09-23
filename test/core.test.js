@@ -8,6 +8,7 @@ import {
   createElement,
   createInterpolation,
   createLayer,
+  duplicateElement,
   getRenderedChildren,
   moveElement,
   moveLayer,
@@ -488,6 +489,20 @@ describe('formes d’un calque', () => {
     const next = moveElement(scene, first.id, 1);
     expect(scene.layers[0].elements).toEqual([first, second]);
     expect(next.layers[0].elements).toEqual([second, first]);
+  });
+
+  it('duplicateElement insère une copie décalée juste devant et la sélectionne', () => {
+    const scene = withTwo();
+    const [first, second] = scene.layers[0].elements;
+    const next = duplicateElement(scene, first.id, 10);
+    const copy = next.layers[0].elements[1];
+    expect(next.layers[0].elements).toHaveLength(3);
+    expect(next.layers[0].elements[2]).toBe(second);
+    expect(copy).toEqual({ ...first, id: copy.id, x: first.x + 10, y: first.y + 10 });
+    expect(copy.id).not.toBe(first.id);
+    expect(next.activeElementId).toBe(copy.id);
+    expect(scene.layers[0].elements).toEqual([first, second]);
+    expect(duplicateElement(scene, 'inconnu', 10)).toBe(scene);
   });
 });
 

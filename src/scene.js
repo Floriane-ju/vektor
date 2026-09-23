@@ -462,6 +462,19 @@ export const removeElement = (scene, elementId) => {
   return { ...next, activeElementId: layer?.elements.at(-1)?.id ?? null };
 };
 
+/** Copie posée juste devant l'originale, décalée de `offset` pour qu'on la voie. */
+export const duplicateElement = (scene, elementId, offset) => {
+  const source = scene.layers.flatMap((layer) => layer.elements).find((el) => el.id === elementId);
+  if (!source) return scene;
+  const copy = { ...source, id: nextId('E'), x: source.x + offset, y: source.y + offset };
+  return {
+    ...mapElement(scene, elementId, (elements) =>
+      elements.flatMap((element) => (element.id === elementId ? [element, copy] : [element])),
+    ),
+    activeElementId: copy.id,
+  };
+};
+
 /** `delta` = -1 vers l'arrière du calque, +1 vers l'avant. */
 export const moveElement = (scene, elementId, delta) => {
   const layer = scene.layers.find((candidate) =>
