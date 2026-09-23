@@ -2,9 +2,11 @@
 {
   "id": "T-0049",
   "titre": "Retirer la pastille couleur de l'entête calque",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "basse",
-  "tags": ["ui"],
+  "tags": [
+    "ui"
+  ],
   "cree": "2026-09-23",
   "maj": "2026-09-23",
   "plan": null

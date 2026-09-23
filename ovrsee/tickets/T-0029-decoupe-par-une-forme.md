@@ -2,7 +2,7 @@
 {
   "id": "T-0029",
   "titre": "Booléens entre formes d'un calque",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "rendu"

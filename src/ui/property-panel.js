@@ -35,14 +35,11 @@ import { FIXED_COPIES, MODIFIER_LABELS, ORIENTING, orients } from '../modifiers.
  * slider disparaîtrait sous la souris au premier pixel.
  */
 
-/* Pastilles de couleur proposées d'office ; le sélecteur libre et le champ hex
-   restent là pour tout le reste. */
+/* Pastilles de base (l'accent et le blanc du thème) ; les couleurs du dessin
+   s'y ajoutent, cf. `swatchColors`. */
 const PALETTE = [
-  ['#ee4722', 'Rouge-orangé'],
-  ['#fcb911', 'Orange'],
-  ['#f5ed62', 'Jaune'],
-  ['#3ba2d6', 'Bleu'],
-  ['#fcfaf3', 'Crème'],
+  ['#ee4722', 'Accent'],
+  ['#fcfaf3', 'Blanc'],
 ];
 
 /* Bornes des curseurs. Le champ numérique voisin accepte au-delà : le curseur

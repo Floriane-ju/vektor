@@ -163,5 +163,8 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   expect(inspector.querySelectorAll('.swatch[data-color="#ee4722"]')).toHaveLength(1);
   swatch('#7dd3c0').click();
   expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('true');
+  /* Palette globale : accent + blanc, plus les couleurs portées par le dessin. */
+  const colors = () => [...inspector.querySelectorAll('.swatch[data-color]')].map((s) => s.dataset.color);
+  expect(colors()).toEqual(['#ee4722', '#fcfaf3', '#7dd3c0']);
 });
 
