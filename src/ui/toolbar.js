@@ -249,15 +249,11 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
       return;
     }
     if (drag) moveDrag(event);
-    /* Sous le curseur, la forme sélectionnée ressort toujours, où que soit le
-       pointeur ; celle survolée s'y ajoute. Pendant un glissement, seule la
-       sélection compte. */
+    /* Sous le curseur, seule la forme sélectionnée ressort, où que soit le
+       pointeur : survoler une autre forme ne la surligne pas. */
     const { activeElementId } = store.get();
     svgRoot.toggleAttribute('data-has-selection', Boolean(activeElementId));
-    const selected = activeElementId ? [...renderedNodes(svgRoot, activeElementId)] : [];
-    const node = drag ? null : shapeAt(event);
-    const hovered = node && node.dataset.elementId !== activeElementId ? [node] : [];
-    showHover(svgRoot, [...selected, ...hovered]);
+    showHover(svgRoot, activeElementId ? renderedNodes(svgRoot, activeElementId) : []);
   });
   svgRoot.addEventListener('pointerleave', () => clearHover(svgRoot));
 

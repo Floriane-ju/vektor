@@ -306,9 +306,7 @@ export const showHover = (svgRoot, nodes) => {
     overlay.dataset.hover = '';
     overlay.setAttribute('pointer-events', 'none');
     overlay.setAttribute('fill', highlightColor(node.getAttribute('fill')));
-    const stroke = highlightColor(node.getAttribute('stroke'));
-    overlay.setAttribute('stroke', stroke);
-    overlay.style.setProperty('--highlight', stroke);
+    overlay.setAttribute('stroke', highlightColor(node.getAttribute('stroke')));
     svgRoot.append(overlay);
   }
 };

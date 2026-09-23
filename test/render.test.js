@@ -463,18 +463,9 @@ describe('outil curseur', () => {
     expect(store.get().layers[0].elements[0]).toMatchObject({ x: 140, y: 110 });
   });
 
-  it('le survol pose une copie de la forme par-dessus, sans la dessiner', () => {
+  it('survoler une forme non sélectionnée ne la surligne pas', () => {
     const { svg } = mountWithShape();
-    const circle = svg.querySelector('circle');
-    on(circle, 'pointermove');
-
-    const overlay = svg.querySelector('[data-hover]');
-    expect(overlay.tagName.toLowerCase()).toBe('circle');
-    expect(overlay.getAttribute('r')).toBe(circle.getAttribute('r'));
-    expect(svg.lastElementChild).toBe(overlay);
-    expect(toSvgDocument(svg)).not.toContain('data-hover');
-
-    on(svg, 'pointermove');
+    on(svg.querySelector('circle'), 'pointermove');
     expect(svg.querySelector('[data-hover]')).toBeNull();
   });
 
