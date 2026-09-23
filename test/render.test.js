@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it } from 'vitest';
-import { highlightColor, render, toSvgDocument } from '../src/renderer-svg.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, toSvgDocument } from '../src/renderer-svg.js';
 import { createElement, createInterpolation, createLayer, STAGE } from '../src/scene.js';
 import { createStore } from '../src/store.js';
 import { mountToolbar } from '../src/ui/toolbar.js';
@@ -469,16 +469,19 @@ describe('outil curseur', () => {
     expect(svg.querySelector('[data-hover]')).toBeNull();
   });
 
-  it('la forme sélectionnée reste surlignée quand le pointeur survole le reste du dessin', () => {
+  it('la forme sélectionnée porte un contour, sans changer sa peinture', () => {
     const { store, svg, layer } = mountWithShape();
-    on(svg.querySelector('circle'), 'pointerdown', 100, 100);
+    const circle = svg.querySelector('circle');
+    const paint = ['fill', 'stroke', 'fill-opacity', 'stroke-opacity'].map((a) => circle.getAttribute(a));
+    on(circle, 'pointerdown', 100, 100);
     on(svg, 'pointerup', 100, 100);
-    on(svg, 'pointermove', 600, 600);
 
-    const overlays = svg.querySelectorAll('[data-hover]');
-    expect(overlays.length).toBeGreaterThan(0);
     expect(store.get().activeElementId).toBe(layer.elements[0].id);
-    expect([...overlays].every((node) => node.tagName.toLowerCase() === 'circle')).toBe(true);
+    expect(svg.querySelectorAll('[data-selection]')).toHaveLength(1);
+    const source = svg.querySelector('[data-element-id]');
+    expect(['fill', 'stroke', 'fill-opacity', 'stroke-opacity'].map((a) => source.getAttribute(a))).toEqual(paint);
+    expect(svg.querySelector('[data-hover]')).toBeNull();
+    expect(toSvgDocument(svg)).not.toContain('data-selection');
   });
 
   it('un clic sélectionne la forme et son calque, sans en créer', () => {
@@ -500,22 +503,8 @@ describe('outil curseur', () => {
   });
 });
 
-describe('couleur du surlignage', () => {
-  const luminance = (hex) => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16);
-
-  it('éclaircit une couleur foncée et assombrit une couleur claire', () => {
-    expect(luminance(highlightColor('#1a1a40'))).toBeGreaterThan(luminance('#1a1a40'));
-    expect(luminance(highlightColor('#7dd3c0'))).toBeLessThan(luminance('#7dd3c0'));
-    expect(luminance(highlightColor('#fff'))).toBeLessThan(luminance('#ffffff'));
-  });
-
-  it('laisse intact ce qui n’est pas une couleur hexadécimale', () => {
-    expect(highlightColor('none')).toBe('none');
-  });
-});
-
 describe('survol depuis la liste des formes', () => {
-  it('surligne toutes les copies de la forme survolée, puis les retire', async () => {
+  it('entoure la seule copie source de la forme survolée, puis la retire', async () => {
     const { mountShapeList } = await import('../src/ui/shape-list.js');
     const layer = createLayer({
       center: { x: 0, y: 0 },
@@ -530,15 +519,43 @@ describe('survol depuis la liste des formes', () => {
 
     const row = list.querySelector(`[data-focus-key="name-${layer.elements[0].id}"]`).closest('li');
     row.dispatchEvent(new MouseEvent('pointerenter'));
-    const overlays = svg.querySelectorAll('[data-hover]');
-    expect(overlays).toHaveLength(3);
-    expect([...overlays].every((node) => node.tagName.toLowerCase() === 'circle')).toBe(true);
+    const outlines = svg.querySelectorAll('[data-hover]');
+    expect(outlines).toHaveLength(1);
+    /* Anneau autour de la copie source (x = 10), pas des copies décalées. */
+    expect(outlines[0].querySelector('[mask] circle').getAttribute('cx')).toBe('10');
     expect(toSvgDocument(svg)).not.toContain('data-hover');
 
+    vi.useFakeTimers();
     row.dispatchEvent(new MouseEvent('pointerleave'));
+    vi.runAllTimers();
+    vi.useRealTimers();
     expect(svg.querySelectorAll('[data-hover]')).toHaveLength(0);
   });
 
+  it('masque le contour de sélection le temps du survol d’une autre forme', async () => {
+    const { mountShapeList } = await import('../src/ui/shape-list.js');
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      elements: [createElement('circle', 10, 10), createElement('rect', 50, 50)],
+    });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: layer.elements[0].id });
+    const svg = stage();
+    render(store.get(), svg);
+    const list = document.createElement('div');
+    mountShapeList({ store, container: list, svgRoot: svg, status: { show: () => {} } });
+
+    const selection = svg.querySelector('[data-selection]');
+    const row = list.querySelector(`[data-focus-key="name-${layer.elements[1].id}"]`).closest('li');
+    row.dispatchEvent(new MouseEvent('pointerenter'));
+    expect(selection.getAttribute('visibility')).toBe('hidden');
+    vi.useFakeTimers();
+    row.dispatchEvent(new MouseEvent('pointerleave'));
+    /* Délai de sortie : entre deux cards, la sélection ne reprend pas l'accent. */
+    expect(selection.getAttribute('visibility')).toBe('hidden');
+    vi.runAllTimers();
+    vi.useRealTimers();
+    expect(selection.hasAttribute('visibility')).toBe(false);
+  });
 });
 
 describe('rendu des formes', () => {

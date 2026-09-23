@@ -7,8 +7,12 @@ import {
   setActiveElement,
   SHAPES,
 } from '../scene.js';
-import { clearHover, renderedNodes, showHover } from '../renderer-svg.js';
+import { clearHover, showHover } from '../renderer-svg.js';
 import { iconButton, rebuildWithFocus, whenChanged } from './list.js';
+
+/* Délai avant de rendre l'accent à la sélection quand le pointeur quitte une
+   card, en millisecondes : assez pour traverser l'interstice entre deux. */
+const HOVER_LEAVE_DELAY = 120;
 
 /**
  * Liste des formes du calque actif.
@@ -33,10 +37,16 @@ export const mountShapeList = ({
   /* Forme dont la card est repliée, tant qu'elle reste sélectionnée. */
   let collapsedId = null;
 
+  /* Sortie d'une card différée : entre deux cards, le pointeur passe par
+     l'interstice et la sélection reprendrait l'accent un instant. */
+  let leaveTimer = null;
+
   const highlight = (elementId) => {
+    clearTimeout(leaveTimer);
     hoveredId = elementId;
+    container.toggleAttribute('data-hovering', Boolean(elementId));
     if (!svgRoot) return;
-    if (elementId) showHover(svgRoot, renderedNodes(svgRoot, elementId));
+    if (elementId) showHover(svgRoot, elementId);
     else clearHover(svgRoot);
   };
 
@@ -105,7 +115,9 @@ export const mountShapeList = ({
     card.className = 'layer-card';
     card.dataset.active = String(isActive);
     card.addEventListener('pointerenter', () => highlight(element.id));
-    card.addEventListener('pointerleave', () => highlight(null));
+    card.addEventListener('pointerleave', () => {
+      leaveTimer = setTimeout(() => highlight(null), HOVER_LEAVE_DELAY);
+    });
     /* Même ligne que le panneau calques, sans la bascule de visibilité : une
        forme se masque en la supprimant ou en masquant son calque. */
     const row = document.createElement('div');

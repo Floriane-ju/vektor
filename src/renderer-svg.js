@@ -31,6 +31,8 @@ export const render = (scene, svgRoot) => {
     svgRoot.append(group);
   }
 
+  const selection = createSelection(scene, svgRoot);
+  if (selection) svgRoot.append(selection);
   const guides = createGuides(getActiveLayer(scene));
   if (guides) svgRoot.append(guides);
   const handles = createHandles(scene);
@@ -250,70 +252,102 @@ const createNode = (child) => {
   return node;
 };
 
-/* Part de noir ou de blanc mêlée à la couleur de la forme survolée. */
-const HIGHLIGHT_MIX = 0.55;
+/* Anneau de sélection : couleur, écart à la forme et épaisseur, en unités du
+   dessin. ponytail: il grossit avec le zoom, comme le dessin ; le diviser par
+   le facteur de zoom si ça gêne. */
+/* L'accent de l'interface : un attribut de présentation ne lit pas `var()`,
+   d'où la peinture posée en style dans `silhouette`. */
+const SELECTION_COLOR = 'var(--accent)';
+const SELECTION_GAP = 4;
+const SELECTION_WIDTH = 4;
 
-/* Au-delà, une couleur est jugée claire et s'assombrit pour ressortir. */
-const LIGHT_LUMINANCE = 0.45;
-
-const parseHex = (color) => {
-  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color ?? '');
-  if (!match) return null;
-  const hex = match[1].length === 3 ? [...match[1]].map((c) => c + c).join('') : match[1];
-  return [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+/* Une ligne ou un tracé ouvert n'a pas d'intérieur : le remplir fermerait la
+   forme d'une corde invisible. */
+const isClosed = (node) => {
+  const tag = node.tagName.toLowerCase();
+  if (tag === 'path') return /z\s*$/i.test(node.getAttribute('d') ?? '');
+  return tag !== 'line' && tag !== 'polyline';
 };
 
-/* Luminance relative WCAG : le vert pèse bien plus que le bleu à l'œil. */
-const luminance = (rgb) => {
-  const [r, g, b] = rgb.map((channel) => {
-    const c = channel / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+/* Copie nue d'un nœud rendu, grossie de `grow` de chaque côté et peinte d'une
+   seule couleur : le trait élargi déborde de la forme d'autant. */
+const silhouette = (node, color, grow) => {
+  const clone = node.cloneNode();
+  for (const name of ['data-element-id', 'transform', 'fill-opacity', 'stroke-opacity']) {
+    clone.removeAttribute(name);
+  }
+  const width = Number(node.getAttribute('stroke-width')) || 0;
+  clone.setAttribute('stroke-width', round(width + grow * 2));
+  clone.style.stroke = color;
+  clone.style.fill = isClosed(node) ? color : 'none';
+  return clone;
 };
 
 /**
- * Couleur de surlignage d'une peinture : la même teinte, éclaircie si elle est
- * foncée, assombrie si elle est claire, pour garder du contraste avec la forme.
- * Ce qui n'est pas un hexadécimal (`none`…) passe tel quel.
+ * Anneau détaché autour d'un nœud rendu : sa silhouette élargie, évidée par un
+ * masque de la silhouette à peine moins large. Rien n'est repeint sur la forme
+ * elle-même, ni couleur ni opacité, et ce qui est dessous reste visible par le
+ * liseré.
+ *
+ * La rotation est portée par le groupe, pas par les silhouettes : le masque se
+ * lit dans l'espace de l'élément qui le référence, elle s'appliquerait deux fois.
  */
-export const highlightColor = (color) => {
-  const rgb = parseHex(color);
-  if (!rgb) return color;
-  const target = luminance(rgb) > LIGHT_LUMINANCE ? 0 : 255;
-  return `#${rgb
-    .map((channel) => Math.round(channel + (target - channel) * HIGHLIGHT_MIX).toString(16).padStart(2, '0'))
-    .join('')}`;
+const outline = (node, marker) => {
+  const id = `outline-${marker}`;
+  const wrapper = document.createElementNS(SVG_NS, 'g');
+  wrapper.dataset[marker] = '';
+  wrapper.setAttribute('pointer-events', 'none');
+
+  /* Bornes larges : sous une rotation, le repère du masque tourne aussi. */
+  const bounds = { x: -STAGE.width, y: -STAGE.height, width: STAGE.width * 3, height: STAGE.height * 3 };
+  const mask = guideNode('mask', bounds);
+  mask.id = id;
+  mask.setAttribute('maskUnits', 'userSpaceOnUse');
+  const keep = guideNode('rect', bounds);
+  keep.setAttribute('fill', '#fff');
+  mask.append(keep, silhouette(node, '#000', SELECTION_GAP));
+
+  const ring = document.createElementNS(SVG_NS, 'g');
+  const transform = node.getAttribute('transform');
+  if (transform) ring.setAttribute('transform', transform);
+  ring.setAttribute('mask', `url(#${id})`);
+  ring.append(silhouette(node, SELECTION_COLOR, SELECTION_GAP + SELECTION_WIDTH));
+
+  wrapper.append(mask, ring);
+  return wrapper;
 };
 
-/** Retire le surlignage de survol, où qu'il ait été posé. */
+/* Copie source d'une forme : la première rendue, que la pile de modificateurs
+   laisse en place. Le contour ne va que sur elle, pas sur les copies. */
+const sourceNode = (svgRoot, elementId) =>
+  elementId ? svgRoot.querySelector(`[data-element-id="${CSS.escape(elementId)}"]`) : null;
+
+const createSelection = (scene, svgRoot) => {
+  const source = sourceNode(svgRoot, scene.activeElementId);
+  return source ? outline(source, 'selection') : null;
+};
+
+/** Retire le contour de survol, où qu'il ait été posé, et rend la sélection. */
 export const clearHover = (svgRoot) => {
   for (const node of svgRoot.querySelectorAll('[data-hover]')) node.remove();
+  svgRoot.querySelector('[data-selection]')?.removeAttribute('visibility');
 };
 
 /**
- * Surligne des nœuds déjà rendus : un clone de chacun par-dessus la scène,
- * repeint d'une nuance de sa propre couleur.
+ * Contour de survol sur la copie source d'une forme, dessiné comme la
+ * sélection, qu'il masque le temps du survol.
  *
  * Le survol est un état d'écran, pas de scène : le prochain rendu l'efface,
  * et c'est à l'appelant de le reposer.
  */
-export const showHover = (svgRoot, nodes) => {
+export const showHover = (svgRoot, elementId) => {
   clearHover(svgRoot);
-  for (const node of nodes) {
-    const overlay = node.cloneNode();
-    delete overlay.dataset.elementId;
-    overlay.dataset.hover = '';
-    overlay.setAttribute('pointer-events', 'none');
-    overlay.setAttribute('fill', highlightColor(node.getAttribute('fill')));
-    overlay.setAttribute('stroke', highlightColor(node.getAttribute('stroke')));
-    svgRoot.append(overlay);
-  }
+  const source = sourceNode(svgRoot, elementId);
+  if (!source) return;
+  /* Un seul accent à la fois : la forme survolée, pas celle sélectionnée. */
+  svgRoot.querySelector('[data-selection]')?.setAttribute('visibility', 'hidden');
+  svgRoot.append(outline(source, 'hover'));
 };
-
-/** Toutes les copies dessinées d'une forme : elles portent l'id de leur source. */
-export const renderedNodes = (svgRoot, elementId) =>
-  svgRoot.querySelectorAll(`[data-element-id="${CSS.escape(elementId)}"]`);
 
 const round = (value) => String(Math.round(value * 1000) / 1000);
 
@@ -325,12 +359,13 @@ const rotateAbout = (degrees, { x, y }) => `rotate(${round(degrees)} ${round(x)}
  * Le `<svg>` du DOM est cloné avant d'y poser les attributs de document : la
  * racine vivante garde ses attributs d'interface (id, role, aria-label) et le
  * fichier n'embarque que ce qui a un sens hors de la page — les repères du
- * modificateur et le survol du curseur en sont donc retirés.
+ * modificateur, la sélection et le survol en sont donc retirés.
  */
 export const toSvgDocument = (svgRoot) => {
   const clone = svgRoot.cloneNode(true);
   clone.querySelector('[data-guides]')?.remove();
   clone.querySelector('[data-handles]')?.remove();
+  clone.querySelector('[data-selection]')?.remove();
   clearHover(clone);
   clone.removeAttribute('id');
   clone.removeAttribute('role');

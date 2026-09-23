@@ -14,7 +14,7 @@ import {
   SHAPES,
   updateElement,
 } from '../scene.js';
-import { clearHover, renderedNodes, showHover, toSvgDocument } from '../renderer-svg.js';
+import { clearHover, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
 import { parseTrace } from '../path.js';
 
@@ -249,11 +249,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
       return;
     }
     if (drag) moveDrag(event);
-    /* Sous le curseur, seule la forme sélectionnée ressort, où que soit le
-       pointeur : survoler une autre forme ne la surligne pas. */
-    const { activeElementId } = store.get();
-    svgRoot.toggleAttribute('data-has-selection', Boolean(activeElementId));
-    showHover(svgRoot, activeElementId ? renderedNodes(svgRoot, activeElementId) : []);
+    svgRoot.toggleAttribute('data-has-selection', Boolean(store.get().activeElementId));
   });
   svgRoot.addEventListener('pointerleave', () => clearHover(svgRoot));
 

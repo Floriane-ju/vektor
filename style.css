@@ -111,13 +111,6 @@ body {
 #stage[data-tool="cursor"][data-dragging],
 #stage[data-tool="cursor"][data-dragging] * { cursor: grabbing; }
 
-/* Le clone est repeint d'une nuance de la couleur de sa forme (voir
-   `highlightColor`), opaque même sur une forme translucide. */
-#stage [data-hover] {
-  stroke-opacity: 1;
-  fill-opacity: 1;
-}
-
 /* ---- Layout ---- */
 
 .workspace {
@@ -321,6 +314,12 @@ fieldset legend {
 }
 
 .layer-card[data-active="true"] { border-color: var(--accent); }
+
+/* Survoler une forme de la liste lui prend l'accent, comme sur le dessin. */
+#shape-list .layer-card:hover { border-color: var(--accent); }
+/* `data-hovering` tombe avec un léger délai (voir `shape-list.js`) : passer
+   d'une card à l'autre ne rend pas l'accent à la sélection entre les deux. */
+#shape-list[data-hovering] .layer-card[data-active="true"]:not(:hover) { border-color: transparent; }
 
 .layer-row {
   display: grid;
