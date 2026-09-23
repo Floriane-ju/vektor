@@ -2,6 +2,7 @@ import {
   addModifier,
   ARC_CLOSURES,
   clampAngle,
+  clampLinecap,
   clampExtent,
   clampInner,
   clampSides,
@@ -9,6 +10,9 @@ import {
   getActiveLayer,
   moveModifier,
   removeModifier,
+  DASH_PRESETS,
+  LINECAPS,
+  parseDash,
   setLayerStroke,
   setLayerStrokeWidth,
   SHAPES,
@@ -205,6 +209,46 @@ export const mountPropertyPanel = ({ store }) => {
   const closedField = field('Fermé', closed);
   shape.append(positionRow, sizeRow, rotationField, polygonRow, arcRow, closedField, filledField);
 
+  /* Motif : un préréglage remplit la saisie libre, une saisie qui n'en reprend
+     aucun s'affiche « Libre ». Les valeurs sont des multiples de l'épaisseur du
+     calque. */
+  const presetOf = (dash) =>
+    Object.keys(DASH_PRESETS).find((key) => DASH_PRESETS[key].dash.join(' ') === dash.join(' ')) ??
+    'custom';
+  const dashPreset = document.createElement('select');
+  dashPreset.id = `prop-${++uid}`;
+  for (const [value, { label }] of Object.entries(DASH_PRESETS)) dashPreset.append(option(value, label));
+  dashPreset.append(option('custom', 'Libre'));
+  bind(
+    dashPreset,
+    (element) => presetOf(element.dash),
+    (element, value) => {
+      if (!DASH_PRESETS[value]) return dashText.focus();
+      const { label, ...patch } = DASH_PRESETS[value];
+      store.apply(updateElement, element.id, patch);
+    },
+    { event: 'change', parse: String },
+  );
+  const dashText = bind(
+    input('text', { placeholder: 'ex. 4 2' }),
+    (element) => element.dash.join(' '),
+    (element, value) => store.apply(updateElement, element.id, { dash: value }),
+    { event: 'change', parse: parseDash },
+  );
+  const linecap = document.createElement('select');
+  linecap.id = `prop-${++uid}`;
+  for (const [value, label] of Object.entries(LINECAPS)) linecap.append(option(value, label));
+  bind(
+    linecap,
+    (element) => element.linecap,
+    (element, value) => store.apply(updateElement, element.id, { linecap: clampLinecap(value) }),
+    { event: 'change', parse: String },
+  );
+  const dashRow = document.createElement('div');
+  dashRow.className = 'field-row';
+  dashRow.append(field('Motif', dashPreset), field('Tirets (× épaisseur)', dashText), field('Bout', linecap));
+  shape.append(dashRow);
+
   /* ---- Calque ---- */
 
   /* L'épaisseur et la couleur appartiennent au calque : toutes ses formes
@@ -227,6 +271,7 @@ export const mountPropertyPanel = ({ store }) => {
     { subject: 'layer', parse: String },
   );
   layerSet.append(field('Épaisseur', strokeWidth), field('Couleur', stroke));
+
 
   /* ---- Modificateurs ---- */
 
@@ -430,6 +475,8 @@ export const mountPropertyPanel = ({ store }) => {
     widthField.hidden = uniform;
     heightField.hidden = uniform;
     filledField.hidden = dot;
+    /* Un point est déjà un bout rond sans longueur : rien à découper. */
+    dashRow.hidden = dot;
     /* Un cercle et un point tournés restent identiques : rien à régler. */
     rotationField.hidden = !element || dot || SHAPES[element.type].geometry === 'circle';
     polygonRow.hidden = !element || SHAPES[element.type].geometry !== 'polygon';

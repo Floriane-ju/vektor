@@ -252,6 +252,15 @@ const createNode = (child) => {
   node.setAttribute('fill', child.fill);
   node.setAttribute('stroke', child.stroke);
   node.setAttribute('stroke-width', round(strokeWidth));
+  /* Le point impose son bout rond, et n'a pas de longueur à découper. */
+  if (geometry !== 'dot') {
+    if (child.linecap && child.linecap !== 'butt') node.setAttribute('stroke-linecap', child.linecap);
+    /* Tirets en multiples de l'épaisseur, suivis de l'échelle de la copie : un
+       anneau réduit garde le même nombre de tirets, pas la même longueur. */
+    if (child.dash?.length) {
+      node.setAttribute('stroke-dasharray', child.dash.map((v) => round(v * strokeWidth * scale)).join(' '));
+    }
+  }
   node.setAttribute('fill-opacity', round(child.opacity ?? 1));
   node.setAttribute('stroke-opacity', round(child.opacity ?? 1));
   return node;
@@ -278,7 +287,8 @@ const isClosed = (node) => {
    seule couleur : le trait élargi déborde de la forme d'autant. */
 const silhouette = (node, color, grow) => {
   const clone = node.cloneNode();
-  for (const name of ['data-element-id', 'transform', 'fill-opacity', 'stroke-opacity']) {
+  /* Sans tirets : l'anneau épouse la forme entière, pas ses morceaux. */
+  for (const name of ['data-element-id', 'transform', 'fill-opacity', 'stroke-opacity', 'stroke-dasharray']) {
     clone.removeAttribute(name);
   }
   const width = Number(node.getAttribute('stroke-width')) || 0;

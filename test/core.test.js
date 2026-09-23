@@ -1056,3 +1056,42 @@ describe('orientation des copies', () => {
     expect(orients(rereadFresh.layers[0].modifiers[0])).toBe(true);
   });
 });
+
+import { parseDash } from '../src/scene.js';
+
+describe('style de trait de la forme', () => {
+  it('lit la saisie libre, bornée', () => {
+    expect(parseDash('4, 2  1')).toEqual([4, 2, 1]);
+    expect(parseDash('4 -1 x 1e9')).toEqual([4, 0, 100]);
+    expect(parseDash('0 0')).toEqual([]);
+    expect(parseDash('')).toEqual([]);
+  });
+
+  it('reste propre à chaque forme et survit à la sauvegarde', () => {
+    const dotted = createElement('circle', 0, 0, { dash: [0, 2], linecap: 'round' });
+    const layer = createLayer({ elements: [dotted, createElement('circle', 50, 0)] });
+    const [first, second] = getRenderedChildren(layer);
+    expect(first).toMatchObject({ dash: [0, 2], linecap: 'round' });
+    expect(second).toMatchObject({ dash: [], linecap: 'butt' });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    expect(deserialize(serialize(scene)).layers[0].elements[0]).toMatchObject({ dash: [0, 2], linecap: 'round' });
+  });
+
+  it('un ancien fichier se relit en trait plein, et un import est borné', () => {
+    const shape = { id: 'E1', type: 'circle', x: 0, y: 0 };
+    const old = JSON.stringify({ format: 'illu/scene@13', layers: [{ id: 'L1', elements: [shape] }] });
+    expect(deserialize(old).layers[0].elements[0]).toMatchObject({ dash: [], linecap: 'butt' });
+
+    /* `@13` orientait déjà : sa case se relit telle quelle. */
+    const oriented = JSON.stringify({
+      format: 'illu/scene@13',
+      layers: [{ id: 'L1', modifiers: [{ type: 'axial', n: 4, orient: true }] }],
+    });
+    expect(deserialize(oriented).layers[0].modifiers[0].orient).toBe(true);
+    const bad = JSON.stringify({
+      format: 'illu/scene@14',
+      layers: [{ id: 'L1', elements: [{ ...shape, dash: 'tirets', linecap: 42 }] }],
+    });
+    expect(deserialize(bad).layers[0].elements[0]).toMatchObject({ dash: [], linecap: 'butt' });
+  });
+});

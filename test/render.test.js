@@ -1167,3 +1167,53 @@ describe('orientation des copies', () => {
     expect(reflected.getAttribute('transform')).toBe('translate(-100 20) scale(-1 1) translate(100 -20)');
   });
 });
+
+describe('style de trait', () => {
+  it('un anneau en pointillés se rend et s’exporte identique, tirets à l’échelle', () => {
+    const svg = stage();
+    const layer = createLayer({
+      strokeWidth: 2,
+      elements: [createElement('circle', 0, 0, { dash: [0, 2], linecap: 'round' })],
+      modifiers: [{ type: 'step', n: 2, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
+      interpolations: [ramp('scale', [1, 0.5])],
+    });
+    render({ layers: [layer] }, svg);
+    const [big, small] = svg.querySelectorAll('circle');
+    expect(big.getAttribute('stroke-dasharray')).toBe('0 4');
+    expect(big.getAttribute('stroke-linecap')).toBe('round');
+    expect(small.getAttribute('stroke-dasharray')).toBe('0 2');
+    expect(toSvgDocument(svg)).toContain('stroke-dasharray="0 4"');
+  });
+
+  it('un trait plein à bout net n’ajoute rien', () => {
+    const svg = stage();
+    render({ layers: [createLayer({ elements: [createElement('circle', 0, 0)] })] }, svg);
+    const circle = svg.querySelector('circle');
+    expect(circle.hasAttribute('stroke-dasharray')).toBe(false);
+    expect(circle.hasAttribute('stroke-linecap')).toBe(false);
+  });
+});
+
+describe('panneau : motif de trait', () => {
+  it('le préréglage Points pose tirets et bout rond, la saisie libre s’affiche Libre', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const element = createElement('circle', 0, 0);
+    const layer = createLayer({ elements: [element, createElement('circle', 50, 0)] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: element.id });
+    const { shapeDetail, layerDetail } = mountPropertyPanel({ store });
+    expect(layerDetail.querySelector('input[type="text"]')).toBeNull();
+    const text = shapeDetail.querySelector('input[type="text"]');
+    const [preset, , cap] = text.closest('.field-row').querySelectorAll('select, input');
+    preset.value = 'dotted';
+    preset.dispatchEvent(new Event('change'));
+    const shapes = () => store.get().layers[0].elements;
+    expect(shapes()[0]).toMatchObject({ dash: [0, 2], linecap: 'round' });
+    expect(shapes()[1]).toMatchObject({ dash: [], linecap: 'butt' });
+    expect(cap.value).toBe('round');
+
+    text.value = '3 1 1 1';
+    text.dispatchEvent(new Event('change'));
+    expect(shapes()[0].dash).toEqual([3, 1, 1, 1]);
+    expect(preset.value).toBe('custom');
+  });
+});

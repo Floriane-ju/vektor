@@ -3,7 +3,9 @@ import { clampCount } from './interpolate.js';
 import {
   ARC_CLOSURES,
   clampAngle,
+  clampDash,
   clampExtent,
+  clampLinecap,
   clampInner,
   clampSides,
   createElement,
@@ -22,7 +24,7 @@ import {
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
    relire les anciens formats. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'illu/scene@13';
+export const FORMAT = 'illu/scene@14';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -39,7 +41,9 @@ export const FORMAT = 'illu/scene@13';
      pas le tracé, `@1` à `@10` pas la rotation propre (formes droites), `@1` à
      `@11` pas l'arc : rien à convertir, ils se relisent tels quels ;
    - `@1` à `@12` n'orientaient pas les copies : leurs modificateurs se relisent
-     case décochée, ce qui rend exactement le même dessin. */
+     case décochée, ce qui rend exactement le même dessin ;
+   - `@1` à `@13` ne connaissaient pas le style de trait des formes : trait
+     plein, bout net, ce qui rend exactement le même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -53,6 +57,7 @@ const READABLE_FORMATS = new Set([
   'illu/scene@10',
   'illu/scene@11',
   'illu/scene@12',
+  'illu/scene@13',
   FORMAT,
 ]);
 
@@ -192,6 +197,8 @@ const readElement = (input) => {
     ry: clampExtent(raw.type, num(raw.ry, legacyRadius ?? defaults.ry)),
     /* Avant `@6` le remplissage était une couleur : n'en reste que sa présence. */
     filled: typeof raw.filled === 'boolean' ? raw.filled : isPainted(raw.fill),
+    dash: clampDash(raw.dash),
+    linecap: clampLinecap(raw.linecap),
     ...(raw.type === 'polygon'
       ? { sides: clampSides(num(raw.sides, defaults.sides)), inner: clampInner(num(raw.inner, defaults.inner)) }
       : {}),
@@ -308,7 +315,8 @@ export const deserialize = (text) => {
   }
   if (!Array.isArray(raw.layers)) fail('`layers` doit être un tableau.');
 
-  const legacy = raw.format !== FORMAT;
+  /* Avant `@13`, pas d'orientation des copies. */
+  const legacy = !['illu/scene@13', FORMAT].includes(raw.format);
   const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy));
   if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
     fail('Deux calques portent le même identifiant.');

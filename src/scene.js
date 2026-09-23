@@ -176,6 +176,39 @@ export const DEFAULT_STROKE_WIDTH = 1.5;
  */
 export const DEFAULT_STROKE = '#7dd3c0';
 
+/**
+ * Le style de trait appartient à la forme, pas au calque : un même calque peut
+ * mêler un anneau pointillé et un cercle plein. Le motif de tirets est exprimé
+ * en multiples de l'épaisseur du calque : un pointillé reste un pointillé quand
+ * on épaissit le trait. Tableau vide = trait plein.
+ */
+export const LINECAPS = { butt: 'Net', round: 'Rond', square: 'Carré' };
+export const DEFAULT_LINECAP = 'butt';
+/* Un point est un tiret de longueur nulle : sans bout rond, il ne se voit pas. */
+export const DASH_PRESETS = {
+  solid: { label: 'Plein', dash: [] },
+  dashed: { label: 'Tirets', dash: [4, 2] },
+  dotted: { label: 'Points', dash: [0, 2], linecap: 'round' },
+};
+const MAX_DASH_LENGTH = 16;
+const MAX_DASH_VALUE = 100;
+
+export const clampDash = (values) => {
+  if (!Array.isArray(values)) return [];
+  const dash = values
+    .map(Number)
+    .filter(Number.isFinite)
+    .slice(0, MAX_DASH_LENGTH)
+    .map((value) => Math.min(MAX_DASH_VALUE, Math.max(0, value)));
+  /* Que des zéros : SVG trace plein, autant le dire. */
+  return dash.some((value) => value > 0) ? dash : [];
+};
+
+/** Saisie libre : nombres séparés par des espaces ou des virgules. */
+export const parseDash = (text) => clampDash(String(text).split(/[\s,]+/).filter(Boolean));
+
+export const clampLinecap = (value) => (Object.hasOwn(LINECAPS, value) ? value : DEFAULT_LINECAP);
+
 const counters = { L: 0, E: 0, I: 0 };
 const nextId = (prefix) => `${prefix}${++counters[prefix]}`;
 
@@ -184,6 +217,8 @@ const nextId = (prefix) => `${prefix}${++counters[prefix]}`;
 export const createElement = (type, x, y, overrides = {}) => ({
   id: nextId('E'),
   rotation: 0,
+  dash: [],
+  linecap: DEFAULT_LINECAP,
   ...SHAPES[type].defaults,
   type,
   x,

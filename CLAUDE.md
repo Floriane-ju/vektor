@@ -38,7 +38,7 @@ Flux unidirectionnel : **transition pure → store → render**.
 - `src/ui/*` — panneaux DOM montés par `main.js` (`mount*({ store, container, ... })`), qui s'abonnent au store. Helpers communs dans `ui/list.js` (reconstruction en gardant le focus, `whenChanged`).
 
 Conventions du modèle :
-- Style (couleur `stroke`, `strokeWidth`) sur le **calque**, pas la forme ; une forme n'a que `filled` (rempli = couleur du calque).
+- Style (couleur `stroke`, `strokeWidth`) sur le **calque**, pas la forme ; une forme n'a que `filled` (rempli = couleur du calque) et son style de trait (`dash` en multiples de l'épaisseur × échelle de la copie, `linecap`).
 - `x, y` = centre de la forme, `rx, ry` = demi-extensions (signées seulement pour `line`, via `clampExtent`). Le « point » est une ligne de longueur nulle à bout rond, dimensionné par l'épaisseur.
 - Le tracé (`polyline`) porte `points` relatifs à `x, y`, recentré sur sa boîte englobante (`recenterTrace`) après chaque geste. Import collé par `src/path.js` (segments droits M/L/H/V/Z seulement). Poignées de sommets (`data-handles`) = état d'écran, retirées à l'export comme les repères.
 - IDs préfixés `L`/`E`/`I` ; `reserveIds` après chargement pour éviter les collisions.
