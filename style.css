@@ -90,7 +90,13 @@ input[type="range"] {
   inset: 0;
   display: flex;
   overflow: auto;
-  padding: var(--gutter-top) var(--gutter-right) var(--gutter-bottom) var(--gutter-left);
+  /* `--slack-*` (posés par `ui/zoom.js`) : assez de marge pour que le plan,
+     plus petit que l'écran, glisse jusqu'à en toucher chaque bord. */
+  padding:
+    max(var(--gutter-top), var(--slack-y, 0px))
+    max(var(--gutter-right), var(--slack-x, 0px))
+    max(var(--gutter-bottom), var(--slack-y, 0px))
+    max(var(--gutter-left), var(--slack-x, 0px));
 }
 
 .artboard {
@@ -116,7 +122,8 @@ input[type="range"] {
   box-shadow: 0 0 0 1px var(--line);
   cursor: crosshair;
   /* Ajusté : le plan tient dans la zone libre entre les panneaux. */
-  max-width: 100%;
+  /* Pas `100%` : la marge de défilement élargit le padding du conteneur. */
+  max-width: calc(100vw - var(--gutter-left) - var(--gutter-right));
   max-height: calc(100vh - var(--gutter-top) - var(--gutter-bottom) - 30px);
   width: auto;
   height: auto;

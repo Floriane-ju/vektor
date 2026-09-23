@@ -11,7 +11,9 @@ export const clampZoom = (zoom) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
  *
  * Le zoom ne touche que la taille CSS du `<svg>` : le `viewBox` reste celui de
  * la scène, donc l'export et `toStagePoint` (qui passe par la CTM) ne voient
- * rien. Le défilement est laissé au `overflow: auto` du conteneur.
+ * rien. Le défilement est laissé au `overflow: auto` du conteneur, auquel on
+ * donne une marge (`--slack-*`) pour que le plan défile même plus petit que
+ * l'écran, jusqu'à en toucher les bords.
  */
 export const mountZoom = ({ svgRoot, scroller, container }) => {
   /* `null` = ajusté au conteneur (comportement par défaut via `max-width`). */
@@ -22,24 +24,46 @@ export const mountZoom = ({ svgRoot, scroller, container }) => {
 
   const currentZoom = () => zoom ?? svgRoot.getBoundingClientRect().width / STAGE.width;
 
+  const artboard = svgRoot.closest('.artboard') ?? svgRoot;
+
+  /* Plan plus petit que l'écran : marge = place libre, de sorte qu'aux deux
+     bouts du défilement il touche un bord. Plus grand : les gouttières suffisent. */
+  const updateSlack = () => {
+    const box = artboard.getBoundingClientRect();
+    scroller.style.setProperty('--slack-x', `${Math.max(0, scroller.clientWidth - box.width)}px`);
+    scroller.style.setProperty('--slack-y', `${Math.max(0, scroller.clientHeight - box.height)}px`);
+  };
+
+  /* Centre de la zone libre entre les panneaux, en coordonnées écran. */
+  const freeCenter = () => {
+    const root = getComputedStyle(document.documentElement);
+    const gutter = (side) => parseFloat(root.getPropertyValue(`--gutter-${side}`)) || 0;
+    return {
+      x: (gutter('left') + scroller.clientWidth - gutter('right')) / 2,
+      y: (gutter('top') + scroller.clientHeight - gutter('bottom')) / 2,
+    };
+  };
+
   const refresh = () => {
     label.textContent = `${Math.round(currentZoom() * 100)} %`;
   };
 
-  /* Garde sous `anchor` (coordonnées écran) le même point de la scène. */
+  /* Garde sous `anchor` (coordonnées écran) le même point de la scène.
+     « Ajuster » (`null`) recentre le plan dans la zone libre. */
   const setZoom = (next, anchor) => {
     const before = svgRoot.getBoundingClientRect();
-    const point = anchor ?? {
-      x: before.left + before.width / 2,
-      y: before.top + before.height / 2,
-    };
-    const fx = (point.x - before.left) / before.width;
-    const fy = (point.y - before.top) / before.height;
+    const recenter = next === null || !before.width;
+    const point = recenter
+      ? freeCenter()
+      : anchor ?? { x: before.left + before.width / 2, y: before.top + before.height / 2 };
+    const fx = recenter ? 0.5 : (point.x - before.left) / before.width;
+    const fy = recenter ? 0.5 : (point.y - before.top) / before.height;
 
     zoom = next === null ? null : clampZoom(next);
     svgRoot.style.maxWidth = zoom === null ? '' : 'none';
     svgRoot.style.maxHeight = zoom === null ? '' : 'none';
     svgRoot.style.width = zoom === null ? '' : `${STAGE.width * zoom}px`;
+    updateSlack();
 
     const after = svgRoot.getBoundingClientRect();
     scroller.scrollLeft += after.left + fx * after.width - point.x;
@@ -91,6 +115,6 @@ export const mountZoom = ({ svgRoot, scroller, container }) => {
     event.preventDefault();
   });
 
-  window.addEventListener('resize', refresh);
-  refresh();
+  window.addEventListener('resize', () => setZoom(zoom));
+  setZoom(null);
 };
