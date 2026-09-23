@@ -167,6 +167,18 @@ input[type="range"] {
   top: 34px;
   margin: 0;
   font: 600 28px/1 var(--font);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Logo en masque : il prend la couleur du texte, un seul fichier sert aussi de favicon. */
+.brand::before {
+  content: '';
+  width: 1em;
+  height: 1em;
+  background: currentColor;
+  mask: url(/logo.svg) center / contain no-repeat;
 }
 
 .pill {
