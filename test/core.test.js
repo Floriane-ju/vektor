@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { clampCount, stackValues, t } from '../src/interpolate.js';
-import { createModifier, MODIFIERS, orients } from '../src/modifiers.js';
+import { clampCount, CURVES, ramp as curveRamp, stackValues, t } from '../src/interpolate.js';
+import { copyCount, createModifier, MAX_COPIES, MODIFIERS, orients } from '../src/modifiers.js';
 import {
   addBoolean,
   addElement,
@@ -14,6 +14,7 @@ import {
   duplicateElement,
   duplicateLayer,
   getRenderedChildren,
+  isSuspended,
   moveElement,
   moveLayer,
   moveModifier,
@@ -26,6 +27,7 @@ import {
   rotateVector,
   pivotOf,
   setLayerCenter,
+  setLayerEvenOdd,
   setLayerStroke,
   setLayerStrokeWidth,
   snapToGrid,
@@ -1235,7 +1237,7 @@ describe('rotation et épaisseur interpolées', () => {
       layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
     });
     const again = deserialize(serialize(deserialize(old)));
-    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@17');
+    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@18');
     expect(orients(again.layers[0].modifiers[0])).toBe(true);
   });
 });
@@ -1380,5 +1382,84 @@ describe('pivot', () => {
     const raw = JSON.parse(serialize(scene));
     raw.layers[0].modifiers[0].center = { x: 'nope', y: 1 };
     expect(deserialize(JSON.stringify(raw)).layers[0].modifiers[0]).not.toHaveProperty('center');
+  });
+});
+
+describe('plafond de copies', () => {
+  const stacked = (n) =>
+    createLayer({
+      elements: [createElement('ellipse', 0, 0)],
+      modifiers: [createModifier({ n }), createModifier({ n }), createModifier({ n })],
+    });
+
+  it('compte les copies sans les énumérer', () => {
+    expect(copyCount([])).toBe(1);
+    expect(copyCount(stacked(12).modifiers)).toBe(1728);
+    expect(copyCount([createModifier({ type: 'mirrorH', n: 50 })])).toBe(2);
+  });
+
+  it('suspend le rendu au-delà du plafond, pas en deçà', () => {
+    expect(getRenderedChildren(stacked(12))).toHaveLength(1728);
+    const over = stacked(200);
+    expect(copyCount(over.modifiers)).toBeGreaterThan(MAX_COPIES);
+    expect(isSuspended(over)).toBe(true);
+    expect(getRenderedChildren(over)).toEqual([]);
+  });
+});
+
+describe('courbes de rampe', () => {
+  const values = (curve, n = 5) => Array.from({ length: n }, (_, i) => curveRamp(curve, i, n));
+
+  it('rend chaque courbe sur cinq copies', () => {
+    expect(values('linear')).toEqual([0, 0.25, 0.5, 0.75, 1]);
+    expect(values('easeIn')).toEqual([0, 0.0625, 0.25, 0.5625, 1]);
+    expect(values('easeOut')).toEqual([0, 0.4375, 0.75, 0.9375, 1]);
+    expect(values('pingPong')).toEqual([0, 0.5, 1, 0.5, 0]);
+    expect(values('alternate')).toEqual([0, 1, 0, 1, 0]);
+  });
+
+  it('une courbe absente ou inconnue reste linéaire, et n ≤ 1 ne rend pas NaN', () => {
+    expect(values(undefined)).toEqual(values('linear'));
+    expect(values('bogus')).toEqual(values('linear'));
+    for (const curve of Object.keys(CURVES)) expect(curveRamp(curve, 0, 1)).toBe(0);
+  });
+
+  it('s’applique aux copies du calque, étage lié compris', () => {
+    const layer = createLayer({
+      elements: [createElement('ellipse', 0, 0)],
+      modifiers: [createModifier({ n: 3 }), createModifier({ n: 2 })],
+      interpolations: [
+        createInterpolation({ property: 'opacity', range: [1, 0], curve: 'pingPong' }),
+        createInterpolation({ property: 'scale', range: [1, 2], curve: 'alternate', binding: 1 }),
+      ],
+    });
+    const children = getRenderedChildren(layer);
+    expect(children.map((child) => child.opacity)).toEqual([1, 0.6, 0.2, 0.2, 0.6, 1].map((v) => expect.closeTo(v)));
+    expect(children.map((child) => child.scale)).toEqual([1, 2, 1, 2, 1, 2]);
+  });
+
+  it('défaut linéaire, et survit à l’aller-retour JSON', () => {
+    expect(createInterpolation().curve).toBe('linear');
+    const layer = createLayer({ interpolations: [createInterpolation({ curve: 'easeOut' })] });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    expect(deserialize(serialize(scene))).toEqual(scene);
+    const raw = JSON.parse(serialize(scene));
+    raw.layers[0].interpolations[0].curve = '<script>';
+    expect(deserialize(JSON.stringify(raw)).layers[0].interpolations[0].curve).toBe('linear');
+    raw.format = 'vektor/scene@17';
+    delete raw.layers[0].interpolations[0].curve;
+    expect(deserialize(JSON.stringify(raw)).layers[0].interpolations[0].curve).toBe('linear');
+  });
+});
+
+describe('recoupements creux', () => {
+  it('bascule par transition et survit à l’aller-retour JSON', () => {
+    const layer = createLayer({ elements: [createElement('ellipse', 0, 0)] });
+    const scene = setLayerEvenOdd({ layers: [layer], activeLayerId: layer.id, activeElementId: null }, layer.id, true);
+    expect(scene.layers[0].evenOdd).toBe(true);
+    expect(deserialize(serialize(scene))).toEqual(scene);
+    const raw = JSON.parse(serialize(scene));
+    raw.layers[0].evenOdd = 'yes';
+    expect(deserialize(JSON.stringify(raw)).layers[0].evenOdd).toBe(false);
   });
 });

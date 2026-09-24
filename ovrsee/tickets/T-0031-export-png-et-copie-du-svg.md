@@ -2,11 +2,13 @@
 {
   "id": "T-0031",
   "titre": "Export PNG et copie du SVG",
-  "colonne": "backlog",
+  "colonne": "revue",
   "priorite": "basse",
-  "tags": ["export"],
+  "tags": [
+    "export"
+  ],
   "cree": "2026-09-23",
-  "maj": "2026-09-23",
+  "maj": "2026-09-24",
   "plan": null,
   "epic": "T-0026"
 }

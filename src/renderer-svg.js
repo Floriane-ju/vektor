@@ -33,14 +33,31 @@ export const render = (scene, svgRoot) => {
     /* Un outil booléen ne se dessine pas : il ne vit que dans le résultat. */
     const tools = new Set(layer.elements.flatMap((element) => element.booleans.map((step) => step.with)));
     const byCopy = new Map(children.map((child) => [`${child.id}:${child.copy}`, child]));
+    /* Recoupements creux : les aplats rejoignent un tracé commun, chaque forme
+       ne garde que son trait. */
+    const holes = [];
     for (const child of children) {
       if (!bounds.has(child.id)) bounds.set(child.id, childBounds(child));
       if (tools.has(child.id)) continue;
       const steps = child.booleans
         .map((step) => ({ shape: byCopy.get(`${step.with}:${child.copy}`), op: step.op }))
         .filter((step) => step.shape);
-      group.append(steps.length > 0 ? createBoolean(child, steps) : createNode(child));
+      if (steps.length > 0) {
+        group.append(createBoolean(child, steps));
+        continue;
+      }
+      const area = layer.evenOdd && child.fill !== 'none' ? areaPath(child) : null;
+      if (!area) {
+        group.append(createNode(child));
+        continue;
+      }
+      holes.push(area);
+      const outline = createNode({ ...child, fill: 'none' });
+      /* L'intérieur reste cliquable au curseur, même creusé. */
+      outline.setAttribute('pointer-events', 'visible');
+      group.append(outline);
     }
+    if (holes.length > 0) group.prepend(createEvenOdd(layer, holes));
     svgRoot.append(group);
   }
 
@@ -188,16 +205,21 @@ const createGuides = (layer) => {
  * un sommet creux s'intercale entre deux sommets : l'étoile. À 100 % il
  * tomberait sur le côté, donc il est omis — même dessin, moitié moins de points.
  */
-export const polygonPoints = (cx, cy, radius, sides, inner) => {
+const polygonVertices = (cx, cy, radius, sides, inner) => {
   const star = inner < 100;
   const count = star ? sides * 2 : sides;
   const hollow = radius * Math.cos(Math.PI / sides) * (inner / 100);
   return Array.from({ length: count }, (_, i) => {
     const r = star && i % 2 === 1 ? hollow : radius;
     const angle = -Math.PI / 2 + (i * Math.PI * 2) / count;
-    return `${round(cx + r * Math.cos(angle))},${round(cy + r * Math.sin(angle))}`;
-  }).join(' ');
+    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+  });
 };
+
+export const polygonPoints = (cx, cy, radius, sides, inner) =>
+  polygonVertices(cx, cy, radius, sides, inner)
+    .map((p) => `${round(p.x)},${round(p.y)}`)
+    .join(' ');
 
 /**
  * Tracé `d` d'un arc de `start` à `end` (degrés, 0 en haut, sens horaire).
@@ -207,21 +229,89 @@ export const polygonPoints = (cx, cy, radius, sides, inner) => {
  * demi-arcs et se ferme, quel que soit le mode : ni rayon au centre ni corde
  * n'y auraient de sens.
  */
-export const arcPath = (cx, cy, radius, start, end, closure) => {
+export const arcPath = (cx, cy, radius, start, end, closure, place = (p) => p, mirrored = false) => {
+  const xy = (p) => {
+    const placed = place(p);
+    return `${round(placed.x)},${round(placed.y)}`;
+  };
   const at = (degrees) => {
     const angle = (degrees * Math.PI) / 180;
-    return `${round(cx + radius * Math.sin(angle))},${round(cy - radius * Math.cos(angle))}`;
+    return xy({ x: cx + radius * Math.sin(angle), y: cy - radius * Math.cos(angle) });
   };
   const r = `${round(radius)},${round(radius)}`;
+  /* Un reflet inverse le sens de parcours. */
+  const clockwise = mirrored ? 0 : 1;
   const span = end - start;
   if (Math.abs(span) >= 360) {
-    return `M${at(start)} A${r} 0 0 1 ${at(start + 180)} A${r} 0 0 1 ${at(start)} Z`;
+    return `M${at(start)} A${r} 0 0 ${clockwise} ${at(start + 180)} A${r} 0 0 ${clockwise} ${at(start)} Z`;
   }
   /* Un arc à rebours (270 → 90) court quand même en sens horaire. */
   const sweep = ((span % 360) + 360) % 360;
-  const arc = `M${at(start)} A${r} 0 ${sweep > 180 ? 1 : 0} 1 ${at(start + sweep)}`;
-  if (closure === 'sector') return `${arc} L${round(cx)},${round(cy)} Z`;
+  const arc = `M${at(start)} A${r} 0 ${sweep > 180 ? 1 : 0} ${clockwise} ${at(start + sweep)}`;
+  if (closure === 'sector') return `${arc} L${xy({ x: cx, y: cy })} Z`;
   return closure === 'chord' ? `${arc} Z` : arc;
+};
+
+/**
+ * Contour d'une copie en données de `<path>`, dans le repère du plan : reflet
+ * puis rotation cuits dans les coordonnées, comme `createNode` les pose en
+ * `transform`. C'est ce qui permet à toutes les copies de partager un tracé.
+ * Une ligne et un point n'ont pas d'aire : `null`.
+ */
+export const areaPath = (child) => {
+  const scale = child.scale ?? 1;
+  const rx = clampExtent(child.type, child.rx * scale);
+  const ry = clampExtent(child.type, child.ry * scale);
+  const { x, y } = child;
+  const rotation = degrees(child.rotation ?? 0);
+  const [cos, sin] = [Math.cos(rotation), Math.sin(rotation)];
+  const place = (p) => {
+    const dx = child.flip ? x - p.x : p.x - x;
+    const dy = p.y - y;
+    return { x: x + dx * cos - dy * sin, y: y + dx * sin + dy * cos };
+  };
+  const polygon = (points) =>
+    `M${points.map((p) => {
+      const placed = place(p);
+      return `${round(placed.x)},${round(placed.y)}`;
+    }).join(' L')} Z`;
+  switch (SHAPES[child.type].geometry) {
+    case 'rect':
+      return polygon([
+        { x: x - rx, y: y - ry },
+        { x: x + rx, y: y - ry },
+        { x: x + rx, y: y + ry },
+        { x: x - rx, y: y + ry },
+      ]);
+    case 'polygon':
+      return polygon(polygonVertices(x, y, rx, child.sides, child.inner));
+    case 'polyline':
+      return polygon(child.points.map((p) => ({ x: x + p.x * scale, y: y + p.y * scale })));
+    case 'arc':
+      return arcPath(x, y, rx, child.start, child.end, child.closure, place, child.flip);
+    case 'ellipse': {
+      /* Deux demi-ellipses ; le reflet laisse une ellipse identique à elle-même. */
+      const [top, bottom] = [place({ x, y: y - ry }), place({ x, y: y + ry })];
+      const half = `A${round(rx)},${round(ry)} ${round(child.rotation ?? 0)} 0 1`;
+      return `M${round(top.x)},${round(top.y)} ${half} ${round(bottom.x)},${round(bottom.y)} ${half} ${round(top.x)},${round(top.y)} Z`;
+    }
+    default:
+      return null;
+  }
+};
+
+/**
+ * Aplat commun des formes remplies d'un calque en recoupements creux : un seul
+ * `<path>` pair-impair, donc une zone couverte deux fois se vide.
+ *
+ * ponytail: l'aplat est d'une seule opacité, pleine — l'opacité interpolée ne
+ * passe que sur les traits. Découper l'aplat par copie défait le pair-impair ;
+ * un masque par copie le jour où l'estompe des aplats manque.
+ */
+const createEvenOdd = (layer, areas) => {
+  const node = svgNode('path', { d: areas.join(' '), 'fill-rule': 'evenodd', fill: layer.stroke, stroke: 'none' });
+  node.dataset.evenOdd = layer.id;
+  return node;
 };
 
 const createNode = (child) => {
@@ -571,3 +661,30 @@ export const toSvgDocument = (svgRoot) => {
   clone.setAttribute('viewBox', `0 0 ${STAGE.width} ${STAGE.height}`);
   return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(clone)}\n`;
 };
+
+/**
+ * Rastérise le document SVG exporté en PNG, à `scale` fois la taille du plan.
+ * Passe par une `<img>` et un `<canvas>` : même source que l'export SVG, donc
+ * même dessin, repères retirés. Sans fond dans le document, le PNG est
+ * transparent.
+ *
+ * @returns {Promise<Blob>}
+ */
+export const toPng = (svgRoot, scale) =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(new Blob([toSvgDocument(svgRoot)], { type: 'image/svg+xml' }));
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = STAGE.width * scale;
+      canvas.height = STAGE.height * scale;
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('image trop grande pour le navigateur.'))), 'image/png');
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('le dessin n’a pas pu être rastérisé.'));
+    };
+    image.src = url;
+  });

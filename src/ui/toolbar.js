@@ -18,7 +18,7 @@ import {
   updateElement,
   updateModifier,
 } from '../scene.js';
-import { clearHover, toSvgDocument } from '../renderer-svg.js';
+import { clearHover, toPng, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
 import { parseTrace } from '../path.js';
 import { icon } from './icons.js';
@@ -26,6 +26,9 @@ import { TOOL_KEYS } from './shortcuts.js';
 
 /* Touche de chaque outil, pour l'infobulle. */
 const KEY_OF = Object.fromEntries(Object.entries(TOOL_KEYS).map(([key, type]) => [type, key.toUpperCase()]));
+
+/* Échelles de l'export PNG, en multiples de la taille du plan. */
+const PNG_SCALES = [1, 2, 4];
 
 /** Outil de sélection : partage le groupe radio des formes, sans en être une. */
 const CURSOR = 'cursor';
@@ -147,6 +150,26 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     }
   });
 
+  const pngItems = PNG_SCALES.map((scale) =>
+    menuItem(`Exporter en PNG ${scale}×`, async () => {
+      try {
+        download(await toPng(svgRoot, scale), `vektor@${scale}x.png`, 'image/png');
+        status.show(`PNG ${scale}× exporté.`);
+      } catch (error) {
+        status.show(`Export PNG impossible — ${error.message}`, 'error');
+      }
+    }),
+  );
+
+  const copySvg = menuItem('Copier le SVG', async () => {
+    try {
+      await navigator.clipboard.writeText(toSvgDocument(svgRoot));
+      status.show('SVG copié dans le presse-papier.');
+    } catch {
+      status.show('Presse-papier refusé par le navigateur — utiliser « Exporter en SVG ».', 'error');
+    }
+  });
+
   const exportJson = menuItem('Exporter le projet (JSON)', () => {
     download(serialize(store.get()), 'vektor.json', 'application/json');
     status.show('Projet exporté.');
@@ -196,7 +219,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   menu.id = 'export-menu';
   menu.className = 'menu';
   menu.popover = 'auto';
-  menu.append(exportSvg, exportJson, importJson, pasteTrace);
+  menu.append(exportSvg, copySvg, ...pngItems, exportJson, importJson, pasteTrace);
 
   const trigger = document.createElement('button');
   trigger.type = 'button';

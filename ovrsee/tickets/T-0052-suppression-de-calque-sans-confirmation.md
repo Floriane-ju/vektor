@@ -2,7 +2,7 @@
 {
   "id": "T-0052",
   "titre": "Suppression de calque sans « Sûr ? », au clavier comme une forme",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "ui"

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { childBounds, render, toSvgDocument } from '../src/renderer-svg.js';
+import { areaPath, childBounds, render, toSvgDocument } from '../src/renderer-svg.js';
 import { createElement, createInterpolation, createLayer, STAGE } from '../src/scene.js';
 import { createStore } from '../src/store.js';
 import { mountToolbar } from '../src/ui/toolbar.js';
@@ -196,6 +196,45 @@ describe('export SVG', () => {
     /* La racine vivante garde ses attributs d'interface : le clone ne la touche pas. */
     expect(svg.id).toBe('stage');
     expect(svg.getAttribute('aria-label')).toBe('Illustration en cours');
+  });
+});
+
+describe('copie du SVG', () => {
+  const mount = () => {
+    const layer = repeatLayer();
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const svg = stage();
+    render(store.get(), svg);
+    const container = document.createElement('div');
+    const messages = [];
+    mountToolbar({ store, svgRoot: svg, container, status: { show: (message, tone) => messages.push([message, tone]) } });
+    const item = (label) => [...container.querySelectorAll('.menu-item')].find((node) => node.textContent === label);
+    return { svg, item, messages };
+  };
+
+  it('met le document dans le presse-papier', async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    const { svg, item, messages } = mount();
+    item('Copier le SVG').click();
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect(writeText).toHaveBeenCalledWith(toSvgDocument(svg));
+    expect(messages[0]).toEqual(['SVG copié dans le presse-papier.', undefined]);
+    vi.unstubAllGlobals();
+  });
+
+  it('dit quand le presse-papier est refusé', async () => {
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: () => Promise.reject(new Error('denied')) } });
+    const { item, messages } = mount();
+    item('Copier le SVG').click();
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect(messages[0][1]).toBe('error');
+    vi.unstubAllGlobals();
+  });
+
+  it('propose le PNG aux trois échelles', () => {
+    const { item } = mount();
+    for (const scale of [1, 2, 4]) expect(item(`Exporter en PNG ${scale}×`)).toBeTruthy();
   });
 });
 
@@ -882,6 +921,12 @@ describe('accessibilité au clavier', () => {
     binding.dispatchEvent(new Event('change'));
     expect(stack()[0].binding).toBe(1);
 
+    const curve = block().querySelector('select[aria-label="Courbe de la rampe"]');
+    expect(curve.value).toBe('linear');
+    curve.value = 'pingPong';
+    curve.dispatchEvent(new Event('change'));
+    expect(stack()[0].curve).toBe('pingPong');
+
     /* Les bornes se saisissent en pourcentage. */
     const [start] = block().querySelectorAll('input[type="number"]');
     start.focus();
@@ -899,6 +944,26 @@ describe('accessibilité au clavier', () => {
     /* Le focus retombe sur le bouton d'ajout, pas en haut de la page. */
     expect(document.activeElement.dataset.focusKey).toBe('add-interpolation');
     panel.remove();
+  });
+
+  it('affiche le total des copies de la pile, et la suspension au-delà du plafond', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const { addModifier, createLayer, updateModifier } = await import('../src/scene.js');
+    const layer = createLayer();
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const panel = document.createElement('div');
+    panel.append(mountPropertyPanel({ store }).layerDetail);
+    const total = panel.querySelector('.copy-count');
+
+    expect(total.hidden).toBe(true);
+    store.apply(addModifier, layer.id);
+    store.apply(addModifier, layer.id);
+    expect(total.hidden).toBe(false);
+    expect(total.textContent).toBe('36 copies');
+
+    store.apply(updateModifier, layer.id, 0, { n: 1000 });
+    expect(total.dataset.tone).toBe('error');
+    expect(total.textContent).toMatch(/suspendu/);
   });
 
   it('la forme s’ajoute et se positionne sans souris', async () => {
@@ -1494,5 +1559,67 @@ describe('pivot au canvas', () => {
     expect(mirror.querySelector('line').getAttribute('x1')).toBe('100');
     expect(axial.dataset.pivot).toBe('1');
     expect(axial.querySelector('line').getAttribute('y1')).toBe('300');
+  });
+});
+
+describe('recoupements creux', () => {
+  const disks = (overrides = {}) =>
+    createLayer({
+      elements: [createElement('ellipse', 100, 100, { rx: 50, ry: 50, filled: true }), createElement('ellipse', 150, 100, { rx: 50, ry: 50, filled: true })],
+      ...overrides,
+    });
+  const draw = (layer) => {
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    return svg;
+  };
+
+  it('éteinte, rend strictement comme avant', () => {
+    const layer = disks();
+    const { evenOdd, ...legacy } = layer;
+    expect(evenOdd).toBe(false);
+    expect(draw(layer).innerHTML).toBe(draw(legacy).innerHTML);
+    expect(draw(layer).querySelector('[data-even-odd]')).toBeNull();
+  });
+
+  it('réunit les aplats en un tracé pair-impair, chaque forme garde son trait', () => {
+    const svg = draw(disks({ evenOdd: true }));
+    const path = svg.querySelector('[data-even-odd]');
+    expect(path.getAttribute('fill-rule')).toBe('evenodd');
+    expect(path.getAttribute('d').match(/M/g)).toHaveLength(2);
+    const outlines = svg.querySelectorAll('ellipse');
+    expect([...outlines].map((node) => node.getAttribute('fill'))).toEqual(['none', 'none']);
+    /* L'aplat passe sous les traits. */
+    expect(path.parentNode.firstChild).toBe(path);
+  });
+
+  it('les copies des modificateurs rejoignent le même tracé', () => {
+    const svg = draw(
+      disks({ evenOdd: true, modifiers: [{ type: 'step', n: 3, stepX: 30, stepY: 0, angleStep: 0, radiusStep: 0 }] }),
+    );
+    expect(svg.querySelectorAll('[data-even-odd]')).toHaveLength(1);
+    expect(svg.querySelector('[data-even-odd]').getAttribute('d').match(/M/g)).toHaveLength(6);
+  });
+
+  it('cuit rotation et reflet dans le contour', () => {
+    const rect = { ...createElement('rect', 0, 0, { rx: 20, ry: 10 }), rotation: 90, flip: false };
+    expect(areaPath(rect)).toBe('M10,-20 L10,20 L-10,20 L-10,-20 Z');
+    expect(areaPath({ ...createElement('line', 0, 0), rotation: 0 })).toBeNull();
+    const arc = { ...createElement('arc', 0, 0, { rx: 10, start: 0, end: 90, closure: 'open' }), rotation: 0 };
+    expect(areaPath(arc)).toBe('M0,-10 A10,10 0 0 1 10,0');
+    expect(areaPath({ ...arc, flip: true })).toBe('M0,-10 A10,10 0 0 0 -10,0');
+  });
+
+  it('se règle depuis le panneau du calque', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const layer = disks();
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const panel = document.createElement('div');
+    panel.append(mountPropertyPanel({ store }).layerDetail);
+    const toggle = [...panel.querySelectorAll('.switch-field')].find((node) => node.textContent.includes('Recoupements creux')).querySelector('input');
+    expect(toggle.checked).toBe(false);
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    expect(store.get().layers[0].evenOdd).toBe(true);
   });
 });

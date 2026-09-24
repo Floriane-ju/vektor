@@ -2,7 +2,7 @@
 {
   "id": "T-0020",
   "titre": "Pivot éditable, et propre à chaque modificateur",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": [
     "modificateurs",

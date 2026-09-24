@@ -16,6 +16,7 @@ import {
   LINECAPS,
   parseDash,
   setLayerCenter,
+  setLayerEvenOdd,
   setLayerStroke,
   setLayerStrokeWidth,
   SHAPES,
@@ -25,7 +26,7 @@ import {
 import { iconButton, rebuildWithFocus, shapeName, whenChanged } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
 import { booleanSection } from './boolean-section.js';
-import { FIXED_COPIES, MODIFIER_LABELS, ORIENTING, orients, PIVOTING } from '../modifiers.js';
+import { copyCount, FIXED_COPIES, MAX_COPIES, MODIFIER_LABELS, ORIENTING, orients, PIVOTING } from '../modifiers.js';
 
 /**
  * Panneau de droite : les réglages du calque actif, ou ceux de la forme
@@ -479,6 +480,16 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     { subject: 'layer' },
   );
 
+  /* Les formes remplies du calque, copies comprises, en un tracé pair-impair. */
+  const evenOdd = bind(
+    input('checkbox'),
+    (layer) => layer.evenOdd,
+    (layer) => store.apply(setLayerEvenOdd, layer.id, evenOdd.checked),
+    { subject: 'layer', event: 'change' },
+  );
+  const evenOddField = switchField('Recoupements creux', evenOdd);
+  evenOddField.title = 'Là où deux formes remplies se recouvrent, le remplissage se creuse';
+
   /* ---- Modificateurs ---- */
 
   /**
@@ -505,7 +516,10 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       { subject: 'layer' },
     );
   const layerPivot = row(field('Pivot X', pivotInput('x')), field('Pivot Y', pivotInput('y')));
-  modifierSet.append(sectionHead('Répéter', addModifierButton), layerPivot, modifierHost);
+  /* Total de la pile, qui multiplie : au-delà du plafond, le calque ne se rend plus. */
+  const copyTotal = el('p', 'copy-count');
+  copyTotal.setAttribute('aria-live', 'polite');
+  modifierSet.append(sectionHead('Répéter', addModifierButton), copyTotal, layerPivot, modifierHost);
 
   let blocks = [];
 
@@ -665,6 +679,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     separator(),
     colorGroup,
     strokeWidth,
+    evenOddField,
     separator(),
     modifierSet,
     separator(),
@@ -733,6 +748,13 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     if (stack.length !== blocks.length) rebuildModifiers(stack);
     addModifierButton.disabled = !layer;
     layerPivot.hidden = !stack.some((modifier) => PIVOTING.has(modifier.type));
+    const total = copyCount(stack);
+    const over = total > MAX_COPIES;
+    copyTotal.hidden = stack.length === 0;
+    copyTotal.dataset.tone = over ? 'error' : 'info';
+    copyTotal.textContent = over
+      ? `${total.toLocaleString('fr-FR')} copies — rendu suspendu au-delà de ${MAX_COPIES.toLocaleString('fr-FR')}`
+      : `${total} copie${total > 1 ? 's' : ''}`;
     if (layer) for (const block of blocks) block.sync(layer);
     interpolations.sync(layer);
   };

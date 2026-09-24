@@ -460,6 +460,8 @@ input[type="range"] {
 
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .section-head h3 { margin: 0; font: 600 14px/1 var(--font); }
+.copy-count { margin: 0; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.copy-count[data-tone="error"] { color: var(--danger); }
 
 .text-btn {
   height: 28px;

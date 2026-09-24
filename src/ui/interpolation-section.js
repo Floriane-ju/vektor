@@ -8,8 +8,8 @@ import {
   updateInterpolation,
   updateInterpolationRange,
 } from '../scene.js';
-import { effectiveCount, MODIFIER_LABELS } from '../modifiers.js';
-import { lerp, t } from '../interpolate.js';
+import { copyCount, effectiveCount, MODIFIER_LABELS } from '../modifiers.js';
+import { CURVE_LABELS, lerp, ramp } from '../interpolate.js';
 
 /* Au-delà, l'aperçu de la rampe ne montre qu'un échantillon régulier. */
 const PREVIEW_DOTS = 12;
@@ -128,12 +128,10 @@ export const interpolationSection = ({ store }) => {
         const current = layer.interpolations.find((candidate) => candidate.id === interpolation.id);
         if (!current) return;
         const stage = current.binding == null ? null : layer.modifiers[current.binding];
-        const n = stage
-          ? effectiveCount(stage)
-          : layer.modifiers.reduce((total, modifier) => total * effectiveCount(modifier), 1);
+        const n = stage ? effectiveCount(stage) : copyCount(layer.modifiers);
         const shown = Math.min(n, PREVIEW_DOTS);
         const dots = Array.from({ length: shown }, (_, i) => {
-          const value = lerp(current.range[0], current.range[1], t(Math.round((i * (n - 1)) / Math.max(1, shown - 1)), n));
+          const value = lerp(current.range[0], current.range[1], ramp(current.curve, Math.round((i * (n - 1)) / Math.max(1, shown - 1)), n));
           const dot = document.createElement('span');
           if (current.property === 'opacity') dot.style.opacity = String(value);
           else if (current.property === 'rotation') dot.style.transform = `rotate(${value}deg)`;
@@ -176,6 +174,21 @@ export const interpolationSection = ({ store }) => {
     );
   };
 
+  /* Forme de la rampe, par interpolation. Resynchronisée sans reconstruction :
+     l'annulation la ramène sans arracher le bloc. */
+  const curveField = (interpolation) => {
+    const node = select('Courbe de la rampe', Object.entries(CURVE_LABELS), interpolation.curve, (value) =>
+      apply(updateInterpolation, interpolation.id, { curve: value }),
+    );
+    bounds.push({
+      sync: (layer) => {
+        const current = layer.interpolations.find((candidate) => candidate.id === interpolation.id);
+        if (current) node.value = current.curve;
+      },
+    });
+    return field('Courbe', node);
+  };
+
   const block = (interpolation, modifiers) => {
     const root = document.createElement('div');
     root.className = 'interpolation-block';
@@ -203,7 +216,7 @@ export const interpolationSection = ({ store }) => {
     range.append(boundControl(interpolation, 0, 'Début'), boundControl(interpolation, 1, 'Fin'));
 
     const binding = bindingField(interpolation, modifiers);
-    root.append(head, ...(binding ? [binding] : []), range, preview(interpolation));
+    root.append(head, ...(binding ? [binding] : []), curveField(interpolation), range, preview(interpolation));
     return root;
   };
 

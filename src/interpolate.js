@@ -8,6 +8,30 @@
  */
 export const t = (i, n) => (n <= 1 ? 0 : i / (n - 1));
 
+/**
+ * Courbes de rampe : `(i, n) -> facteur` entre 0 et 1, toutes bâties sur `t`
+ * sauf l'alternance, qui ne lit que la parité du rang. Une interpolation porte
+ * la sienne ; absente ou inconnue, la rampe reste linéaire.
+ */
+export const CURVES = {
+  linear: t,
+  easeIn: (i, n) => t(i, n) ** 2,
+  easeOut: (i, n) => 1 - (1 - t(i, n)) ** 2,
+  /* Aller-retour : 0 aux deux bouts, 1 à mi-course. */
+  pingPong: (i, n) => 1 - Math.abs(2 * t(i, n) - 1),
+  alternate: (i) => i % 2,
+};
+
+export const CURVE_LABELS = {
+  linear: 'Linéaire',
+  easeIn: 'Entrée douce',
+  easeOut: 'Sortie douce',
+  pingPong: 'Aller-retour',
+  alternate: 'Alternance',
+};
+
+export const ramp = (curve, i, n) => (CURVES[curve] ?? t)(i, n);
+
 export const lerp = (from, to, factor) => from + (to - from) * factor;
 
 /** `n` est toujours un entier ≥ 1 : aucune division par zéro en aval. */

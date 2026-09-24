@@ -1,5 +1,5 @@
-import { applyStack, createModifier, effectiveCount, stackCopies } from './modifiers.js';
-import { clampCount, stackValues, t } from './interpolate.js';
+import { applyStack, copyCount, createModifier, effectiveCount, MAX_COPIES, stackCopies } from './modifiers.js';
+import { clampCount, ramp, stackValues } from './interpolate.js';
 
 export const STAGE = { width: 900, height: 900 };
 
@@ -313,6 +313,9 @@ export const createLayer = (overrides = {}) => ({
   modifiers: [],
   /* Pile vide : toutes les copies se rendent pareilles. */
   interpolations: [],
+  /* « Recoupements creux » : les formes remplies du calque, copies comprises,
+     se peignent en un seul tracé pair-impair — leurs recoupements se creusent. */
+  evenOdd: false,
   ...overrides,
 });
 
@@ -329,12 +332,15 @@ export const createLayer = (overrides = {}) => ({
  *
  * La pile s'ajoute par produit et non par écrasement, donc deux interpolations
  * d'opacité se composent — voir `stackValues`.
+ *
+ * `curve` = forme de la rampe, clé de `CURVES` (`interpolate.js`).
  */
 export const createInterpolation = (overrides = {}) => ({
   id: nextId('I'),
   property: 'opacity',
   range: [...RANGE_BOUNDS.opacity.defaultRange],
   binding: null,
+  curve: 'linear',
   ...overrides,
 });
 
@@ -399,20 +405,23 @@ export const getActiveElement = (scene) =>
  * ne désigne plus de modificateur — fichier importé, étage supprimé ailleurs —
  * retombe sur la rampe globale plutôt que de rendre `NaN`.
  */
-const rangeFactor = (layer, binding, indices, i, total) => {
+const rangeFactor = (layer, { binding, curve }, indices, i, total) => {
   const modifier = binding === null ? null : layer.modifiers[binding];
-  return modifier ? t(indices[binding], effectiveCount(modifier)) : t(i, total);
+  return modifier ? ramp(curve, indices[binding], effectiveCount(modifier)) : ramp(curve, i, total);
 };
 
+/** Pile qui dépasse `MAX_COPIES` : le calque n'est pas rendu, le panneau le dit. */
+export const isSuspended = (layer) => copyCount(layer.modifiers) > MAX_COPIES;
+
 export const getRenderedChildren = (layer) => {
-  if (layer.elements.length === 0) return [];
+  if (layer.elements.length === 0 || isSuspended(layer)) return [];
   const copies = stackCopies(layer.modifiers);
 
   const children = [];
   copies.forEach((indices, i) => {
     const { rotation: twist = 0, strokeWidth: widthFactor = 1, ...properties } = stackValues(
       layer.interpolations,
-      (interpolation) => rangeFactor(layer, interpolation.binding, indices, i, copies.length),
+      (interpolation) => rangeFactor(layer, interpolation, indices, i, copies.length),
       RANGE_BOUNDS,
     );
     for (const element of layer.elements) {
@@ -512,6 +521,9 @@ export const setLayerCenter = (scene, id, { x, y }) =>
 
 /** Pivot effectivement utilisé par l'étage `index` : le sien, ou celui du calque. */
 export const pivotOf = (layer, index) => layer.modifiers[index]?.center ?? layer.center;
+
+export const setLayerEvenOdd = (scene, id, evenOdd) =>
+  mapLayer(scene, id, (layer) => ({ ...layer, evenOdd: Boolean(evenOdd) }));
 
 export const setLayerStroke = (scene, id, stroke) =>
   mapLayer(scene, id, (layer) => ({ ...layer, stroke }));
@@ -737,7 +749,7 @@ export const clearInterpolations = (scene, layerId) =>
   mapLayer(scene, layerId, (layer) => ({ ...layer, interpolations: [] }));
 
 /**
- * `patch` porte les champs à changer : `property`, `binding` ou `range`.
+ * `patch` porte les champs à changer : `property`, `binding`, `curve` ou `range`.
  *
  * Changer de propriété change les bornes, donc la plage repart du réglage par
  * défaut de la nouvelle plutôt que d'être rabotée à une valeur qui ne veut plus

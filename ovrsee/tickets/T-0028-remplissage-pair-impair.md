@@ -2,11 +2,13 @@
 {
   "id": "T-0028",
   "titre": "Remplissage pair-impair du calque",
-  "colonne": "backlog",
+  "colonne": "revue",
   "priorite": "moyenne",
-  "tags": ["rendu"],
+  "tags": [
+    "rendu"
+  ],
   "cree": "2026-09-23",
-  "maj": "2026-09-23",
+  "maj": "2026-09-24",
   "plan": null,
   "epic": "T-0026"
 }

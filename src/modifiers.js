@@ -149,6 +149,17 @@ export const createModifier = (overrides = {}) => ({
 });
 
 /**
+ * Plafond de copies d'un calque. Empiler multiplie : trois étages à 12 font
+ * 1728 copies, chacune répétant toutes les formes du calque. Au-delà, le rendu
+ * du calque est suspendu plutôt que tenté — l'onglet se figerait.
+ */
+export const MAX_COPIES = 2000;
+
+/** Nombre de copies de la pile, sans les énumérer : se lit avant de décider de rendre. */
+export const copyCount = (modifiers) =>
+  modifiers.reduce((total, modifier) => total * effectiveCount(modifier), 1);
+
+/**
  * Indices de copie d'une pile : un tableau par copie, un indice par
  * modificateur. Le dernier modificateur varie le plus vite, donc une pile d'un
  * seul élément redonne exactement `[[0], [1], …]`.

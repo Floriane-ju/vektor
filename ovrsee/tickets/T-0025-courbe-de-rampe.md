@@ -2,11 +2,13 @@
 {
   "id": "T-0025",
   "titre": "Courbe de rampe des interpolations",
-  "colonne": "backlog",
+  "colonne": "revue",
   "priorite": "moyenne",
-  "tags": ["interpolation"],
+  "tags": [
+    "interpolation"
+  ],
   "cree": "2026-09-23",
-  "maj": "2026-09-23",
+  "maj": "2026-09-24",
   "plan": null,
   "epic": "T-0023"
 }

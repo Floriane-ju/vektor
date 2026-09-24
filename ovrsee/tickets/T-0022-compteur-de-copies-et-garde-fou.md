@@ -2,11 +2,14 @@
 {
   "id": "T-0022",
   "titre": "Compteur de copies et garde-fou",
-  "colonne": "backlog",
+  "colonne": "revue",
   "priorite": "basse",
-  "tags": ["modificateurs","perf"],
+  "tags": [
+    "modificateurs",
+    "perf"
+  ],
   "cree": "2026-09-23",
-  "maj": "2026-09-23",
+  "maj": "2026-09-24",
   "plan": null,
   "epic": "T-0018"
 }
