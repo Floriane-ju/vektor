@@ -2,11 +2,14 @@
 {
   "id": "T-0036",
   "titre": "Bibliothèque de préréglages de calque",
-  "colonne": "a-specifier",
+  "colonne": "backlog",
   "priorite": "basse",
-  "tags": ["ui","persistance"],
+  "tags": [
+    "ui",
+    "persistance"
+  ],
   "cree": "2026-09-23",
-  "maj": "2026-09-23",
+  "maj": "2026-09-24",
   "plan": null,
   "epic": "T-0032"
 }
