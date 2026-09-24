@@ -87,7 +87,7 @@ const createHandles = (scene) => {
   const group = document.createElementNS(SVG_NS, 'g');
   group.dataset.handles = element.id;
   group.setAttribute('fill', '#1b1b1b');
-  group.setAttribute('stroke', '#3ba2d6');
+  group.setAttribute('stroke', '#ee4722');
   group.setAttribute('stroke-width', '2');
   group.setAttribute('vector-effect', 'non-scaling-stroke');
   if (element.rotation) group.setAttribute('transform', rotateAbout(element.rotation, element));
@@ -393,6 +393,31 @@ const createNode = (child) => {
   return node;
 };
 
+/* Marge autour de l'aperçu, en fraction de son côté : le trait déborde du contour. */
+const PREVIEW_PADDING = 0.08;
+
+/**
+ * Aperçu d'une forme pour l'arbre : sa géométrie telle que dessinée (ratio,
+ * rotation), cadrée sur sa boîte dans un carré de `size` pixels, en
+ * `currentColor` et d'un trait fixe à l'écran. `null` pour le point, qui n'a
+ * pas d'étendue à montrer.
+ */
+export const shapePreview = (element, size) => {
+  if (SHAPES[element.type].geometry === 'dot') return null;
+  const child = { ...element, flip: false, strokeWidth: 0, dash: [], opacity: 1 };
+  const node = createNode({ ...child, fill: element.filled ? 'currentColor' : 'none', stroke: 'currentColor' });
+  delete node.dataset.elementId;
+  node.setAttribute('stroke-width', '1.8');
+  node.setAttribute('vector-effect', 'non-scaling-stroke');
+  const box = childBounds(child);
+  const side = Math.max(box.maxX - box.minX, box.maxY - box.minY) * (1 + PREVIEW_PADDING * 2) || 1;
+  const left = (box.minX + box.maxX - side) / 2;
+  const top = (box.minY + box.maxY - side) / 2;
+  const svg = svgNode('svg', { width: size, height: size, viewBox: [left, top, side, side].map(round).join(' ') });
+  svg.append(node);
+  return svg;
+};
+
 /* Étendue d'un masque, en unités du dessin.
    ponytail: trois plans de large autour du plan ; une forme qui déborde plus
    loin serait coupée net, élargir le jour où le zoom y mène. */
@@ -494,9 +519,9 @@ const createBoolean = (child, steps) => {
    l'interface (`style.css`) : un attribut de présentation ne lit pas `var()`. */
 const SELECTION_GAP = 8;
 const FRAME_COLORS = {
-  selection: 'var(--select, #3ba2d6)',
+  selection: 'var(--accent, #ee4722)',
   layer: 'var(--accent, #ee4722)',
-  hover: 'var(--select, #3ba2d6)',
+  hover: 'var(--accent, #ee4722)',
 };
 /* Échantillons d'un contour courbe : l'écart à la vraie boîte reste sous le
    pixel pour les rayons du plan. */

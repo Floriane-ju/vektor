@@ -66,15 +66,6 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
   const render = (scene) => {
     if (collapsedId !== scene.activeLayerId) collapsedId = null;
     rebuild(scene);
-    /* La couleur change en continu pendant qu'on la règle : on la pose sur
-       place plutôt que de reconstruire l'arbre. La pastille du calque prend
-       celle de sa dernière forme — celle que la prochaine reprendra. */
-    for (const layer of scene.layers) {
-      const row = container.querySelector(`[data-layer-id="${layer.id}"]`);
-      const color = layer.elements.at(-1)?.stroke;
-      if (color) row?.style.setProperty('--layer-color', color);
-      else row?.style.removeProperty('--layer-color');
-    }
   };
 
   /* Choisir un calque le montre seul dans les réglages : sa forme sélectionnée,
@@ -115,10 +106,6 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
       collapsedId = isOpen ? layer.id : null;
       render(store.get());
     });
-
-    const swatch = document.createElement('span');
-    swatch.className = 'layer-swatch';
-    swatch.setAttribute('aria-hidden', 'true');
 
     const name = document.createElement('button');
     name.type = 'button';
@@ -162,7 +149,7 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
 
     reorderKeys(name, (delta) => store.apply(moveLayer, layer.id, delta));
 
-    row.append(dragHandle(), chevron, swatch, name, actions);
+    row.append(dragHandle(), chevron, name, actions);
     /* Un calque se range entre les autres ; une forme d'un autre calque y
        entre, au premier plan. */
     sortableRow(row, { kind: 'layer', id: layer.id }, {

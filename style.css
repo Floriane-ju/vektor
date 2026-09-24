@@ -11,7 +11,7 @@
   --text: #fcfaf3;      /* 13.4:1 sur --bg-panel */
   --text-dim: #aaaaaa;  /* 6.0:1  sur --bg-panel */
   --accent: #ee4722;    /* calque sélectionné, outil actif */
-  --select: #3ba2d6;    /* forme sélectionnée */
+  --select: #3ba2d6;    /* focus clavier */
   --ink: #1b1b1b;       /* texte posé sur un accent */
   --danger: #f5917a;    /* 6.6:1  sur --bg-panel */
   --radius: 8px;
@@ -322,14 +322,6 @@ input[type="range"] {
 }
 [data-selected="layer"] > .layer-row .chevron { color: var(--ink); }
 
-.layer-swatch {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  border-radius: var(--pill);
-  background: var(--layer-color, var(--text));
-}
-[data-selected="layer"] > .layer-row .layer-swatch { box-shadow: 0 0 0 1.5px var(--ink); }
 
 .layer-name {
   flex-grow: 1;
@@ -348,10 +340,14 @@ input[type="range"] {
 #shape-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px 32px; }
 #shape-list .layer-row { height: 36px; }
 #shape-list .layer-name { font-weight: 400; }
-#shape-list .layer-card[data-active="true"] > .layer-row { background: var(--select); color: var(--ink); }
+#shape-list .layer-card[data-active="true"] > .layer-row { background: var(--accent); color: var(--ink); }
 #shape-list .layer-card[data-active="true"] .layer-name { font-weight: 600; }
+/* L'aperçu porte la couleur de la forme ; en blanc sur l'accent de la ligne
+   sélectionnée. */
+.shape-glyph { color: var(--shape-color, currentColor); }
+#shape-list .layer-card[data-active="true"] > .layer-row > .shape-glyph { color: #fff; }
 /* Survoler une forme de la liste l'encadre sur le dessin (voir `shape-list.js`). */
-#shape-list .layer-card:hover:not(:has(.layer-card:hover)) > .layer-row { box-shadow: inset 0 0 0 1.5px var(--select); }
+#shape-list .layer-card:hover:not(:has(.layer-card:hover)) > .layer-row { box-shadow: inset 0 0 0 1.5px var(--accent); }
 /* Outil booléen rangé sous la forme qui l'emploie : un filet relie la
    branche à son parent, un coude à chaque outil. */
 .boolean-branch { position: relative; margin: 2px 0 0 16px; padding-left: 16px; }

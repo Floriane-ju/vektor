@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { areaPath, childBounds, render, toSvgDocument } from '../src/renderer-svg.js';
+import { areaPath, childBounds, render, shapePreview, toSvgDocument } from '../src/renderer-svg.js';
 import { createElement, createInterpolation, createLayer, STAGE } from '../src/scene.js';
 import { createStore } from '../src/store.js';
 import { mountToolbar } from '../src/ui/toolbar.js';
@@ -1728,5 +1728,20 @@ describe('recoupements creux', () => {
     toggle.checked = true;
     toggle.dispatchEvent(new Event('change'));
     expect(store.get().layers[0].evenOdd).toBe(true);
+  });
+});
+
+describe('shapePreview', () => {
+  it('garde le ratio de la forme dans un cadre carré', () => {
+    const preview = shapePreview(createElement('ellipse', 100, 50, { rx: 40, ry: 10, filled: true }), 18);
+    const [, , width, height] = preview.getAttribute('viewBox').split(' ').map(Number);
+    const node = preview.querySelector('ellipse');
+    expect(width).toBe(height);
+    expect(Number(node.getAttribute('rx')) / Number(node.getAttribute('ry'))).toBe(4);
+    expect(node.getAttribute('fill')).toBe('currentColor');
+  });
+
+  it("n'a rien à montrer pour le point", () => {
+    expect(shapePreview(createElement('point', 0, 0), 18)).toBeNull();
   });
 });

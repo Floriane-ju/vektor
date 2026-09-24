@@ -9,7 +9,7 @@ import {
   setActiveElement,
   SHAPES,
 } from '../scene.js';
-import { clearHover, showHover } from '../renderer-svg.js';
+import { clearHover, shapePreview, showHover } from '../renderer-svg.js';
 import { dragHandle, dropIndex, iconButton, rebuildWithFocus, reorderKeys, shapeName, sortableRow, whenChanged } from './list.js';
 import { icon } from './icons.js';
 import { DUPLICATE_OFFSET } from './shortcuts.js';
@@ -17,6 +17,9 @@ import { DUPLICATE_OFFSET } from './shortcuts.js';
 /* Délai avant de rendre l'accent à la sélection quand le pointeur quitte une
    card, en millisecondes : assez pour traverser l'interstice entre deux. */
 const HOVER_LEAVE_DELAY = 120;
+
+/* Côté de l'aperçu d'une forme dans la liste, en pixels. */
+const GLYPH_SIZE = 18;
 
 /**
  * Forme sous laquelle chaque outil booléen se range : la première, du premier plan
@@ -122,6 +125,17 @@ export const mountShapeList = ({
   const render = (scene) => {
     if (hoveredId) highlight(hoveredId);
     rebuild(scene);
+    /* Couleur et géométrie changent en continu pendant qu'on les règle : on
+       redessine l'aperçu sur place plutôt que de reconstruire la liste.
+       ponytail: tous les aperçus du calque à chaque rendu ; ne redessiner que
+       la forme modifiée si un calque très chargé rame. */
+    for (const element of getActiveLayer(scene)?.elements ?? []) {
+      const glyph = container.querySelector(`[data-element-id="${element.id}"] > .layer-row > .shape-glyph`);
+      if (!glyph) continue;
+      glyph.style.setProperty('--shape-color', element.stroke);
+      const preview = shapePreview(element, GLYPH_SIZE);
+      if (preview) glyph.replaceChildren(preview);
+    }
   };
 
   const shapeRow = (layer, element, activeElementId, displayed, parents) => {
@@ -130,6 +144,7 @@ export const mountShapeList = ({
     const card = document.createElement('li');
     card.className = 'layer-card';
     card.dataset.active = String(isActive);
+    card.dataset.elementId = element.id;
     card.addEventListener('pointerenter', () => highlight(element.id));
     /* Revenir d'un outil imbriqué sur sa forme ne rentre pas dans la card :
        seul `pointerover` le dit. */
@@ -162,7 +177,9 @@ export const mountShapeList = ({
     const actions = document.createElement('span');
     actions.className = 'row-actions';
     reorderKeys(name, (delta) => store.apply(moveElement, element.id, delta));
-    row.append(dragHandle(), icon(element.type, 18), name, actions);
+    const glyph = icon(element.type, GLYPH_SIZE);
+    glyph.classList.add('shape-glyph');
+    row.append(dragHandle(), glyph, name, actions);
     actions.append(
       iconButton({
         label: `Dupliquer ${name.textContent}`,
