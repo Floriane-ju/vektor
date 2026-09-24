@@ -211,7 +211,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
         status.show(`Tracé refusé — ${error.message}`, 'error');
       }
     },
-    'Segments droits seulement : M, L, H, V, Z',
+    'Chemin SVG (d), points de polygon/polyline — courbes échantillonnées',
   );
 
   /* ponytail: `popover` natif — Échap et clic extérieur ferment le menu, pas de

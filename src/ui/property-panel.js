@@ -17,8 +17,6 @@ import {
   parseDash,
   setLayerCenter,
   setLayerEvenOdd,
-  setLayerStroke,
-  setLayerStrokeWidth,
   SHAPES,
   updateElement,
   updateModifier,
@@ -142,7 +140,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
    * Relie un `input` à une transition de scène.
    *
    * `subject` dit ce que le contrôle édite : la forme active pour les champs de
-   * forme, le calque actif pour l'épaisseur et les modificateurs. Le contrôle
+   * forme, le calque actif pour les modificateurs. Le contrôle
    * ne s'écrit pas quand son sujet est absent.
    */
   const bind = (
@@ -285,8 +283,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     (element, value) => store.apply(updateElement, element.id, { closure: value }),
     { event: 'change', parse: String },
   );
-  /* La couleur est réglée sur le calque : ici on ne dit que rempli ou non, et
-     le remplissage reprend cette couleur. */
+  /* Le remplissage n'a pas de teinte propre : il reprend la couleur de la forme. */
   const filled = bind(
     input('checkbox'),
     (element) => element.filled,
@@ -316,12 +313,12 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   /* 0° en haut, sens horaire ; de 0 à 360 l'arc fait le tour complet. */
   const arcRow = row(field('Début (°)', arcStart), field('Fin (°)', arcEnd), field('Fermeture', closure));
   const closedField = switchField('Fermé', closed);
-  const filledField = switchField('Remplir de la couleur du calque', filled);
+  const filledField = switchField('Remplir', filled);
 
   /* Trait : le type de motif se lit sur le tableau de tirets — vide, plein ;
      un premier tiret nul, des points ; sinon des tirets. La saisie libre garde
      tous les motifs que les segments ne nomment pas. Valeurs en multiples de
-     l'épaisseur du calque. */
+     l'épaisseur de la forme. */
   const dashKind = (dash) => (dash.length === 0 ? 'solid' : dash[0] === 0 ? 'dotted' : 'dashed');
   const dashSegments = segmented(
     'Trait',
@@ -359,41 +356,18 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   const strokeGroup = el('div', 'group');
   strokeGroup.append(dashSegments, dashLength, dashTextField, linecapSegments);
 
-  const shapeDetail = el('div', 'inspector-body');
-  shapeDetail.dataset.kind = 'shape';
-  shapeDetail.setAttribute('aria-label', 'Réglages de la forme');
-  const strokeSeparator = separator();
-  shapeDetail.append(
-    shapeHead.head,
-    separator(),
-    geometryRow,
-    rotationField,
-    polygonRow,
-    arcRow,
-    closedField,
-    strokeSeparator,
-    strokeGroup,
-    filledField,
-    separator(),
-    booleans.root,
-  );
-
-  /* ---- Calque ---- */
-
-  const layerHead = inspectorHead('Calque');
-
-  /* L'épaisseur et la couleur appartiennent au calque : toutes ses formes
-     sortent du même outil, et un point y trouve son diamètre. */
+  /* L'épaisseur et la couleur appartiennent à la forme ; un point y trouve
+     son diamètre. */
   const setStroke = (value) => {
-    const layer = getActiveLayer(store.get());
-    if (layer) store.apply(setLayerStroke, layer.id, value);
+    const element = getActiveElement(store.get());
+    if (element) store.apply(updateElement, element.id, { stroke: value });
   };
 
-  /* Palette fixe, puis les couleurs hors palette déjà portées par un calque :
-     réaccorder deux calques se fait d'un clic, sans recopier l'hexadécimal. */
+  /* Palette fixe, puis les couleurs hors palette déjà portées par une forme :
+     réaccorder deux formes se fait d'un clic, sans recopier l'hexadécimal. */
   const swatchColors = (scene) => {
     const labels = new Map(PALETTE);
-    for (const { stroke: value } of scene.layers) {
+    for (const { stroke: value } of scene.layers.flatMap((layer) => layer.elements)) {
       const key = value.toLowerCase();
       if (!labels.has(key)) labels.set(key, key.toUpperCase());
     }
@@ -422,9 +396,9 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   );
   const stroke = bind(
     input('color'),
-    (layer) => layer.stroke,
-    (layer, value) => store.apply(setLayerStroke, layer.id, value),
-    { subject: 'layer', parse: String },
+    (element) => element.stroke,
+    (element, value) => store.apply(updateElement, element.id, { stroke: value }),
+    { parse: String },
   );
   stroke.setAttribute('aria-label', 'Autre couleur');
   const custom = el('label', 'swatch is-custom', '+');
@@ -433,24 +407,27 @@ export const mountPropertyPanel = ({ store, container = null }) => {
 
   const hex = bind(
     input('text', { spellcheck: false, maxLength: 7 }),
-    (layer) => layer.stroke.toUpperCase(),
-    (layer, value) => {
+    (element) => element.stroke.toUpperCase(),
+    (element, value) => {
       const match = HEX.exec(value.trim());
-      if (match) store.apply(setLayerStroke, layer.id, `#${match[1].toLowerCase()}`);
-      else hex.value = layer.stroke.toUpperCase();
+      if (match) store.apply(updateElement, element.id, { stroke: `#${match[1].toLowerCase()}` });
+      else hex.value = element.stroke.toUpperCase();
     },
-    { subject: 'layer', event: 'change', parse: String },
+    { event: 'change', parse: String },
   );
   hex.className = 'hex';
   controls.push({
-    subject: 'layer',
-    sync: (layer) => {
+    subject: 'element',
+    sync: (element) => {
       const scene = store.get();
       rebuildSwatches(scene);
-      const current = layer.stroke.toLowerCase();
+      const current = element.stroke.toLowerCase();
       for (const swatch of swatchList.children) {
-        const users = scene.layers.filter(
-          (other) => other.id !== layer.id && other.stroke.toLowerCase() === swatch.dataset.color,
+        /* Calques où une autre forme porte déjà cette couleur. */
+        const users = scene.layers.filter((layer) =>
+          layer.elements.some(
+            (other) => other.id !== element.id && other.stroke.toLowerCase() === swatch.dataset.color,
+          ),
         );
         swatch.setAttribute('aria-pressed', String(swatch.dataset.color === current));
         swatch.toggleAttribute('data-used', users.length > 0);
@@ -475,10 +452,35 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   const strokeWidth = slider(
     'Épaisseur',
     STROKE_SLIDER,
-    (layer) => layer.strokeWidth,
-    (layer, value) => store.apply(setLayerStrokeWidth, layer.id, value),
-    { subject: 'layer' },
+    (element) => element.strokeWidth,
+    (element, value) => store.apply(updateElement, element.id, { strokeWidth: Math.max(0, value) }),
   );
+
+  const shapeDetail = el('div', 'inspector-body');
+  shapeDetail.dataset.kind = 'shape';
+  shapeDetail.setAttribute('aria-label', 'Réglages de la forme');
+  const strokeSeparator = separator();
+  shapeDetail.append(
+    shapeHead.head,
+    separator(),
+    geometryRow,
+    rotationField,
+    polygonRow,
+    arcRow,
+    closedField,
+    separator(),
+    colorGroup,
+    strokeWidth,
+    filledField,
+    strokeSeparator,
+    strokeGroup,
+    separator(),
+    booleans.root,
+  );
+
+  /* ---- Calque ---- */
+
+  const layerHead = inspectorHead('Calque');
 
   /* Les formes remplies du calque, copies comprises, en un tracé pair-impair. */
   const evenOdd = bind(
@@ -677,8 +679,6 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   layerDetail.append(
     layerHead.head,
     separator(),
-    colorGroup,
-    strokeWidth,
     evenOddField,
     separator(),
     modifierSet,
@@ -719,7 +719,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
 
     if (element) {
       const { geometry, uniform, signed } = SHAPES[element.type];
-      /* Un point n'a ni taille ni remplissage : l'épaisseur du calque lui donne
+      /* Un point n'a ni taille ni remplissage : son épaisseur lui donne
          son diamètre, et c'est déjà un bout rond sans longueur à découper. */
       const dot = geometry === 'dot';
       /* Un tracé se dimensionne par ses sommets, pas par des champs. */

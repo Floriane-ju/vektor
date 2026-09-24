@@ -13,6 +13,8 @@ const PATHS = {
   eye: '<path d="M2 10 C5 4.5 15 4.5 18 10 C15 15.5 5 15.5 2 10 Z" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.5"/>',
   eyeOff: '<path d="M2 10 C5 4.5 15 4.5 18 10 C15 15.5 5 15.5 2 10 Z" stroke-linejoin="round"/><path d="M4 16 L16 4" stroke-linecap="round"/>',
   chevronDown: '<path d="M5 8 L10 13 L15 8" stroke-linecap="round" stroke-linejoin="round"/>',
+  /* Poignée de glisser-déposer : deux colonnes de trois points. */
+  grip: [7, 13].flatMap((x) => [5, 10, 15].map((y) => `<circle cx="${x}" cy="${y}" r="1.4" fill="currentColor" stroke="none"/>`)).join(''),
   chevronRight: '<path d="M8 5 L13 10 L8 15" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 

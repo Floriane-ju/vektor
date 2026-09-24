@@ -46,6 +46,7 @@ const LIST = [
   ['⌘/Ctrl + D', 'Dupliquer la forme sélectionnée (sinon le calque)'],
   ['Échap', 'Désélectionner'],
   ['Flèches', 'Déplacer de 1 px (Maj : 10 px)'],
+  ['Alt + ↑ / ↓', 'Sur un calque ou une forme de la liste : le monter / descendre'],
   ['⌘/Ctrl + Z', 'Annuler (Maj : rétablir)'],
   ['⌘/Ctrl + + / − / 0', 'Zoomer / dézoomer / ajuster'],
   ['?', 'Afficher cette liste'],

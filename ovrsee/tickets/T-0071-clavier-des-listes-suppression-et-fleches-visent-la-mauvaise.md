@@ -2,7 +2,7 @@
 {
   "id": "T-0071",
   "titre": "Clavier des listes : suppression et flèches visent la mauvaise cible",
-  "colonne": "backlog",
+  "colonne": "pret",
   "priorite": "haute",
   "charge": "s",
   "tags": [

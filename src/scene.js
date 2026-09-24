@@ -45,9 +45,22 @@ export const RANGE_BOUNDS = {
   rotation: { min: -720, max: 720, step: 1, identity: 0, defaultRange: [0, 180], additive: true, unit: '°' },
   /* Facteur de l'épaisseur du calque, comme l'échelle l'est de la taille. */
   strokeWidth: { min: 0, max: 5, step: 0.01, identity: 1, defaultRange: [1, 0.2] },
+  /* Couleur du trait et de l'aplat, qui remplace celle du calque. Pas de
+     bornes numériques : une plage de deux `#rrggbb`, du trait par défaut à
+     l'accent. */
+  color: { color: true, defaultRange: ['#7dd3c0', '#ee4722'] },
 };
 
-export const RANGE_LABELS = { opacity: 'Opacité', scale: 'Échelle', rotation: 'Rotation', strokeWidth: 'Épaisseur' };
+export const RANGE_LABELS = {
+  opacity: 'Opacité',
+  scale: 'Échelle',
+  rotation: 'Rotation',
+  strokeWidth: 'Épaisseur',
+  color: 'Couleur',
+};
+
+/** `#rrggbb`, seule écriture que le mélange de couleurs et `<input type="color">` lisent. */
+export const isHexColor = (value) => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 
 /**
  * Formes disponibles.
@@ -188,24 +201,22 @@ export const absolutePoints = (element) =>
 export const clampInner = (value) => Math.min(100, Math.max(0, Number.isFinite(value) ? value : 100));
 
 /**
- * L'épaisseur du trait appartient au calque, pas à la forme : un calque est un
- * coup de crayon, toutes ses formes sortent du même outil. C'est aussi ce qui
- * donne son diamètre au point, faute d'étendue propre.
+ * L'épaisseur du trait appartient à la forme : un même calque peut mêler un
+ * trait fin et un trait épais. C'est aussi ce qui donne son diamètre au point,
+ * faute d'étendue propre.
  */
 export const DEFAULT_STROKE_WIDTH = 1.5;
 
 /**
- * La couleur appartient au calque pour la même raison que l'épaisseur : un
- * calque est un coup de crayon, toutes ses formes sortent du même outil. Le
- * remplissage n'a pas de teinte propre — rempli, une forme se peint de son
- * contour.
+ * La couleur appartient à la forme, comme l'épaisseur. Le remplissage n'a pas
+ * de teinte propre — rempli, une forme se peint de son contour.
  */
 export const DEFAULT_STROKE = '#7dd3c0';
 
 /**
  * Le style de trait appartient à la forme, pas au calque : un même calque peut
  * mêler un anneau pointillé et un cercle plein. Le motif de tirets est exprimé
- * en multiples de l'épaisseur du calque : un pointillé reste un pointillé quand
+ * en multiples de l'épaisseur de la forme : un pointillé reste un pointillé quand
  * on épaissit le trait. Tableau vide = trait plein.
  */
 export const LINECAPS = { butt: 'Net', round: 'Rond', square: 'Carré' };
@@ -251,6 +262,8 @@ const nextId = (prefix) => `${prefix}${++counters[prefix]}`;
 export const createElement = (type, x, y, overrides = {}) => ({
   id: nextId('E'),
   rotation: 0,
+  strokeWidth: DEFAULT_STROKE_WIDTH,
+  stroke: DEFAULT_STROKE,
   dash: [],
   linecap: DEFAULT_LINECAP,
   booleans: [],
@@ -306,8 +319,6 @@ export const createLayer = (overrides = {}) => ({
   name: `Calque ${counters.L}`,
   visible: true,
   center: { x: STAGE.width / 2, y: STAGE.height / 2 },
-  strokeWidth: DEFAULT_STROKE_WIDTH,
-  stroke: DEFAULT_STROKE,
   elements: [],
   /* Pile vide : le calque se rend tel quel. On empile ensuite les gestes. */
   modifiers: [],
@@ -419,7 +430,7 @@ export const getRenderedChildren = (layer) => {
 
   const children = [];
   copies.forEach((indices, i) => {
-    const { rotation: twist = 0, strokeWidth: widthFactor = 1, ...properties } = stackValues(
+    const { rotation: twist = 0, strokeWidth: widthFactor = 1, color, ...properties } = stackValues(
       layer.interpolations,
       (interpolation) => rangeFactor(layer, interpolation, indices, i, copies.length),
       RANGE_BOUNDS,
@@ -432,9 +443,9 @@ export const getRenderedChildren = (layer) => {
       const own = (element.rotation ?? 0) + twist;
       children.push({
         ...element,
-        strokeWidth: layer.strokeWidth * widthFactor,
-        stroke: layer.stroke,
-        fill: element.filled ? layer.stroke : 'none',
+        strokeWidth: element.strokeWidth * widthFactor,
+        stroke: color ?? element.stroke,
+        fill: element.filled ? (color ?? element.stroke) : 'none',
         x,
         y,
         rotation: (angle * 180) / Math.PI + (flip ? -own : own),
@@ -510,9 +521,6 @@ export const toggleVisibility = (scene, id) =>
 export const renameLayer = (scene, id, name) =>
   mapLayer(scene, id, (layer) => ({ ...layer, name }));
 
-export const setLayerStrokeWidth = (scene, id, strokeWidth) =>
-  mapLayer(scene, id, (layer) => ({ ...layer, strokeWidth: Math.max(0, strokeWidth) }));
-
 /** Pivot par défaut des modificateurs du calque. Une coordonnée non finie est ignorée. */
 export const setLayerCenter = (scene, id, { x, y }) =>
   Number.isFinite(x) && Number.isFinite(y)
@@ -525,9 +533,6 @@ export const pivotOf = (layer, index) => layer.modifiers[index]?.center ?? layer
 export const setLayerEvenOdd = (scene, id, evenOdd) =>
   mapLayer(scene, id, (layer) => ({ ...layer, evenOdd: Boolean(evenOdd) }));
 
-export const setLayerStroke = (scene, id, stroke) =>
-  mapLayer(scene, id, (layer) => ({ ...layer, stroke }));
-
 /** `delta` = -1 vers l'arrière-plan, +1 vers le premier plan. */
 export const moveLayer = (scene, id, delta) => {
   const from = scene.layers.findIndex((layer) => layer.id === id);
@@ -538,19 +543,41 @@ export const moveLayer = (scene, id, delta) => {
   return { ...scene, layers };
 };
 
+/* Retire `item` de `list` et le repose au rang `index` (borné) ; même
+   référence si l'ordre ne change pas. */
+const placeAt = (list, item, index) => {
+  const rest = list.filter((candidate) => candidate !== item);
+  const at = Math.max(0, Math.min(index, rest.length));
+  const next = [...rest.slice(0, at), item, ...rest.slice(at)];
+  return next.every((candidate, i) => candidate === list[i]) ? list : next;
+};
+
+/** Pose un calque au rang `index` de la pile (0 = fond) : glisser-déposer de l'arbre. */
+export const placeLayer = (scene, id, index) => {
+  const layer = scene.layers.find((candidate) => candidate.id === id);
+  const layers = layer ? placeAt(scene.layers, layer, index) : scene.layers;
+  return layers === scene.layers ? scene : { ...scene, layers };
+};
+
 /* ---- Formes d'un calque ---- */
 
 /**
  * Ajoute une forme au calque et la rend active.
  *
- * La nouvelle forme reprend le remplissage de la forme active, quel que soit
- * son type — dessiner dix formes pleines d'affilée ne doit pas demander de
- * cocher dix fois. La couleur et l'épaisseur n'en font pas partie : elles
- * vivent sur le calque.
+ * La nouvelle forme reprend le remplissage, la couleur et l'épaisseur de la
+ * dernière forme créée, quel que soit son type — dessiner dix formes pleines
+ * d'affilée ne doit pas demander de cocher dix fois.
+ *
+ * ponytail: « dernière créée » = la forme active (une forme naît active), à
+ * défaut la dernière du calque. Sélectionner une autre forme change donc le
+ * modèle ; un champ « dernier style » dans la scène le jour où ça gêne.
  */
 export const addElement = (scene, layerId, type, x, y, overrides = {}) => {
-  const previous = getActiveElement(scene);
-  const style = previous ? { filled: previous.filled } : {};
+  const previous =
+    getActiveElement(scene) ?? scene.layers.find((layer) => layer.id === layerId)?.elements.at(-1);
+  const style = previous
+    ? { filled: previous.filled, stroke: previous.stroke, strokeWidth: previous.strokeWidth }
+    : {};
   const element = createElement(type, x, y, { ...style, ...overrides });
   return {
     ...mapLayer(scene, layerId, (layer) => ({ ...layer, elements: [...layer.elements, element] })),
@@ -598,16 +625,18 @@ export const updateElement = (scene, elementId, patch) =>
     elements.map((element) => (element.id === elementId ? { ...element, ...patch } : element)),
   );
 
+/* Les formes qui employaient `toolId` comme outil booléen le perdent. */
+const withoutTool = (elements, toolId) =>
+  elements.map((element) =>
+    element.booleans.some((step) => step.with === toolId)
+      ? { ...element, booleans: element.booleans.filter((step) => step.with !== toolId) }
+      : element,
+  );
+
 export const removeElement = (scene, elementId) => {
   /* Un outil supprimé libère les formes qu'il travaillait. */
   const next = mapElement(scene, elementId, (elements) =>
-    elements
-      .filter((element) => element.id !== elementId)
-      .map((element) =>
-        element.booleans.some((step) => step.with === elementId)
-          ? { ...element, booleans: element.booleans.filter((step) => step.with !== elementId) }
-          : element,
-      ),
+    withoutTool(elements.filter((element) => element.id !== elementId), elementId),
   );
   if (scene.activeElementId !== elementId) return next;
   const layer = next.layers.find((candidate) => candidate.id === scene.activeLayerId);
@@ -669,6 +698,33 @@ export const moveElement = (scene, elementId, delta) => {
     [next[from], next[to]] = [next[to], next[from]];
     return next;
   });
+};
+
+/**
+ * Pose une forme au rang `index` du calque `layerId` (0 = fond), le sien ou un
+ * autre. Un booléen ne vit qu'entre formes d'un même calque : changer de
+ * calque les rompt, dans les deux sens. La forme active emmène le calque actif.
+ */
+export const placeElement = (scene, elementId, layerId, index) => {
+  const source = scene.layers.find((layer) => layer.elements.some((element) => element.id === elementId));
+  const target = scene.layers.find((layer) => layer.id === layerId);
+  if (!source || !target) return scene;
+  const element = source.elements.find((candidate) => candidate.id === elementId);
+  if (source === target) {
+    const elements = placeAt(source.elements, element, index);
+    return elements === source.elements ? scene : mapLayer(scene, layerId, (layer) => ({ ...layer, elements }));
+  }
+  const moved = element.booleans.length > 0 ? { ...element, booleans: [] } : element;
+  const layers = scene.layers.map((layer) => {
+    if (layer === source) {
+      return { ...layer, elements: withoutTool(layer.elements.filter((candidate) => candidate !== element), elementId) };
+    }
+    if (layer !== target) return layer;
+    const at = Math.max(0, Math.min(index, layer.elements.length));
+    return { ...layer, elements: [...layer.elements.slice(0, at), moved, ...layer.elements.slice(at)] };
+  });
+  const activeLayerId = scene.activeElementId === elementId ? layerId : scene.activeLayerId;
+  return { ...scene, layers, activeLayerId };
 };
 
 /* ---- Pile de modificateurs ---- */

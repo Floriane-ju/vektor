@@ -34,6 +34,20 @@ export const ramp = (curve, i, n) => (CURVES[curve] ?? t)(i, n);
 
 export const lerp = (from, to, factor) => from + (to - from) * factor;
 
+/* `#rrggbb` → [r, g, b]. */
+const channels = (hex) => [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16));
+
+/**
+ * Mélange de deux couleurs `#rrggbb`, canal par canal.
+ *
+ * ponytail: mélange en sRGB, dont les milieux ternissent (rouge → cyan passe
+ * par le gris). Passer par OKLab le jour où un dégradé le montre.
+ */
+export const lerpColor = (from, to, factor) =>
+  `#${channels(from)
+    .map((value, i) => Math.round(lerp(value, channels(to)[i], factor)).toString(16).padStart(2, '0'))
+    .join('')}`;
+
 /** `n` est toujours un entier ≥ 1 : aucune division par zéro en aval. */
 export const clampCount = (n) => Math.max(1, Math.floor(Number(n) || 1));
 
@@ -55,18 +69,23 @@ export const clampCount = (n) => Math.max(1, Math.floor(Number(n) || 1));
  * permet à l'une de suivre un étage de la pile de modificateurs pendant qu'une
  * autre court sur le total des copies. Générique sur le nom de propriété :
  * ajouter une propriété = ajouter une entrée dans `RANGE_BOUNDS`, rien à toucher
- * ici. Une couleur demandera une variante `lerpColor`, le reste ne bouge pas.
+ * ici.
  *
- * Exception : une propriété marquée `additive` dans `bounds` (la rotation) se
+ * Exceptions : une propriété marquée `additive` dans `bounds` (la rotation) se
  * compose par somme, neutre 0 — deux vrilles s'ajoutent, elles ne se
- * multiplient pas.
+ * multiplient pas. Une propriété `color` n'a ni produit ni somme : la dernière
+ * de la pile l'emporte, comme une couche de peinture sur l'autre.
  */
 export const stackValues = (interpolations, factorOf, bounds = {}) => {
   const values = {};
   for (const interpolation of interpolations) {
     const [from, to] = interpolation.range;
-    const value = lerp(from, to, factorOf(interpolation));
     const { property } = interpolation;
+    if (bounds[property]?.color) {
+      values[property] = lerpColor(from, to, factorOf(interpolation));
+      continue;
+    }
+    const value = lerp(from, to, factorOf(interpolation));
     values[property] = bounds[property]?.additive
       ? (values[property] ?? 0) + value
       : (values[property] ?? 1) * value;

@@ -1,9 +1,11 @@
-import { iconButton, rebuildWithFocus, whenChanged } from './list.js';
+import { dragHandle, dropIndex, iconButton, rebuildWithFocus, reorderKeys, sortableRow, whenChanged } from './list.js';
 import { icon } from './icons.js';
 import {
   addLayer,
   duplicateLayer,
   moveLayer,
+  placeElement,
+  placeLayer,
   removeLayer,
   renameLayer,
   setActiveElement,
@@ -65,11 +67,13 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
     if (collapsedId !== scene.activeLayerId) collapsedId = null;
     rebuild(scene);
     /* La couleur change en continu pendant qu'on la règle : on la pose sur
-       place plutôt que de reconstruire l'arbre. */
+       place plutôt que de reconstruire l'arbre. La pastille du calque prend
+       celle de sa dernière forme — celle que la prochaine reprendra. */
     for (const layer of scene.layers) {
-      container
-        .querySelector(`[data-layer-id="${layer.id}"]`)
-        ?.style.setProperty('--layer-color', layer.stroke);
+      const row = container.querySelector(`[data-layer-id="${layer.id}"]`);
+      const color = layer.elements.at(-1)?.stroke;
+      if (color) row?.style.setProperty('--layer-color', color);
+      else row?.style.removeProperty('--layer-color');
     }
   };
 
@@ -79,7 +83,6 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
     store.apply((scene) => setActiveElement(setActiveLayer(scene, id), null));
 
   const layerRow = (scene, layer) => {
-    const index = scene.layers.indexOf(layer);
     const isActive = layer.id === scene.activeLayerId;
     const isOpen = isActive && collapsedId !== layer.id;
 
@@ -149,20 +152,6 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
         onClick: () => store.apply(duplicateLayer, layer.id),
       }),
       iconButton({
-        label: `Monter ${layer.name}`,
-        text: '↑',
-        focusKey: `up-${layer.id}`,
-        disabled: index === scene.layers.length - 1,
-        onClick: () => store.apply(moveLayer, layer.id, 1),
-      }),
-      iconButton({
-        label: `Descendre ${layer.name}`,
-        text: '↓',
-        focusKey: `down-${layer.id}`,
-        disabled: index === 0,
-        onClick: () => store.apply(moveLayer, layer.id, -1),
-      }),
-      iconButton({
         label: `Supprimer ${layer.name}`,
         text: '×',
         focusKey: `delete-${layer.id}`,
@@ -171,7 +160,29 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
       }),
     );
 
-    row.append(chevron, swatch, name, actions);
+    reorderKeys(name, (delta) => store.apply(moveLayer, layer.id, delta));
+
+    row.append(dragHandle(), chevron, swatch, name, actions);
+    /* Un calque se range entre les autres ; une forme d'un autre calque y
+       entre, au premier plan. */
+    sortableRow(row, { kind: 'layer', id: layer.id }, {
+      accepts: (item) => {
+        if (item.kind === 'layer') return item.id === layer.id ? null : 'sort';
+        /* L'arbre ne se reconstruit pas quand les formes changent : relire la scène. */
+        const current = store.get().layers.find((candidate) => candidate.id === layer.id);
+        return current?.elements.some((element) => element.id === item.id) ? null : 'into';
+      },
+      drop: (item, where) => {
+        const current = store.get();
+        const target = current.layers.find((candidate) => candidate.id === layer.id);
+        if (item.kind === 'shape') {
+          store.apply(placeElement, item.id, layer.id, target.elements.length);
+          return;
+        }
+        const dragged = current.layers.find((candidate) => candidate.id === item.id);
+        store.apply(placeLayer, item.id, dropIndex(current.layers, dragged, target, where));
+      },
+    });
     return card;
   };
 

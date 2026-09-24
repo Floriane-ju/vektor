@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { expect, it } from 'vitest';
 import { createStore } from '../src/store.js';
-import { createScene, getActiveLayer, setLayerStrokeWidth } from '../src/scene.js';
+import { addElement, createScene, getActiveElement, updateElement } from '../src/scene.js';
 import { mountHistory } from '../src/ui/history.js';
 import { mountScrub, scrubValue } from '../src/ui/scrub.js';
 
@@ -16,15 +16,16 @@ it('fait varier par pas, borne et respecte les décimales du step', () => {
 });
 
 it('un glissement entier = un seul pas d’annulation', () => {
-  const store = createStore(createScene());
+  const scene = createScene();
+  const store = createStore(addElement(scene, scene.activeLayerId, 'ellipse', 0, 0));
   mountHistory({ store });
   mountScrub();
   const input = numberInput({ step: '1', value: '1' });
   document.body.append(input);
   input.addEventListener('change', () =>
-    store.apply(setLayerStrokeWidth, store.get().activeLayerId, Number(input.value)),
+    store.apply(updateElement, store.get().activeElementId, { strokeWidth: Number(input.value) }),
   );
-  const width = () => getActiveLayer(store.get()).strokeWidth;
+  const width = () => getActiveElement(store.get()).strokeWidth;
   const before = width();
 
   const fire = (type, clientX) =>

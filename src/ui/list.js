@@ -1,3 +1,5 @@
+import { icon } from './icons.js';
+
 /**
  * Briques communes aux deux listes reconstruites de l'interface — le panneau
  * calques et la liste des formes.
@@ -85,3 +87,93 @@ export const whenChanged = (signature, render) => {
 /** Nom affiché d'une forme : son type et son rang dans le calque, compté depuis le fond. */
 export const shapeName = (layer, element, labels) =>
   `${labels[element.type].label} ${layer.elements.indexOf(element) + 1}`;
+
+/* Ligne en cours de glisser-déposer, partagée entre l'arbre des calques et la
+   liste des formes : pendant `dragover`, le navigateur cache `dataTransfer`. */
+let dragged = null;
+
+const clearDrop = () => {
+  for (const node of document.querySelectorAll('[data-drop]')) delete node.dataset.drop;
+};
+
+/** Poignée de glisser-déposer, posée en tête de ligne : la ligne entière se saisit. */
+export const dragHandle = () => {
+  const node = icon('grip', 14);
+  node.classList.add('drag-handle');
+  node.title = 'Glisser pour réordonner (Alt + ↑/↓ au clavier)';
+  return node;
+};
+
+/**
+ * Alt + ↑/↓ sur le nom d'une ligne la fait monter (vers le premier plan) ou
+ * descendre : le chemin clavier du glisser-déposer. `move(delta)` reçoit +1 ou -1.
+ */
+export const reorderKeys = (name, move) =>
+  name.addEventListener('keydown', (event) => {
+    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+    event.preventDefault();
+    move(event.key === 'ArrowUp' ? 1 : -1);
+  });
+
+/**
+ * Rang où poser `item` dans `list` (0 = fond) pour qu'il arrive juste avant
+ * (`'before'`, au-dessus à l'écran, donc devant) ou juste après `target`. Les
+ * listes s'affichent du premier plan vers le fond, à l'envers du tableau.
+ */
+export const dropIndex = (list, item, target, where) => {
+  const at = list.filter((candidate) => candidate !== item).indexOf(target);
+  return where === 'before' ? at + 1 : at;
+};
+
+/**
+ * Glisser-déposer natif d'une ligne. `item` = `{ kind, id }` de la ligne
+ * saisie ; `accepts(item)` dit ce que la ligne visée en fait : `'sort'` (se
+ * pose avant ou après elle, selon la moitié survolée), `'into'` (entre dedans)
+ * ou `null` (refusé) ; `drop(item, position)` applique le dépôt.
+ *
+ * ponytail: glisser natif, donc souris seulement — au clavier, Alt + ↑/↓ sur
+ * le nom de la ligne (`reorderKeys`) ; le tactile n'a pas de chemin.
+ */
+export const sortableRow = (row, item, { accepts, drop }) => {
+  row.draggable = true;
+  const position = (event) => {
+    const mode = dragged && accepts(dragged);
+    if (mode !== 'sort') return mode || null;
+    const box = row.getBoundingClientRect();
+    return event.clientY < box.top + box.height / 2 ? 'before' : 'after';
+  };
+  row.addEventListener('dragstart', (event) => {
+    /* Une ligne de forme vit dans la card de son calque : ne pas saisir les deux. */
+    event.stopPropagation();
+    dragged = item;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', item.id);
+    }
+  });
+  row.addEventListener('dragend', () => {
+    dragged = null;
+    clearDrop();
+  });
+  row.addEventListener('dragover', (event) => {
+    const where = position(event);
+    if (!where) return;
+    event.preventDefault();
+    if (row.dataset.drop !== where) {
+      clearDrop();
+      row.dataset.drop = where;
+    }
+  });
+  row.addEventListener('dragleave', (event) => {
+    if (!row.contains(event.relatedTarget)) delete row.dataset.drop;
+  });
+  row.addEventListener('drop', (event) => {
+    const where = position(event);
+    const payload = dragged;
+    dragged = null;
+    clearDrop();
+    if (!where) return;
+    event.preventDefault();
+    drop(payload, where);
+  });
+};

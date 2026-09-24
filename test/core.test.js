@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampCount, CURVES, ramp as curveRamp, stackValues, t } from '../src/interpolate.js';
+import { clampCount, CURVES, lerpColor, ramp as curveRamp, stackValues, t } from '../src/interpolate.js';
 import { copyCount, createModifier, MAX_COPIES, MODIFIERS, orients } from '../src/modifiers.js';
 import {
   addBoolean,
@@ -18,6 +18,8 @@ import {
   moveElement,
   moveLayer,
   moveModifier,
+  placeElement,
+  placeLayer,
   recenterTrace,
   removeBoolean,
   removeElement,
@@ -28,8 +30,6 @@ import {
   pivotOf,
   setLayerCenter,
   setLayerEvenOdd,
-  setLayerStroke,
-  setLayerStrokeWidth,
   snapToGrid,
   snapToPolarGrid,
   updateBoolean,
@@ -40,7 +40,7 @@ import {
 import { deserialize, serialize } from '../src/persistence.js';
 import { createStore, HISTORY_LIMIT } from '../src/store.js';
 import { parseTrace } from '../src/path.js';
-import { SHAPES } from '../src/scene.js';
+import { MAX_POINTS, RANGE_BOUNDS, SHAPES } from '../src/scene.js';
 
 const SHAPES_DEFAULT_POINTS = SHAPES.polyline.defaults.points;
 import { addLayer, createScene, setActiveElement } from '../src/scene.js';
@@ -252,11 +252,11 @@ describe('composition', () => {
     angles.forEach((angle, i) => expect(angle).toBeCloseTo(i * 20));
   });
 
-  /* L'épaisseur est un facteur de celle du calque, comme l'échelle l'est de la
-     taille : 4 → 0,5 va de 4× à la moitié de l'épaisseur du calque. */
+  /* L'épaisseur est un facteur de celle de la forme, comme l'échelle l'est de
+     la taille : 4 → 0,5 va de 4× à la moitié de l'épaisseur de la forme. */
   it('une interpolation d’épaisseur affine les copies', () => {
     const thinning = layer({
-      strokeWidth: 2,
+      elements: [createElement('ellipse', 100, 0, { strokeWidth: 2 })],
       interpolations: [createInterpolation({ property: 'strokeWidth', range: [4, 0.5] })],
     });
     const widths = getRenderedChildren(thinning).map((c) => c.strokeWidth);
@@ -406,6 +406,51 @@ describe('scène immuable', () => {
     expect(next.layers).toEqual([b, a]);
   });
 
+  it('placeLayer pose un calque à un rang donné, bornes comprises', () => {
+    const [a, b, c] = [createLayer(), createLayer(), createLayer()];
+    const scene = { layers: [a, b, c], activeLayerId: a.id, activeElementId: null };
+    expect(placeLayer(scene, a.id, 2).layers).toEqual([b, c, a]);
+    expect(placeLayer(scene, c.id, 0).layers).toEqual([c, a, b]);
+    expect(placeLayer(scene, b.id, 99).layers).toEqual([a, c, b]);
+    expect(scene.layers).toEqual([a, b, c]);
+    expect(placeLayer(scene, a.id, 0)).toBe(scene);
+    expect(placeLayer(scene, 'inconnu', 1)).toBe(scene);
+  });
+
+  it('placeElement réordonne dans le calque', () => {
+    const [e1, e2, e3] = ['rect', 'ellipse', 'line'].map((type) => createElement(type, 0, 0));
+    const layer = createLayer({ elements: [e1, e2, e3] });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    expect(placeElement(scene, e1.id, layer.id, 2).layers[0].elements).toEqual([e2, e3, e1]);
+    expect(placeElement(scene, e3.id, layer.id, 0).layers[0].elements).toEqual([e3, e1, e2]);
+    expect(placeElement(scene, e2.id, layer.id, 1)).toBe(scene);
+  });
+
+  it('placeElement change une forme de calque et rompt ses booléens', () => {
+    const [shape, tool, user] = ['rect', 'ellipse', 'line'].map((type) => createElement(type, 0, 0));
+    const from = createLayer({
+      elements: [
+        { ...shape, booleans: [{ with: tool.id, op: 'subtract' }] },
+        tool,
+        { ...user, booleans: [{ with: shape.id, op: 'union' }] },
+      ],
+    });
+    const to = createLayer({ elements: [createElement('rect', 0, 0)] });
+    const scene = { layers: [from, to], activeLayerId: from.id, activeElementId: shape.id };
+    const next = placeElement(scene, shape.id, to.id, 1);
+
+    expect(next.layers[0].elements.map((el) => el.id)).toEqual([tool.id, user.id]);
+    /* La forme qui l'employait comme outil le perd. */
+    expect(next.layers[0].elements[1].booleans).toEqual([]);
+    const moved = next.layers[1].elements[1];
+    expect(moved.id).toBe(shape.id);
+    expect(moved.booleans).toEqual([]);
+    /* La forme active suit : son calque devient l'actif. */
+    expect(next.activeLayerId).toBe(to.id);
+    expect(next.activeElementId).toBe(shape.id);
+    expect(scene.layers[0].elements).toHaveLength(3);
+  });
+
   it('un déplacement hors bornes rend la même référence', () => {
     const a = createLayer();
     const scene = { layers: [a], activeLayerId: a.id, activeElementId: null };
@@ -502,23 +547,20 @@ describe('formes d’un calque', () => {
     const point = scene.layers[0].elements.at(-1);
     expect(point.filled).toBe(true);
     expect(point.rx).toBe(0);
-    /* Ni l'épaisseur ni la couleur ne sont sur la forme : elles appartiennent
-       au calque. */
-    expect(point.strokeWidth).toBeUndefined();
-    expect(point.stroke).toBeUndefined();
+    expect(point.strokeWidth).toBe(1.5);
+    expect(point.stroke).toBe('#7dd3c0');
   });
 
-  it('la couleur du calque borne rien et ne mute pas', () => {
-    const scene = withTwo();
-    expect(setLayerStroke(scene, scene.layers[0].id, '#ff0000').layers[0].stroke).toBe('#ff0000');
-    expect(scene.layers[0].stroke).toBe('#7dd3c0');
-  });
-
-  it('l’épaisseur du calque borne à zéro et ne mute pas', () => {
-    const scene = withTwo();
-    expect(setLayerStrokeWidth(scene, scene.layers[0].id, 4).layers[0].strokeWidth).toBe(4);
-    expect(setLayerStrokeWidth(scene, scene.layers[0].id, -3).layers[0].strokeWidth).toBe(0);
-    expect(scene.layers[0].strokeWidth).toBe(1.5);
+  it('une nouvelle forme reprend couleur et épaisseur de la dernière créée', () => {
+    let scene = withTwo();
+    scene = updateElement(scene, scene.activeElementId, { stroke: '#ff0000', strokeWidth: 4 });
+    scene = addElement(scene, scene.layers[0].id, 'rect', 30, 30);
+    expect(scene.layers[0].elements.at(-1)).toMatchObject({ stroke: '#ff0000', strokeWidth: 4 });
+    /* La première forme garde les siennes. */
+    expect(scene.layers[0].elements[0]).toMatchObject({ stroke: '#7dd3c0', strokeWidth: 1.5 });
+    /* Sans forme active, la dernière du calque sert de modèle. */
+    scene = addElement({ ...scene, activeElementId: null }, scene.layers[0].id, 'rect', 40, 40);
+    expect(scene.layers[0].elements.at(-1)).toMatchObject({ stroke: '#ff0000', strokeWidth: 4 });
   });
 
   it('supprimer la forme active en réactive une autre', () => {
@@ -748,10 +790,8 @@ describe('persistance', () => {
       ],
     });
     const [layer] = deserialize(text).layers;
-    expect(layer.strokeWidth).toBe(10);
-    /* La couleur du disque remonte sur le calque, qui la porte désormais. */
-    expect(layer.stroke).toBe('#abcdef');
-    expect(layer.elements[0]).toMatchObject({ filled: false, rx: 0 });
+    /* La couleur du disque devient celle du trait. */
+    expect(layer.elements[0]).toMatchObject({ filled: false, rx: 0, strokeWidth: 10, stroke: '#abcdef' });
   });
 
   it('relit un projet v1 : `radius` converti, forme unique devenue liste', () => {
@@ -771,7 +811,7 @@ describe('persistance', () => {
     const { elements } = layer;
     expect(elements).toHaveLength(1);
     expect(elements[0]).toMatchObject({ type: 'ellipse', x: 10, y: 20, rx: 33, ry: 33 });
-    expect(layer.stroke).toBe('#abcdef');
+    expect(elements[0].stroke).toBe('#abcdef');
     expect(elements[0].radius).toBeUndefined();
   });
 
@@ -901,8 +941,53 @@ describe('lecture d’un tracé collé', () => {
     expect(pts(parseTrace('0 0, 1e1 -2')[0])).toEqual([[0, 0], [10, -2]]);
   });
 
-  it('refuse ce qui ne trace pas de segment droit', () => {
-    expect(() => parseTrace('M0 0 Q 1 1 2 2')).toThrow(/« Q »/);
+  const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) < 1e-6;
+  const radii = (trace, cx, cy) => trace.points.map((p) => Math.hypot(p.x - cx, p.y - cy));
+
+  it('échantillonne les courbes C et Q, fin de courbe exacte', () => {
+    const [cubic] = parseTrace('M0 0 C0 10 10 10 10 0');
+    expect(cubic.points.length).toBeGreaterThan(8);
+    expect(near(cubic.points.at(-1), { x: 10, y: 0 })).toBe(true);
+    /* Milieu d'une cubique symétrique : (5, 7.5). */
+    expect(cubic.points.some((p) => near(p, { x: 5, y: 7.5 }))).toBe(true);
+    const [quad] = parseTrace('m0 0 q5 10 10 0');
+    expect(near(quad.points.at(-1), { x: 10, y: 0 })).toBe(true);
+    expect(quad.points.some((p) => near(p, { x: 5, y: 5 }))).toBe(true);
+  });
+
+  it('S et T reflètent le point de contrôle précédent', () => {
+    const [s] = parseTrace('M0 0 C0 10 10 10 10 0 S20 -10 20 0');
+    const [c] = parseTrace('M0 0 C0 10 10 10 10 0 C10 -10 20 -10 20 0');
+    expect(pts(s)).toEqual(pts(c));
+    const [t] = parseTrace('M0 0 Q5 10 10 0 T20 0');
+    const [q] = parseTrace('M0 0 Q5 10 10 0 Q15 -10 20 0');
+    expect(pts(t)).toEqual(pts(q));
+  });
+
+  it('un cercle en deux arcs donne une polyligne fermée sur le cercle', () => {
+    const [circle] = parseTrace('M0 10 A10 10 0 1 0 20 10 A10 10 0 1 0 0 10 Z');
+    expect(circle.closed).toBe(true);
+    expect(circle.points.length).toBeGreaterThan(16);
+    for (const r of radii(circle, 10, 10)) expect(r).toBeCloseTo(10, 6);
+    /* Sweep 0 depuis (0, 10) vers (20, 10) : l'arc passe par le bas (y = 20). */
+    expect(circle.points.some((p) => near(p, { x: 10, y: 20 }))).toBe(true);
+  });
+
+  it('lit les drapeaux d’arc collés et agrandit un rayon trop petit', () => {
+    const [packed] = parseTrace('M0 10a10 10 0 1020 0');
+    const [spaced] = parseTrace('M0 10 a10 10 0 1 0 20 0');
+    expect(pts(packed)).toEqual(pts(spaced));
+    const [tight] = parseTrace('M0 0 A1 1 0 0 1 20 0');
+    for (const r of radii(tight, 10, 0)) expect(r).toBeCloseTo(10, 6);
+  });
+
+  it('refuse un tracé qui dépasse le plafond de sommets', () => {
+    const d = `M0 0 ${Array.from({ length: MAX_POINTS }, (_, i) => `L${i} 1`).join(' ')}`;
+    expect(() => parseTrace(d)).toThrow(/sommets/);
+  });
+
+  it('refuse ce qui ne trace pas de segment', () => {
+    expect(() => parseTrace('M0 0 B 1 1 2 2')).toThrow(/« B »/);
     expect(() => parseTrace('M0 0')).toThrow(/aucun segment/);
     expect(() => parseTrace('L 1 1')).toThrow(/commencer par M/);
     expect(() => parseTrace('0 0 1')).toThrow(/incomplète/);
@@ -1237,8 +1322,30 @@ describe('rotation et épaisseur interpolées', () => {
       layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
     });
     const again = deserialize(serialize(deserialize(old)));
-    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@18');
+    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@20');
     expect(orients(again.layers[0].modifiers[0])).toBe(true);
+  });
+
+  it('une scène `@19` recopie couleur et épaisseur du calque sur ses formes', () => {
+    const old = JSON.stringify({
+      format: 'vektor/scene@19',
+      layers: [
+        {
+          id: 'L1',
+          stroke: '#abcdef',
+          strokeWidth: 4,
+          elements: [
+            { id: 'E1', type: 'ellipse', x: 0, y: 0 },
+            { id: 'E2', type: 'rect', x: 0, y: 0 },
+          ],
+        },
+      ],
+    });
+    const again = deserialize(serialize(deserialize(old)));
+    for (const element of again.layers[0].elements) {
+      expect(element).toMatchObject({ stroke: '#abcdef', strokeWidth: 4 });
+    }
+    expect(again.layers[0].stroke).toBeUndefined();
   });
 });
 
@@ -1461,5 +1568,57 @@ describe('recoupements creux', () => {
     const raw = JSON.parse(serialize(scene));
     raw.layers[0].evenOdd = 'yes';
     expect(deserialize(JSON.stringify(raw)).layers[0].evenOdd).toBe(false);
+  });
+});
+
+describe('interpolation de couleur', () => {
+  const colorLayer = (interpolations, filled = false) =>
+    createLayer({
+      center: { x: 0, y: 0 },
+      elements: [createElement('ellipse', 0, 0, { filled })],
+      modifiers: [{ type: 'step', n: 3, stepX: 10, stepY: 0 }],
+      interpolations,
+    });
+  const tint = (range, overrides = {}) => createInterpolation({ property: 'color', range, ...overrides });
+
+  it('mélange deux couleurs hexadécimales', () => {
+    expect(lerpColor('#000000', '#ffffff', 0.5)).toBe('#808080');
+    expect(lerpColor('#ee4722', '#7dd3c0', 0)).toBe('#ee4722');
+    expect(lerpColor('#EE4722', '#7dd3c0', 1)).toBe('#7dd3c0');
+  });
+
+  it('fait courir trait et aplat le long des copies', () => {
+    const children = getRenderedChildren(colorLayer([tint(['#000000', '#ffffff'])], true));
+    expect(children.map((c) => c.stroke)).toEqual(['#000000', '#808080', '#ffffff']);
+    expect(children.map((c) => c.fill)).toEqual(['#000000', '#808080', '#ffffff']);
+    expect(children.every((c) => c.color === undefined)).toBe(true);
+  });
+
+  it('suit la courbe, et la dernière de la pile l’emporte', () => {
+    const [first] = getRenderedChildren(colorLayer([tint(['#000000', '#ffffff'], { curve: 'pingPong' })]));
+    expect(first.stroke).toBe('#000000');
+    const stacked = getRenderedChildren(colorLayer([tint(['#000000', '#ffffff']), tint(['#ff0000', '#ff0000'])]));
+    expect(stacked.map((c) => c.stroke)).toEqual(['#ff0000', '#ff0000', '#ff0000']);
+  });
+
+  it('passer une interpolation à la couleur lui donne une plage de couleurs', () => {
+    const layer = createLayer({ interpolations: [createInterpolation()] });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    const [interpolation] = updateInterpolation(scene, layer.id, layer.interpolations[0].id, { property: 'color' })
+      .layers[0].interpolations;
+    expect(interpolation.range).toEqual(RANGE_BOUNDS.color.defaultRange);
+    expect(interpolation.range.every((value) => /^#[0-9a-f]{6}$/.test(value))).toBe(true);
+  });
+
+  it('se sauvegarde, se relit, et une couleur illisible se replie sur le défaut', () => {
+    const layer = colorLayer([tint(['#112233', '#445566'])]);
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    const back = deserialize(serialize(scene));
+    expect(back.layers[0].interpolations[0]).toMatchObject({ property: 'color', range: ['#112233', '#445566'] });
+
+    const raw = JSON.parse(serialize(scene));
+    raw.layers[0].interpolations[0].range = ['rouge', 42];
+    const [fallback] = deserialize(JSON.stringify(raw)).layers[0].interpolations;
+    expect(fallback.range).toEqual(RANGE_BOUNDS.color.defaultRange);
   });
 });

@@ -2,7 +2,7 @@
 {
   "id": "T-0073",
   "titre": "Réordonner au glisser et changer une forme de calque",
-  "colonne": "pret",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "m",
   "tags": [
@@ -10,7 +10,7 @@
   ],
   "cree": "2026-09-24",
   "maj": "2026-09-24",
-  "plan": null,
+  "plan": "2026-09-24-tickets-issus-du-tour-de-code-2026-09-24.md",
   "epic": "T-0032"
 }
 ---

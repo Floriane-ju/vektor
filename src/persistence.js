@@ -15,6 +15,7 @@ import {
   createLayer,
   DEFAULT_STROKE,
   DEFAULT_STROKE_WIDTH,
+  isHexColor,
   RANGE_BOUNDS,
   reserveIds,
   SHAPES,
@@ -26,7 +27,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@18';
+export const FORMAT = 'vektor/scene@20';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -53,7 +54,11 @@ export const FORMAT = 'vektor/scene@18';
    - `@1` à `@16` n'avaient qu'un pivot par calque : aucun modificateur n'a le
      sien, ce qui rend exactement le même dessin ;
    - `@1` à `@17` ne connaissaient que la rampe linéaire : c'est la courbe par
-     défaut, ni les recoupements creux : option éteinte. Même dessin. */
+     défaut, ni les recoupements creux : option éteinte. Même dessin ;
+   - `@1` à `@18` n'interpolaient pas la couleur : rien à convertir. Le bump
+     empêche une version antérieure de relire un dégradé comme une opacité ;
+   - `@4` à `@19` portaient couleur et épaisseur sur le calque : chaque forme
+     reprend celles de son calque, même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -73,6 +78,8 @@ const READABLE_FORMATS = new Set([
   'illu/scene@16',
   'vektor/scene@16',
   'vektor/scene@17',
+  'vektor/scene@18',
+  'vektor/scene@19',
   FORMAT,
 ]);
 
@@ -130,10 +137,15 @@ const readInterpolation = (raw, stackSize) => {
   const property = Object.hasOwn(RANGE_BOUNDS, raw?.property) ? raw.property : 'opacity';
   const bounds = RANGE_BOUNDS[property];
   const range = Array.isArray(raw?.range) ? raw.range : [];
+  /* Une couleur illisible ne se devine pas : la plage entière repart du défaut. */
+  const colors = range.slice(0, 2);
+  const read = bounds.color
+    ? colors.length === 2 && colors.every(isHexColor) ? colors.map((value) => value.toLowerCase()) : [...bounds.defaultRange]
+    : [clamp(range[0], bounds), clamp(range[1], bounds)];
   return createInterpolation({
     ...(typeof raw?.id === 'string' && raw.id !== '' ? { id: raw.id } : {}),
     property,
-    range: [clamp(range[0], bounds), clamp(range[1], bounds)],
+    range: read,
     binding: readBinding(raw?.binding, stackSize),
     curve: Object.hasOwn(CURVES, raw?.curve) ? raw.curve : 'linear',
   });
@@ -150,7 +162,9 @@ const readInterpolations = (raw, stackSize) => {
   if (Array.isArray(raw.interpolations)) {
     return raw.interpolations.map((entry) => readInterpolation(entry, stackSize));
   }
-  return Object.keys(RANGE_BOUNDS).flatMap((property) => {
+  /* Avant `@8` n'existaient que des propriétés numériques. */
+  const numeric = Object.keys(RANGE_BOUNDS).filter((property) => !RANGE_BOUNDS[property].color);
+  return numeric.flatMap((property) => {
     const range = readRange(raw.propertyRanges, property);
     const { identity } = RANGE_BOUNDS[property];
     if (range[0] === identity && range[1] === identity) return [];
@@ -165,8 +179,7 @@ const readInterpolations = (raw, stackSize) => {
 };
 
 /* Ancien point : un disque plein sans contour. Sa couleur de remplissage
-   devient celle du contour, et son diamètre l'épaisseur — reprise par le calque,
-   qui porte désormais cette valeur. */
+   devient celle du contour, et son diamètre l'épaisseur. */
 const upgradeLegacyPoint = (raw) =>
   raw.type === 'point' && (raw.stroke === 'none' || !(num(raw.strokeWidth, 0) > 0))
     ? {
@@ -207,7 +220,8 @@ const readBooleans = (raw) =>
     .filter((step) => typeof step?.with === 'string')
     .map((step) => ({ with: step.with, op: clampBooleanOp(step.op) }));
 
-const readElement = (input) => {
+/* `style` = couleur et épaisseur du calque, pour les formats qui les y rangeaient. */
+const readElement = (input, style) => {
   if (input == null || typeof input !== 'object') fail('Une forme doit être un objet.');
   const raw = upgradeLegacyPoint(input);
   if (!Object.hasOwn(SHAPES, raw.type)) {
@@ -219,6 +233,8 @@ const readElement = (input) => {
     ...(typeof raw.id === 'string' && raw.id !== '' ? { id: raw.id } : {}),
     /* Ramenée à un tour : au-delà, le même dessin sous un nombre sans borne. */
     rotation: num(raw.rotation, 0) % 360,
+    strokeWidth: raw.strokeWidth === undefined ? style.strokeWidth : Math.max(0, num(raw.strokeWidth, style.strokeWidth)),
+    stroke: isPainted(raw.stroke) ? raw.stroke : isPainted(raw.fill) ? raw.fill : style.stroke,
     rx: clampExtent(raw.type, num(raw.rx, legacyRadius ?? defaults.rx)),
     ry: clampExtent(raw.type, num(raw.ry, legacyRadius ?? defaults.ry)),
     /* Avant `@6` le remplissage était une couleur : n'en reste que sa présence. */
@@ -279,7 +295,8 @@ const rawElements = (raw) => {
 /* Un outil ne se cherche que parmi les autres formes du calque : absente,
    l'opération tombe plutôt que de rendre une forme invisible. */
 const readElements = (raw) => {
-  const elements = rawElements(raw).map(readElement);
+  const style = { strokeWidth: readStrokeWidth(raw), stroke: readStroke(raw) };
+  const elements = rawElements(raw).map((element) => readElement(element, style));
   const ids = new Set(elements.map((element) => element.id));
   return elements.map((element) => ({
     ...element,
@@ -288,9 +305,9 @@ const readElements = (raw) => {
 };
 
 /**
- * Épaisseur du calque. Avant `@4` elle vivait sur chaque forme : un ancien
- * fichier se replie sur celle de sa première forme, quitte à aplatir un calque
- * qui en mélangeait plusieurs — c'est le sens même de la bascule.
+ * Épaisseur du calque de `@4` à `@19`, reprise par les formes qui n'ont pas la
+ * leur. Avant `@4` elle vivait déjà sur chaque forme ; une forme qui n'en a pas
+ * se replie sur celle de la première forme.
  */
 const readStrokeWidth = (raw) => {
   if (raw.strokeWidth !== undefined) {
@@ -304,9 +321,9 @@ const readStrokeWidth = (raw) => {
 };
 
 /**
- * Couleur du calque. Avant `@6` elle vivait sur chaque forme : un ancien
- * fichier se replie sur le contour de sa première forme peinte, quitte à
- * aplatir un calque qui en mélangeait plusieurs — c'est le sens de la bascule.
+ * Couleur du calque de `@6` à `@19`, reprise par les formes qui n'ont pas la
+ * leur. Avant `@6` elle vivait sur chaque forme ; une forme non peinte se
+ * replie sur le contour de la première forme peinte.
  */
 const readStroke = (raw) => {
   if (isPainted(raw.stroke)) return raw.stroke;
@@ -330,8 +347,6 @@ const readLayer = (raw, index, legacy) => {
       x: num(raw.center?.x, STAGE.width / 2),
       y: num(raw.center?.y, STAGE.height / 2),
     },
-    strokeWidth: readStrokeWidth(raw),
-    stroke: readStroke(raw),
     elements: readElements(raw),
     modifiers,
     interpolations: readInterpolations(raw, modifiers.length),
@@ -358,7 +373,7 @@ export const deserialize = (text) => {
   if (!Array.isArray(raw.layers)) fail('`layers` doit être un tableau.');
 
   /* Avant `@13`, pas d'orientation des copies. */
-  const legacy = !['illu/scene@13', 'illu/scene@14', 'illu/scene@15', 'illu/scene@16', 'vektor/scene@16', 'vektor/scene@17', FORMAT].includes(raw.format);
+  const legacy = !['illu/scene@13', 'illu/scene@14', 'illu/scene@15', 'illu/scene@16', 'vektor/scene@16', 'vektor/scene@17', 'vektor/scene@18', 'vektor/scene@19', FORMAT].includes(raw.format);
   const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy));
   if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
     fail('Deux calques portent le même identifiant.');

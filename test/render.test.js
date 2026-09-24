@@ -444,10 +444,9 @@ describe('dessin au glisser', () => {
     const point = store.get().layers[0].elements.at(-1);
     expect(point.filled).toBe(circle.filled);
     expect(point.rx).toBe(0);
-    /* Ni l'épaisseur ni la couleur ne suivent la forme : elles sont réglées
-       sur le calque. */
-    expect(point.strokeWidth).toBeUndefined();
-    expect(point.stroke).toBeUndefined();
+    /* Épaisseur et couleur suivent aussi. */
+    expect(point.strokeWidth).toBe(circle.strokeWidth);
+    expect(point.stroke).toBe(circle.stroke);
   });
 
   it('crée un calque quand il n’y en a aucun', () => {
@@ -615,7 +614,7 @@ describe('cadre de sélection', () => {
     const svg = stage();
     render({ layers: [layer], activeLayerId: layer.id, activeElementId: null }, svg);
     const frame = svg.querySelector('[data-selection="layer"]');
-    const half = layer.strokeWidth / 2;
+    const half = layer.elements[0].strokeWidth / 2;
     /* Trois copies de 100 en 100 : de 90 à 310, plus la demi-épaisseur et l'écart. */
     expect(Number(frame.getAttribute('width'))).toBeCloseTo(220 + 2 * half + 16);
     expect(toSvgDocument(svg)).not.toContain('data-selection');
@@ -681,39 +680,37 @@ describe('survol depuis la liste des formes', () => {
 });
 
 describe('rendu des formes', () => {
-  it('toutes les formes d’un calque portent l’épaisseur du calque', () => {
+  it('chaque forme porte sa propre épaisseur, copies comprises', () => {
     const svg = stage();
     const layer = createLayer({
-      strokeWidth: 7,
       center: { x: 0, y: 0 },
-      elements: [createElement('ellipse', 10, 10), createElement('rect', 50, 50)],
+      elements: [createElement('ellipse', 10, 10, { strokeWidth: 7 }), createElement('rect', 50, 50, { strokeWidth: 3 })],
       modifiers: [{ type: 'step', n: 2, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 }],
     });
     render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
     const widths = [...svg.querySelectorAll('ellipse, rect')].map((node) =>
       node.getAttribute('stroke-width'),
     );
-    expect(widths).toEqual(['7', '7', '7', '7']);
+    expect(widths).toEqual(['7', '3', '7', '3']);
   });
 
-  it('toutes les formes d’un calque portent sa couleur, remplissage compris', () => {
+  it('chaque forme porte sa propre couleur, remplissage compris', () => {
     const svg = stage();
     const layer = createLayer({
-      stroke: '#ff0000',
       center: { x: 0, y: 0 },
       elements: [
-        createElement('ellipse', 10, 10),
-        createElement('rect', 50, 50, { filled: true }),
+        createElement('ellipse', 10, 10, { stroke: '#00ff00' }),
+        createElement('rect', 50, 50, { filled: true, stroke: '#ff0000' }),
       ],
       modifiers: [{ type: 'none', n: 1, angleStep: 0, radiusStep: 0 }],
     });
     render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
     const [circle, rect] = svg.querySelectorAll('ellipse, rect');
     expect([circle, rect].map((node) => node.getAttribute('stroke'))).toEqual([
-      '#ff0000',
+      '#00ff00',
       '#ff0000',
     ]);
-    /* Rempli, une forme se peint de la couleur du calque ; sinon rien. */
+    /* Rempli, une forme se peint de sa couleur ; sinon rien. */
     expect(circle.getAttribute('fill')).toBe('none');
     expect(rect.getAttribute('fill')).toBe('#ff0000');
   });
@@ -860,8 +857,64 @@ describe('sauvegarde locale', () => {
   });
 });
 
+describe('glisser-déposer dans l’arbre', () => {
+  /* happy-dom rend des boîtes nulles : clientY < 0 vise la moitié haute. */
+  const drag = (from, to, clientY) => {
+    from.dispatchEvent(new MouseEvent('dragstart', { bubbles: true }));
+    to.dispatchEvent(new MouseEvent('dragover', { bubbles: true, cancelable: true, clientY }));
+    const where = to.dataset.drop;
+    to.dispatchEvent(new MouseEvent('drop', { bubbles: true, cancelable: true, clientY }));
+    from.dispatchEvent(new MouseEvent('dragend', { bubbles: true }));
+    return where;
+  };
+  const rowOf = (panel, id) => panel.querySelector(`[data-focus-key="name-${id}"]`).closest('.layer-row');
+
+  const mount = async (scene) => {
+    const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
+    const { mountShapeList } = await import('../src/ui/shape-list.js');
+    const store = createStore(scene);
+    const panel = document.createElement('div');
+    const list = document.createElement('div');
+    document.body.append(panel);
+    const status = { show: () => {} };
+    mountShapeList({ store, container: list, status });
+    mountLayerPanel({ store, container: panel, status, children: list });
+    return { store, panel };
+  };
+
+  it('range un calque au-dessus ou au-dessous d’un autre', async () => {
+    const [bottom, middle, top] = [repeatLayer(), repeatLayer(), repeatLayer()];
+    const { store, panel } = await mount({ layers: [bottom, middle, top], activeLayerId: top.id, activeElementId: null });
+
+    /* Au-dessus à l'écran = devant dans la pile. */
+    expect(drag(rowOf(panel, bottom.id), rowOf(panel, top.id), -1)).toBe('before');
+    expect(store.get().layers.map((l) => l.id)).toEqual([middle.id, top.id, bottom.id]);
+    expect(drag(rowOf(panel, bottom.id), rowOf(panel, middle.id), 1)).toBe('after');
+    expect(store.get().layers.map((l) => l.id)).toEqual([bottom.id, middle.id, top.id]);
+    expect(panel.querySelector('[data-drop]')).toBeNull();
+    panel.remove();
+  });
+
+  it('réordonne les formes et en passe une dans un autre calque', async () => {
+    const [a, b] = [createElement('rect', 0, 0), createElement('ellipse', 0, 0)];
+    const source = repeatLayer({ elements: [a, b] });
+    const other = repeatLayer({ elements: [] });
+    const { store, panel } = await mount({ layers: [other, source], activeLayerId: source.id, activeElementId: null });
+
+    drag(rowOf(panel, a.id), rowOf(panel, b.id), -1);
+    expect(store.get().layers[1].elements.map((el) => el.id)).toEqual([b.id, a.id]);
+
+    /* Une forme ne « rentre » pas dans son propre calque. */
+    expect(drag(rowOf(panel, a.id), rowOf(panel, source.id), 0)).toBeUndefined();
+    expect(drag(rowOf(panel, a.id), rowOf(panel, other.id), 0)).toBe('into');
+    expect(store.get().layers[0].elements.map((el) => el.id)).toEqual([a.id]);
+    expect(store.get().layers[1].elements.map((el) => el.id)).toEqual([b.id]);
+    panel.remove();
+  });
+});
+
 describe('accessibilité au clavier', () => {
-  it('le bouton icône garde le focus après reconstruction du panneau', async () => {
+  it('Alt + ↑ réordonne un calque et garde le focus sur sa ligne', async () => {
     const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
     const [bottom, middle, top] = [repeatLayer(), repeatLayer(), repeatLayer()];
     const store = createStore({ layers: [bottom, middle, top], activeLayerId: bottom.id, activeElementId: null });
@@ -869,17 +922,23 @@ describe('accessibilité au clavier', () => {
     document.body.append(panel);
     mountLayerPanel({ store, container: panel, status: { show: () => {} } });
 
-    const up = panel.querySelector(`[data-focus-key="up-${bottom.id}"]`);
-    up.focus();
-    up.click();
-
+    /* Alt + ↑ : chemin clavier du glisser-déposer, le focus reste sur la ligne. */
+    const altUp = () =>
+      document.activeElement.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true, bubbles: true, cancelable: true }),
+      );
+    panel.querySelector(`[data-focus-key="name-${bottom.id}"]`).focus();
+    altUp();
     expect(store.get().layers).toEqual([middle, bottom, top]);
-    expect(document.activeElement.dataset.focusKey).toBe(`up-${bottom.id}`);
-
-    /* Second clic : le calque atteint le sommet, son « ↑ » se désactive et le
-       focus se rabat sur sa propre ligne au lieu de quitter la liste. */
-    document.activeElement.click();
     expect(document.activeElement.dataset.focusKey).toBe(`name-${bottom.id}`);
+
+    /* Au sommet, rien ne bouge. */
+    altUp();
+    altUp();
+    expect(store.get().layers).toEqual([middle, top, bottom]);
+    expect(document.activeElement.dataset.focusKey).toBe(`name-${bottom.id}`);
+    expect(panel.querySelector('[data-focus-key^="up-"], [data-focus-key^="down-"]')).toBeNull();
+    expect(panel.querySelector('.drag-handle')).not.toBeNull();
     panel.remove();
   });
 
@@ -897,6 +956,28 @@ describe('accessibilité au clavier', () => {
 
     expect(store.get().layers).toHaveLength(0);
     expect(document.activeElement.dataset.focusKey).toBe('add-layer');
+    panel.remove();
+  });
+
+  it('une interpolation de couleur se règle au sélecteur natif', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const { createLayer, RANGE_BOUNDS } = await import('../src/scene.js');
+    const layer = createLayer();
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const panel = document.createElement('div');
+    document.body.append(panel);
+    panel.append(mountPropertyPanel({ store }).layerDetail);
+
+    panel.querySelector('[data-focus-key="add-interpolation"]').click();
+    const property = panel.querySelector('.interpolation-block select');
+    property.value = 'color';
+    property.dispatchEvent(new Event('change'));
+
+    const [start, end] = panel.querySelectorAll('.interpolation-block input[type="color"]');
+    expect([start.value, end.value]).toEqual(RANGE_BOUNDS.color.defaultRange);
+    end.value = '#112233';
+    end.dispatchEvent(new Event('input'));
+    expect(store.get().layers[0].interpolations[0].range).toEqual([RANGE_BOUNDS.color.defaultRange[0], '#112233']);
     panel.remove();
   });
 
@@ -1024,7 +1105,9 @@ describe('accessibilité au clavier', () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
     const { createLayer, renameLayer } = await import('../src/scene.js');
-    const [bottom, top] = [createLayer(), createLayer()];
+    /* Même longueur de pile : les blocs de modificateur ne sont pas reconstruits. */
+    const step = () => [{ type: 'step', n: 2, stepX: 10, stepY: 0, angleStep: 0, radiusStep: 0 }];
+    const [bottom, top] = [createLayer({ modifiers: step() }), createLayer({ modifiers: step() })];
     const store = createStore({ layers: [bottom, top], activeLayerId: bottom.id, activeElementId: null });
     store.apply(renameLayer, top.id, 'Haut');
     const panel = document.createElement('div');
@@ -1038,7 +1121,7 @@ describe('accessibilité au clavier', () => {
     thickness.focus();
     thickness.value = '4';
     thickness.dispatchEvent(new Event('change'));
-    expect(store.get().layers[0].strokeWidth).toBe(4);
+    expect(store.get().layers[0].modifiers[0].n).toBe(4);
     expect(document.activeElement).toBe(thickness);
 
     panel.querySelector(`[data-focus-key="name-${top.id}"]`).click();
@@ -1238,12 +1321,18 @@ describe('tracé', () => {
     expect(store.get()).toBe(before);
   });
 
-  it('refuse une courbe et le dit', () => {
+  it('colle une courbe en l’échantillonnant, refuse une commande inconnue et le dit', () => {
     const { store, container, messages } = mountTrace();
-    globalThis.prompt = () => 'M0 0 C 10 10 20 20 30 30';
-    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Coller un tracé…').click();
-    expect(store.get().layers[0].elements).toHaveLength(0);
-    expect(messages.at(-1)).toEqual([expect.stringContaining('« C »'), 'error']);
+    const paste = (text) => {
+      globalThis.prompt = () => text;
+      [...container.querySelectorAll('button')].find((b) => b.textContent === 'Coller un tracé…').click();
+    };
+    paste('M0 0 C 0 10 10 10 10 0');
+    expect(store.get().layers[0].elements).toHaveLength(1);
+    expect(store.get().layers[0].elements[0].points.length).toBeGreaterThan(8);
+    paste('M0 0 B 10 10');
+    expect(store.get().layers[0].elements).toHaveLength(1);
+    expect(messages.at(-1)).toEqual([expect.stringContaining('« B »'), 'error']);
   });
 });
 
@@ -1287,11 +1376,10 @@ describe('arc', () => {
     }
   });
 
-  it('un secteur rempli se peint de la couleur du calque', () => {
+  it('un secteur rempli se peint de sa couleur', () => {
     const svg = stage();
     const layer = createLayer({
-      stroke: '#ff0000',
-      elements: [createElement('arc', 0, 0, { closure: 'sector', filled: true })],
+      elements: [createElement('arc', 0, 0, { closure: 'sector', filled: true, stroke: '#ff0000' })],
     });
     render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
     expect(svg.querySelector('path').getAttribute('fill')).toBe('#ff0000');
@@ -1317,8 +1405,7 @@ describe('style de trait', () => {
   it('un anneau en pointillés se rend et s’exporte identique, tirets à l’échelle', () => {
     const svg = stage();
     const layer = createLayer({
-      strokeWidth: 2,
-      elements: [createElement('ellipse', 0, 0, { dash: [0, 2], linecap: 'round' })],
+      elements: [createElement('ellipse', 0, 0, { strokeWidth: 2, dash: [0, 2], linecap: 'round' })],
       modifiers: [{ type: 'step', n: 2, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
       interpolations: [ramp('scale', [1, 0.5])],
     });
@@ -1358,7 +1445,8 @@ describe('panneau : motif de trait', () => {
     expect(radio(bout, 'round').checked).toBe(true);
 
     /* Tirets : le curseur de longueur apparaît et ne touche que le premier tiret. */
-    const length = shapeDetail.querySelector('.slider-field');
+    /* Le premier curseur est l'épaisseur. */
+    const length = shapeDetail.querySelectorAll('.slider-field')[1];
     expect(length.hidden).toBe(true);
     radio(trait, 'dashed').checked = true;
     radio(trait, 'dashed').dispatchEvent(new Event('change'));
@@ -1368,7 +1456,7 @@ describe('panneau : motif de trait', () => {
     range.dispatchEvent(new Event('input'));
     expect(shapes()[0].dash).toEqual([6, 2]);
 
-    const text = shapeDetail.querySelector('input[type="text"]');
+    const text = shapeDetail.querySelector('input[placeholder="ex. 4 2"]');
     text.value = '3 1 1 1';
     text.dispatchEvent(new Event('change'));
     expect(shapes()[0].dash).toEqual([3, 1, 1, 1]);

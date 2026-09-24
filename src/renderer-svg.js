@@ -36,6 +36,7 @@ export const render = (scene, svgRoot) => {
     /* Recoupements creux : les aplats rejoignent un tracé commun, chaque forme
        ne garde que son trait. */
     const holes = [];
+    let holeFill;
     for (const child of children) {
       if (!bounds.has(child.id)) bounds.set(child.id, childBounds(child));
       if (tools.has(child.id)) continue;
@@ -52,12 +53,13 @@ export const render = (scene, svgRoot) => {
         continue;
       }
       holes.push(area);
+      holeFill ??= child.fill;
       const outline = createNode({ ...child, fill: 'none' });
       /* L'intérieur reste cliquable au curseur, même creusé. */
       outline.setAttribute('pointer-events', 'visible');
       group.append(outline);
     }
-    if (holes.length > 0) group.prepend(createEvenOdd(layer, holes));
+    if (holes.length > 0) group.prepend(createEvenOdd(layer, holes, holeFill));
     svgRoot.append(group);
   }
 
@@ -304,12 +306,14 @@ export const areaPath = (child) => {
  * Aplat commun des formes remplies d'un calque en recoupements creux : un seul
  * `<path>` pair-impair, donc une zone couverte deux fois se vide.
  *
- * ponytail: l'aplat est d'une seule opacité, pleine — l'opacité interpolée ne
- * passe que sur les traits. Découper l'aplat par copie défait le pair-impair ;
- * un masque par copie le jour où l'estompe des aplats manque.
+ * ponytail: l'aplat est d'une seule opacité, pleine, et de la couleur de la
+ * première copie remplie — opacité, dégradé et couleurs des autres formes ne
+ * passent que sur les traits.
+ * Découper l'aplat par copie défait le pair-impair ; un masque par copie le
+ * jour où l'estompe ou le dégradé des aplats manque.
  */
-const createEvenOdd = (layer, areas) => {
-  const node = svgNode('path', { d: areas.join(' '), 'fill-rule': 'evenodd', fill: layer.stroke, stroke: 'none' });
+const createEvenOdd = (layer, areas, fill) => {
+  const node = svgNode('path', { d: areas.join(' '), 'fill-rule': 'evenodd', fill, stroke: 'none' });
   node.dataset.evenOdd = layer.id;
   return node;
 };

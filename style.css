@@ -661,3 +661,13 @@ input[type="range"] {
   border-radius: 6px;
 }
 .shortcuts form { text-align: right; }
+
+/* Glisser-déposer dans l'arbre : trait d'insertion avant/après la ligne visée,
+   contour quand une forme entre dans un autre calque. */
+.layer-row[draggable="true"] { cursor: grab; }
+/* Poignée discrète, pleine au survol de la ligne. */
+.drag-handle { display: flex; flex: none; opacity: 0.35; margin-inline-end: -4px; }
+.layer-row:hover .drag-handle { opacity: 0.8; }
+.layer-row[data-drop="before"] { box-shadow: inset 0 2px 0 var(--accent); }
+.layer-row[data-drop="after"] { box-shadow: inset 0 -2px 0 var(--accent); }
+.layer-row[data-drop="into"] { box-shadow: inset 0 0 0 1.5px var(--accent); }

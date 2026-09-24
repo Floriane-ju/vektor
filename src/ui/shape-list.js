@@ -4,12 +4,13 @@ import {
   duplicateElement,
   getActiveLayer,
   moveElement,
+  placeElement,
   removeElement,
   setActiveElement,
   SHAPES,
 } from '../scene.js';
 import { clearHover, showHover } from '../renderer-svg.js';
-import { iconButton, rebuildWithFocus, shapeName, whenChanged } from './list.js';
+import { dragHandle, dropIndex, iconButton, rebuildWithFocus, reorderKeys, shapeName, sortableRow, whenChanged } from './list.js';
 import { icon } from './icons.js';
 import { DUPLICATE_OFFSET } from './shortcuts.js';
 
@@ -124,7 +125,6 @@ export const mountShapeList = ({
   };
 
   const shapeRow = (layer, element, activeElementId, displayed, parents) => {
-    const index = layer.elements.indexOf(element);
     const isActive = element.id === activeElementId;
 
     const card = document.createElement('li');
@@ -161,27 +161,14 @@ export const mountShapeList = ({
 
     const actions = document.createElement('span');
     actions.className = 'row-actions';
-    row.append(icon(element.type, 18), name, actions);
+    reorderKeys(name, (delta) => store.apply(moveElement, element.id, delta));
+    row.append(dragHandle(), icon(element.type, 18), name, actions);
     actions.append(
       iconButton({
         label: `Dupliquer ${name.textContent}`,
         text: '⧉',
         focusKey: `duplicate-${element.id}`,
         onClick: () => store.apply(duplicateElement, element.id, DUPLICATE_OFFSET),
-      }),
-      iconButton({
-        label: `Monter ${name.textContent}`,
-        text: '↑',
-        focusKey: `up-${element.id}`,
-        disabled: index === layer.elements.length - 1,
-        onClick: () => store.apply(moveElement, element.id, 1),
-      }),
-      iconButton({
-        label: `Descendre ${name.textContent}`,
-        text: '↓',
-        focusKey: `down-${element.id}`,
-        disabled: index === 0,
-        onClick: () => store.apply(moveElement, element.id, -1),
       }),
       iconButton({
         label: `Supprimer ${name.textContent}`,
@@ -191,6 +178,16 @@ export const mountShapeList = ({
         onClick: () => remove(element, name.textContent),
       }),
     );
+
+    sortableRow(row, { kind: 'shape', id: element.id }, {
+      accepts: (item) =>
+        item.kind === 'shape' && item.id !== element.id && layer.elements.some((el) => el.id === item.id) ? 'sort' : null,
+      drop: (item, where) => {
+        const current = store.get().layers.find((candidate) => candidate.id === layer.id);
+        const find = (id) => current.elements.find((el) => el.id === id);
+        store.apply(placeElement, item.id, layer.id, dropIndex(current.elements, find(item.id), find(element.id), where));
+      },
+    });
 
     /* Outils de cette forme, rangés sous elle : ils ne se dessinent pas,
        ils la façonnent. */

@@ -154,19 +154,27 @@ it('démarre et rend après un placement', async () => {
   const rects = stage.querySelectorAll('rect[data-element-id]');
   expect([rects[1].getAttribute('x'), rects[1].getAttribute('y')]).toEqual(['380', '236.25']);
 
-  /* Nuancier : la couleur hors palette du calque y figure, cerclée ; celle
-     d'un autre calque y est marquée, et un clic l'applique. */
-  press({ key: 'Escape' });
+  /* Nuancier de la forme active : la couleur hors palette y figure, cerclée,
+     et marquée puisque l'autre rectangle la porte ; un clic en applique une autre. */
   const swatch = (color) => inspector.querySelector(`.swatch[data-color="${color}"]`);
   expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('true');
-  expect(swatch('#7dd3c0').hasAttribute('data-used')).toBe(false);
-  document.querySelector('.add-layer').click();
+  expect(swatch('#7dd3c0').hasAttribute('data-used')).toBe(true);
   swatch('#ee4722').click();
   expect(swatch('#ee4722').getAttribute('aria-pressed')).toBe('true');
   expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('false');
-  expect(swatch('#7dd3c0').hasAttribute('data-used')).toBe(true);
   expect(swatch('#7dd3c0').title).toContain('Calque 1');
   expect(inspector.querySelectorAll('.swatch[data-color="#ee4722"]')).toHaveLength(1);
+  /* Une couleur par forme, copies confondues. */
+  const strokes = () => [
+    ...new Map(
+      [...stage.querySelectorAll('rect[data-element-id]')].map((node) => [node.dataset.elementId, node.getAttribute('stroke')]),
+    ).values(),
+  ];
+  expect(strokes()).toEqual(['#7dd3c0', '#ee4722']);
+  /* La forme suivante reprend la couleur de la dernière créée. */
+  pointer('pointerdown', 460, 460);
+  pointer('pointerup', 460, 460);
+  expect(strokes()).toEqual(['#7dd3c0', '#ee4722', '#ee4722']);
   swatch('#7dd3c0').click();
   expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('true');
   /* Palette globale : accent + blanc, plus les couleurs portées par le dessin. */

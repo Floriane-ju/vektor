@@ -2,7 +2,7 @@
 {
   "id": "T-0069",
   "titre": "Courbes dans les tracés collés (C, S, Q, T, A)",
-  "colonne": "pret",
+  "colonne": "fait",
   "priorite": "basse",
   "charge": "m",
   "tags": [
@@ -10,7 +10,7 @@
   ],
   "cree": "2026-09-24",
   "maj": "2026-09-24",
-  "plan": null,
+  "plan": "2026-09-24-tickets-issus-du-tour-de-code-2026-09-24.md",
   "epic": "T-0012"
 }
 ---
