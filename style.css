@@ -157,19 +157,6 @@ input[type="range"] {
    de son viewBox, donc elle suit le zoom. */
 #stage[data-grid] { background-size: 100% 100%; background-repeat: no-repeat; }
 
-.stage-hint {
-  position: fixed;
-  left: calc((var(--gutter-left) + 100vw - var(--gutter-right)) / 2);
-  top: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
-  padding: 8px 16px;
-  border-radius: var(--pill);
-  background: var(--bg-panel);
-  color: var(--text-dim);
-  pointer-events: none;
-}
-
 /* ---- Éléments flottants ---- */
 
 .float {

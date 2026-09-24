@@ -13,7 +13,6 @@ import { mountSettings } from './ui/settings.js';
 import { mountScrub } from './ui/scrub.js';
 
 const svgRoot = document.getElementById('stage');
-const hint = document.getElementById('stage-hint');
 const statusNode = document.getElementById('status');
 
 const status = {
@@ -29,12 +28,7 @@ reserveIds(scene.layers);
 
 const store = createStore(scene);
 
-const hasShapes = (scene) => scene.layers.some((layer) => layer.elements.length > 0);
-
-store.subscribe((next) => {
-  render(next, svgRoot);
-  hint.hidden = hasShapes(next);
-});
+store.subscribe((next) => render(next, svgRoot));
 
 /* L'autosave est repoussée : un glissement de slider produit des dizaines de
    notifications, une seule écriture suffit. */
@@ -73,7 +67,6 @@ mountLayerPanel({
 });
 
 render(store.get(), svgRoot);
-hint.hidden = hasShapes(store.get());
 if (restored.error) {
   status.show(`Sauvegarde locale illisible, projet vierge — ${restored.error}`, 'error');
 } else if (restored.scene) {

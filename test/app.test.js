@@ -10,24 +10,21 @@ import { SHAPES } from '../src/scene.js';
  * erreurs de branchement entre eux — un id absent, un import circulaire, un
  * panneau qui plante au premier rendu.
  */
-it('démarre, affiche l’aide et rend après un placement', async () => {
+it('démarre et rend après un placement', async () => {
   document.body.innerHTML = `
     <div id="toolbar-shapes"></div>
     <div id="toolbar-actions"></div>
     <div id="view-controls"></div>
     <div id="inspector"></div>
     <svg id="stage" viewBox="0 0 900 900"></svg>
-    <p class="stage-hint" id="stage-hint">Glisser depuis le centre pour dessiner</p>
     <div id="layer-panel"></div>
     <div id="shape-list"></div>
     <p id="status"></p>`;
 
   await import('../src/main.js');
 
-  const hint = document.getElementById('stage-hint');
   const stage = document.getElementById('stage');
 
-  expect(hint.hidden).toBe(false);
   expect(stage.childNodes).toHaveLength(0);
   expect(document.querySelectorAll('#layer-panel .layer-row')).toHaveLength(1);
   /* Sans forme sélectionnée, le panneau de droite ne montre que le calque. */
@@ -55,7 +52,6 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
 
   expect(stage.querySelectorAll('ellipse[data-element-id]')).toHaveLength(1);
   expect(stage.querySelector('ellipse').getAttribute('ry')).toBe('70');
-  expect(hint.hidden).toBe(true);
 
   /* Un second geste ajoute une forme au même calque au lieu de remplacer la
      première, et la liste des formes du panneau droit les montre toutes les deux. */
