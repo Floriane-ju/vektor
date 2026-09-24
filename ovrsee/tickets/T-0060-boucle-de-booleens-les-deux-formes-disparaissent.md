@@ -2,7 +2,7 @@
 {
   "id": "T-0060",
   "titre": "Boucle de booléens : les deux formes disparaissent",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "s",
   "tags": [
@@ -26,6 +26,6 @@ n'est dessinée, sans message.
 
 ## Critères d'acceptation
 
-- [ ] Le sélecteur n'offre pas une forme qui créerait un cycle.
-- [ ] `addBoolean` renvoie la scène inchangée sur un cycle.
-- [ ] L'import refuse (ou retire) une chaîne cyclique, avec message.
+- [x] Le sélecteur n'offre pas une forme qui créerait un cycle.
+- [x] `addBoolean` renvoie la scène inchangée sur un cycle.
+- [x] L'import refuse (ou retire) une chaîne cyclique, avec message.

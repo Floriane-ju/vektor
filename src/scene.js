@@ -678,22 +678,48 @@ const mapBooleans = (scene, elementId, fn) =>
   );
 
 /**
+ * `toolId` comme outil de `elementId` fermerait-il une boucle ? Oui si l'outil
+ * mène déjà à la forme par ses propres outils : un outil n'étant pas dessiné,
+ * toute la boucle disparaîtrait.
+ */
+export const closesLoop = (layer, elementId, toolId) => {
+  const byId = new Map(layer.elements.map((el) => [el.id, el]));
+  const seen = new Set();
+  const pending = [toolId];
+  while (pending.length > 0) {
+    const id = pending.pop();
+    if (id === elementId) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    pending.push(...(byId.get(id)?.booleans ?? []).map((step) => step.with));
+  }
+  return false;
+};
+
+const layerOfElement = (scene, elementId) =>
+  scene.layers.find((candidate) => candidate.elements.some((el) => el.id === elementId));
+
+/**
  * Ajoute une opération, outil = la première autre forme du calque pas encore
- * employée (ou, toutes l'étant, la première autre). Sans autre forme, rien.
+ * employée (ou, toutes l'étant, la première autre), hors celles qui
+ * fermeraient une boucle. Sans outil possible, rien.
  */
 export const addBoolean = (scene, elementId) => {
-  const layer = scene.layers.find((candidate) => candidate.elements.some((el) => el.id === elementId));
+  const layer = layerOfElement(scene, elementId);
   const element = layer?.elements.find((el) => el.id === elementId);
   if (!element) return scene;
-  const others = layer.elements.filter((el) => el.id !== elementId);
+  const others = layer.elements.filter((el) => el.id !== elementId && !closesLoop(layer, elementId, el.id));
   const used = new Set(element.booleans.map((step) => step.with));
   const tool = others.find((el) => !used.has(el.id)) ?? others[0];
   if (!tool) return scene;
   return mapBooleans(scene, elementId, (steps) => [...steps, { with: tool.id, op: DEFAULT_BOOLEAN_OP }]);
 };
 
-export const updateBoolean = (scene, elementId, index, patch) =>
-  mapBooleans(scene, elementId, (steps) => steps.map((step, i) => (i === index ? { ...step, ...patch } : step)));
+export const updateBoolean = (scene, elementId, index, patch) => {
+  const layer = layerOfElement(scene, elementId);
+  if (patch.with !== undefined && (!layer || closesLoop(layer, elementId, patch.with))) return scene;
+  return mapBooleans(scene, elementId, (steps) => steps.map((step, i) => (i === index ? { ...step, ...patch } : step)));
+};
 
 export const removeBoolean = (scene, elementId, index) =>
   mapBooleans(scene, elementId, (steps) => steps.filter((_, i) => i !== index));

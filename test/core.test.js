@@ -3,6 +3,7 @@ import { clampCount, CURVES, lerpColor, ramp as curveRamp, stackValues, t } from
 import { copyCount, createModifier, MAX_COPIES, MODIFIERS, orients } from '../src/modifiers.js';
 import {
   addBoolean,
+  closesLoop,
   currentStyle,
   setStyle,
   addElement,
@@ -1470,6 +1471,20 @@ describe('booléens', () => {
     expect(shape(deserialize(JSON.stringify(raw)), 2).booleans).toEqual([
       { with: forme.booleans[0].with, op: 'intersect' },
     ]);
+  });
+  it('refuse une boucle : ajout, changement d’outil, import', () => {
+    const { disque, carre, forme, scene } = trio();
+    // disque employé par forme : forme ne peut devenir l'outil de disque, ni via carré.
+    const onlyForme = updateElement(scene, disque.id, { booleans: [] });
+    const viaCarre = updateElement(onlyForme, carre.id, { booleans: [{ with: forme.id, op: 'union' }] });
+    expect(addBoolean(viaCarre, disque.id)).toBe(viaCarre);
+    const withCarre = updateElement(scene, disque.id, { booleans: [{ with: carre.id, op: 'union' }] });
+    expect(updateBoolean(withCarre, disque.id, 0, { with: forme.id })).toBe(withCarre);
+    expect(closesLoop(scene.layers[0], disque.id, forme.id)).toBe(true);
+    expect(closesLoop(scene.layers[0], disque.id, carre.id)).toBe(false);
+    const raw = JSON.parse(serialize(scene));
+    raw.layers[0].elements[0].booleans = [{ with: forme.id, op: 'union' }];
+    expect(() => deserialize(JSON.stringify(raw))).toThrow(/boucle/);
   });
 });
 

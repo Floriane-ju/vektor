@@ -2,6 +2,7 @@ import {
   addBoolean,
   BOOLEAN_OPS,
   clampBooleanOp,
+  closesLoop,
   getActiveElement,
   removeBoolean,
   SHAPES,
@@ -30,7 +31,11 @@ export const booleanSection = ({ store }) => {
     node.id = `boolean-${++uid}`;
     node.setAttribute('aria-label', `Outil de l'opération ${index + 1}`);
     node.dataset.focusKey = `boolean-tool${index}`;
-    for (const other of layer.elements.filter((candidate) => candidate !== element)) {
+    /* L'outil actuel reste offert : il ne ferme pas de boucle, sinon il n'aurait pas été posé. */
+    const tools = layer.elements.filter(
+      (candidate) => candidate !== element && (candidate.id === step.with || !closesLoop(layer, element.id, candidate.id)),
+    );
+    for (const other of tools) {
       const option = document.createElement('option');
       option.value = other.id;
       option.textContent = shapeName(layer, other, SHAPES);
@@ -114,15 +119,16 @@ export const booleanSection = ({ store }) => {
     JSON.stringify([
       element.id,
       element.booleans,
-      layer.elements.map((candidate) => [candidate.id, candidate.type]),
+      layer.elements.map((candidate) => [candidate.id, candidate.type, candidate.booleans]),
     ]);
 
   let last = null;
 
   const sync = (layer, element) => {
     if (!layer || !element) return;
-    /* Seule, une forme n'a pas d'outil à qui s'opposer. */
-    addButton.disabled = layer.elements.length < 2;
+    /* Seule, ou entourée d'outils qui fermeraient une boucle : rien à ajouter. */
+    const scene = store.get();
+    addButton.disabled = addBoolean(scene, element.id) === scene;
     const next = signature(layer, element);
     if (next === last) return;
     last = next;

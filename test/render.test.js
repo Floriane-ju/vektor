@@ -1624,6 +1624,18 @@ describe('panneau : booléen', () => {
     shapeDetail.querySelector('[data-focus-key="delete-boolean0"]').click();
     expect(steps()).toEqual([{ with: disque.id, op: 'intersect' }]);
   });
+  it('le sélecteur n’offre pas un outil qui fermerait une boucle', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const disque = createElement('ellipse', 0, 0);
+    const carre = createElement('rect', 0, 0);
+    const forme = createElement('rect', 0, 0, { booleans: [{ with: disque.id, op: 'union' }] });
+    const cible = { ...disque, booleans: [{ with: carre.id, op: 'union' }] };
+    const layer = createLayer({ elements: [cible, carre, forme] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: disque.id });
+    const { shapeDetail } = mountPropertyPanel({ store });
+    const options = [...shapeDetail.querySelector('.modifier-block select').options].map((o) => o.value);
+    expect(options).toEqual([carre.id]);
+  });
 });
 
 describe('liste des formes : arborescence des booléens', () => {

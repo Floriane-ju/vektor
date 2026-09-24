@@ -4,6 +4,7 @@ import {
   ARC_CLOSURES,
   clampAngle,
   clampBooleanOp,
+  closesLoop,
   clampDash,
   clampExtent,
   clampLinecap,
@@ -298,10 +299,15 @@ const readElements = (raw) => {
   const style = { strokeWidth: readStrokeWidth(raw), stroke: readStroke(raw) };
   const elements = rawElements(raw).map((element) => readElement(element, style));
   const ids = new Set(elements.map((element) => element.id));
-  return elements.map((element) => ({
+  const kept = elements.map((element) => ({
     ...element,
     booleans: element.booleans.filter((step) => step.with !== element.id && ids.has(step.with)),
   }));
+  const layer = { elements: kept };
+  if (kept.some((element) => element.booleans.some((step) => closesLoop(layer, element.id, step.with)))) {
+    fail('Des opérations booléennes forment une boucle : les formes concernées seraient invisibles.');
+  }
+  return kept;
 };
 
 /**
