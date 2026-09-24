@@ -4,7 +4,18 @@
   "title": "Tickets issus du tour de code (2026-09-24)",
   "opened": "2026-09-24",
   "closed": null,
-  "commits": []
+  "commits": [
+    {
+      "sha": "c789126",
+      "date": "2026-09-24",
+      "files": [
+        "src/renderer-svg.js",
+        "src/ui/toolbar.js",
+        "test/app.test.js",
+        "test/render.test.js"
+      ]
+    }
+  ]
 }
 ---
 

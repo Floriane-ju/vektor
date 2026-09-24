@@ -2,7 +2,7 @@
 {
   "id": "T-0070",
   "titre": "Dessiner sur un calque masqué crée une forme invisible",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "xs",
   "tags": [

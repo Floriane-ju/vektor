@@ -2,7 +2,7 @@
 {
   "id": "T-0063",
   "titre": "L'export embarque le style d'écran (zoom, grille, data-*)",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "xs",
   "tags": [
