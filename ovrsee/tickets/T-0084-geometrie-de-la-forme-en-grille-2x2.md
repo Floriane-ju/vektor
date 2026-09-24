@@ -2,7 +2,7 @@
 {
   "id": "T-0084",
   "titre": "Géométrie de la forme en grille 2×2",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui"],
   "cree": "2026-09-24",
