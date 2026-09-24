@@ -2,7 +2,7 @@
 {
   "id": "T-0081",
   "titre": "Pas angulaire de la spirale plus fin",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui"],
   "cree": "2026-09-24",
@@ -17,5 +17,5 @@ Le champ « Pas angulaire (rad) » de la spirale avance par 0,05 : passer de 0,0
 
 ## Critères d'acceptation
 
-- [ ] Pas angulaire : les flèches avancent par 0,001.
-- [ ] Croissance (%) : les flèches avancent par 0,1.
+- [x] Pas angulaire : les flèches avancent par 0,001.
+- [x] Croissance (%) : les flèches avancent par 0,1.
