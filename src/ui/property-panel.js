@@ -10,10 +10,12 @@ import {
   getActiveElement,
   getActiveLayer,
   moveModifier,
+  pivotOf,
   removeModifier,
   DASH_PRESETS,
   LINECAPS,
   parseDash,
+  setLayerCenter,
   setLayerStroke,
   setLayerStrokeWidth,
   SHAPES,
@@ -23,7 +25,7 @@ import {
 import { iconButton, rebuildWithFocus, shapeName, whenChanged } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
 import { booleanSection } from './boolean-section.js';
-import { FIXED_COPIES, MODIFIER_LABELS, ORIENTING, orients } from '../modifiers.js';
+import { FIXED_COPIES, MODIFIER_LABELS, ORIENTING, orients, PIVOTING } from '../modifiers.js';
 
 /**
  * Panneau de droite : les réglages du calque actif, ou ceux de la forme
@@ -493,7 +495,17 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     const layer = getActiveLayer(store.get());
     if (layer) store.apply(addModifier, layer.id);
   });
-  modifierSet.append(sectionHead('Répéter', addModifierButton), modifierHost);
+  /* Pivot du calque : celui de tout étage qui n'a pas le sien. Se déplace
+     aussi à la souris, par la croix ou l'axe des repères. */
+  const pivotInput = (axis) =>
+    bind(
+      input('number', { step: '1' }),
+      (layer) => Math.round(layer.center[axis]),
+      (layer, value) => store.apply(setLayerCenter, layer.id, { ...layer.center, [axis]: value }),
+      { subject: 'layer' },
+    );
+  const layerPivot = row(field('Pivot X', pivotInput('x')), field('Pivot Y', pivotInput('y')));
+  modifierSet.append(sectionHead('Répéter', addModifierButton), layerPivot, modifierHost);
 
   let blocks = [];
 
@@ -550,6 +562,24 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       { event: 'change', parse: () => orient.checked },
     );
 
+    /* Cochée, l'étage part du pivot du calque et le garde ensuite pour lui ;
+       décochée, il le reprend. */
+    const writeCenter = (toCenter) => (layer, value) =>
+      store.apply(updateModifier, layer.id, index, { center: toCenter(pivotOf(layer, index), value) });
+    const ownPivot = bind(
+      input('checkbox'),
+      (layer) => Boolean(layer.modifiers[index].center),
+      writeCenter((pivot, own) => (own ? pivot : null)),
+      modifierOptions({ event: 'change', parse: () => ownPivot.checked }),
+    );
+    const pivotInput = (axis) =>
+      bind(
+        input('number', { step: '1' }),
+        (layer) => Math.round(pivotOf(layer, index)[axis]),
+        writeCenter((pivot, value) => ({ ...pivot, [axis]: value })),
+        modifierOptions(),
+      );
+
     const apply = (transition, ...args) => {
       const layer = getActiveLayer(store.get());
       if (layer) store.apply(transition, layer.id, ...args);
@@ -586,9 +616,11 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     const stepRow = row(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
     const spiralRow = row(field('Pas angulaire (rad)', angleStep), field('Croissance (%)', radiusStep));
     const orientField = switchField('Orienter les copies', orient);
+    const ownPivotField = switchField('Pivot personnalisé', ownPivot);
+    const pivotRow = row(field('Pivot X', pivotInput('x')), field('Pivot Y', pivotInput('y')));
 
     const root = el('div', 'modifier-block');
-    root.append(head, countField, stepRow, spiralRow, orientField);
+    root.append(head, countField, stepRow, spiralRow, orientField, ownPivotField, pivotRow);
 
     const sync = (layer) => {
       const modifier = layer.modifiers[index];
@@ -604,6 +636,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       spiralRow.hidden = modifier.type !== 'spiral';
       /* Un pas ne tourne rien : rien à orienter. */
       orientField.hidden = !ORIENTING.has(modifier.type);
+      ownPivotField.hidden = !PIVOTING.has(modifier.type);
+      pivotRow.hidden = ownPivotField.hidden || !modifier.center;
     };
 
     return { root, sync };
@@ -698,6 +732,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     const stack = layer?.modifiers ?? [];
     if (stack.length !== blocks.length) rebuildModifiers(stack);
     addModifierButton.disabled = !layer;
+    layerPivot.hidden = !stack.some((modifier) => PIVOTING.has(modifier.type));
     if (layer) for (const block of blocks) block.sync(layer);
     interpolations.sync(layer);
   };

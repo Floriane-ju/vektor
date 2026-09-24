@@ -24,6 +24,8 @@ import {
   removeLayer,
   removeModifier,
   rotateVector,
+  pivotOf,
+  setLayerCenter,
   setLayerStroke,
   setLayerStrokeWidth,
   snapToGrid,
@@ -1233,7 +1235,7 @@ describe('rotation et épaisseur interpolées', () => {
       layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
     });
     const again = deserialize(serialize(deserialize(old)));
-    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@16');
+    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@17');
     expect(orients(again.layers[0].modifiers[0])).toBe(true);
   });
 });
@@ -1326,5 +1328,57 @@ describe('booléens', () => {
     expect(shape(deserialize(JSON.stringify(raw)), 2).booleans).toEqual([
       { with: forme.booleans[0].with, op: 'intersect' },
     ]);
+  });
+});
+
+describe('pivot', () => {
+  const dot = () => createElement('ellipse', 100, 0);
+  const positions = (layer) => getRenderedChildren(layer).map(({ x, y }) => [Math.round(x), Math.round(y)]);
+
+  it('le pivot du calque se règle, et refuse une coordonnée non finie', () => {
+    const layer = createLayer();
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    const next = setLayerCenter(scene, layer.id, { x: 10, y: -20 });
+    expect(next.layers[0].center).toEqual({ x: 10, y: -20 });
+    expect(setLayerCenter(scene, layer.id, { x: Number.NaN, y: 0 })).toBe(scene);
+  });
+
+  it('un modificateur sans pivot propre reprend celui du calque', () => {
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      elements: [dot()],
+      modifiers: [createModifier({ type: 'mirrorH' })],
+    });
+    expect(positions(layer)).toEqual([[100, 0], [-100, 0]]);
+    expect(pivotOf(layer, 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('chaque étage tourne autour de son propre pivot', () => {
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      elements: [dot()],
+      modifiers: [
+        createModifier({ type: 'mirrorH', center: { x: 50, y: 0 } }),
+        createModifier({ type: 'mirrorH' }),
+      ],
+    });
+    /* 100 → reflet autour de 50 → 0 ; puis reflet autour du pivot du calque. */
+    expect(positions(layer)).toEqual([[100, 0], [-100, 0], [0, 0], [0, 0]]);
+    expect(pivotOf(layer, 0)).toEqual({ x: 50, y: 0 });
+    expect(pivotOf(layer, 1)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('le pivot propre survit à l’aller-retour JSON, et un pivot invalide retombe sur le calque', () => {
+    const layer = createLayer({
+      center: { x: 12, y: 34 },
+      elements: [dot()],
+      modifiers: [createModifier({ type: 'axial', center: { x: 5, y: 6 } }), createModifier({ type: 'spiral' })],
+    });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    expect(deserialize(serialize(scene))).toEqual(scene);
+
+    const raw = JSON.parse(serialize(scene));
+    raw.layers[0].modifiers[0].center = { x: 'nope', y: 1 };
+    expect(deserialize(JSON.stringify(raw)).layers[0].modifiers[0]).not.toHaveProperty('center');
   });
 });

@@ -122,6 +122,12 @@ export const FIXED_COPIES = { none: 1, mirrorH: 2, mirrorV: 2 };
  */
 export const ORIENTING = new Set(['mirrorH', 'mirrorV', 'axial', 'spiral']);
 
+/**
+ * Modificateurs qui tournent ou reflètent autour d'un pivot. `step` translate,
+ * `none` ne fait rien : ni l'un ni l'autre n'a de pivot à régler ni à montrer.
+ */
+export const PIVOTING = new Set(['mirrorH', 'mirrorV', 'axial', 'spiral']);
+
 /** `orient` absent = réglage par défaut du type. */
 export const orients = (modifier) => ORIENTING.has(modifier.type) && (modifier.orient ?? true);
 
@@ -167,6 +173,10 @@ export const stackCopies = (modifiers) =>
  * chaque étage qui oriente : `R(b)·S^g · R(a)·S^f = R(b ± a)·S^(g⊕f)`, le signe
  * s'inversant quand l'étage reflète. Un étage dont la case est décochée ne
  * déplace que le point.
+ *
+ * Chaque étage tourne autour de son propre pivot s'il en a un, sinon autour de
+ * `center`, celui du calque : une couronne dont chaque branche est une petite
+ * spirale demande deux pivots.
  */
 export const applyStack = (point, modifiers, indices, center) =>
   modifiers.reduce(
@@ -175,7 +185,7 @@ export const applyStack = (point, modifiers, indices, center) =>
         current,
         indices[k],
         effectiveCount(modifier),
-        center,
+        modifier.center ?? center,
         modifier,
       );
       if (!orients(modifier)) return { ...next, angle: current.angle, flip: current.flip };

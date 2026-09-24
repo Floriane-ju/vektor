@@ -504,6 +504,15 @@ export const renameLayer = (scene, id, name) =>
 export const setLayerStrokeWidth = (scene, id, strokeWidth) =>
   mapLayer(scene, id, (layer) => ({ ...layer, strokeWidth: Math.max(0, strokeWidth) }));
 
+/** Pivot par défaut des modificateurs du calque. Une coordonnée non finie est ignorée. */
+export const setLayerCenter = (scene, id, { x, y }) =>
+  Number.isFinite(x) && Number.isFinite(y)
+    ? mapLayer(scene, id, (layer) => ({ ...layer, center: { x, y } }))
+    : scene;
+
+/** Pivot effectivement utilisé par l'étage `index` : le sien, ou celui du calque. */
+export const pivotOf = (layer, index) => layer.modifiers[index]?.center ?? layer.center;
+
 export const setLayerStroke = (scene, id, stroke) =>
   mapLayer(scene, id, (layer) => ({ ...layer, stroke }));
 
@@ -695,8 +704,9 @@ export const updateModifier = (scene, id, index, patch) =>
     ...layer,
     modifiers: layer.modifiers.map((current, i) => {
       if (i !== index) return current;
-      const modifier = { ...current, ...patch };
-      return { ...modifier, n: clampCount(modifier.n) };
+      /* `center: null` rend l'étage au pivot du calque : la clé disparaît. */
+      const { center, ...modifier } = { ...current, ...patch };
+      return { ...modifier, n: clampCount(modifier.n), ...(center ? { center } : {}) };
     }),
   }));
 

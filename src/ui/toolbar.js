@@ -1,18 +1,22 @@
 import {
   absolutePoints,
   addElement,
+  addLayer,
   addTraces,
   DEFAULT_SHAPE,
   dragPatch,
   getActiveElement,
   getActiveLayer,
+  pivotOf,
   recenterTrace,
   removeElement,
   rotateVector,
   setActiveElement,
   setActiveLayer,
+  setLayerCenter,
   SHAPES,
   updateElement,
+  updateModifier,
 } from '../scene.js';
 import { clearHover, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
@@ -228,7 +232,47 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   /* Glissement d'un sommet de tracé, par sa poignée. */
   let vertexDrag = null;
 
+  /* Glissement d'un pivot, par son repère. */
+  let pivotDrag = null;
+
+  /* Un miroir ne lit qu'une coordonnée de son pivot : l'autre ne bouge pas,
+     sinon traîner l'axe décalerait en douce le centre d'un étage voisin. */
+  const LOCKED = { mirrorH: 'y', mirrorV: 'x' };
+
+  const startPivot = (event, grip) => {
+    const layer = getActiveLayer(store.get());
+    const index = Number(grip.dataset.pivot);
+    const modifier = layer?.modifiers[index];
+    if (!modifier) return false;
+    const origin = pivotOf(layer, index);
+    const point = toStagePoint(svgRoot, event);
+    pivotDrag = {
+      layerId: layer.id,
+      index,
+      own: Boolean(modifier.center),
+      locked: LOCKED[modifier.type],
+      origin,
+      offset: { x: origin.x - point.x, y: origin.y - point.y },
+    };
+    svgRoot.toggleAttribute('data-dragging', true);
+    svgRoot.setPointerCapture?.(event.pointerId);
+    return true;
+  };
+
+  /* Sans pivot propre, l'étage montre celui du calque : c'est lui qui bouge,
+     avec tous les étages qui le partagent. */
+  const movePivot = (event) => {
+    const { layerId, index, own, locked, origin, offset } = pivotDrag;
+    const point = toStagePoint(svgRoot, event);
+    const target = { ...snap({ x: point.x + offset.x, y: point.y + offset.y }) };
+    if (locked) target[locked] = origin[locked];
+    if (own) store.apply(updateModifier, layerId, index, { center: target });
+    else store.apply(setLayerCenter, layerId, target);
+  };
+
   const startDrag = (event) => {
+    const grip = event.target.closest?.('[data-pivot]');
+    if (grip && startPivot(event, grip)) return;
     const handle = event.target.closest?.('[data-vertex]');
     const selected = getActiveElement(store.get());
     if (handle && selected?.points) {
@@ -283,6 +327,10 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
 
   svgRoot.addEventListener('pointermove', (event) => {
     if (!selecting) return;
+    if (pivotDrag) {
+      movePivot(event);
+      return;
+    }
     if (vertexDrag) {
       moveVertex(event);
       return;
@@ -374,11 +422,10 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
       startDrag(event);
       return;
     }
+    /* Sans calque, le premier geste en crée un : même pas d'historique que
+       la forme (pointerdown→pointerup), un seul ⌘Z annule les deux. */
+    if (!getActiveLayer(store.get())) store.apply(addLayer);
     const layer = getActiveLayer(store.get());
-    if (!layer) {
-      status.show('Sélectionner un calque avant de dessiner.', 'error');
-      return;
-    }
     const { x, y } = stagePoint(event);
     if (tool === 'polyline') {
       traceClick(layer, x, y);
@@ -398,6 +445,12 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   });
 
   svgRoot.addEventListener('pointerup', (event) => {
+    if (pivotDrag) {
+      movePivot(event);
+      svgRoot.releasePointerCapture?.(event.pointerId);
+      svgRoot.toggleAttribute('data-dragging', false);
+      pivotDrag = null;
+    }
     if (vertexDrag) {
       moveVertex(event);
       store.apply(recenterTrace, vertexDrag.element.id);
@@ -424,6 +477,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     stroke = null;
     drag = null;
     vertexDrag = null;
+    pivotDrag = null;
     svgRoot.toggleAttribute('data-dragging', false);
   });
 

@@ -98,7 +98,7 @@ describe('repères du modificateur', () => {
     render(scene(layer), svg);
     const guides = svg.querySelector('[data-guides]');
     expect(guides.dataset.guides).toBe('mirrorH');
-    const lines = [...guides.querySelectorAll('line')];
+    const lines = [...guides.querySelectorAll('line:not([data-grip])')];
     expect(lines).toHaveLength(1);
     expect([lines[0].getAttribute('x1'), lines[0].getAttribute('x2')]).toEqual(['400', '400']);
     expect([lines[0].getAttribute('y1'), lines[0].getAttribute('y2')]).toEqual([
@@ -114,7 +114,7 @@ describe('repères du modificateur', () => {
       modifiers: [{ type: 'spiral', n: 3, angleStep: 0.4, radiusStep: 12 }],
     });
     render(scene(layer), svg);
-    const [horizontal, vertical] = svg.querySelectorAll('[data-guides] line');
+    const [horizontal, vertical] = svg.querySelectorAll('[data-guides] line:not([data-grip])');
     /* Croix centrée : chaque branche s'étend autant de part et d'autre du centre. */
     expect([
       horizontal.getAttribute('x1'),
@@ -128,7 +128,7 @@ describe('repères du modificateur', () => {
       vertical.getAttribute('y1'),
       vertical.getAttribute('y2'),
     ]).toEqual(['400', '400', '286', '314']);
-    expect(svg.querySelectorAll('[data-guides] circle')).toHaveLength(0);
+    expect(svg.querySelectorAll('[data-guides] circle:not([data-grip])')).toHaveLength(0);
   });
 
   it('ne trace rien pour `none` ni pour un pas, ni sans calque actif', () => {
@@ -155,7 +155,7 @@ describe('repères du modificateur', () => {
     const guides = svg.querySelector('[data-guides]');
     expect(guides.dataset.guides).toBe('mirrorH spiral');
     /* L'axe du miroir, plus les deux branches du centre de la spirale. */
-    expect(guides.querySelectorAll('line')).toHaveLength(3);
+    expect(guides.querySelectorAll('line:not([data-grip])')).toHaveLength(3);
   });
 
   it('laisse les repères hors de l’export', () => {
@@ -392,21 +392,24 @@ describe('dessin au glisser', () => {
     expect(point.stroke).toBeUndefined();
   });
 
-  it('refuse sans calque actif et le signale', () => {
-    const { store, svg, messages } = mount({ layers: [], activeLayerId: null, activeElementId: null });
+  it('crée un calque quand il n’y en a aucun', () => {
+    const { store, svg } = mount({ layers: [], activeLayerId: null, activeElementId: null });
     pointer(svg, 'pointerdown', 10, 10);
     pointer(svg, 'pointerup', 60, 60);
 
-    expect(store.get().layers).toEqual([]);
-    expect(messages[0][1]).toBe('error');
+    const [layer] = store.get().layers;
+    expect(store.get().activeLayerId).toBe(layer.id);
+    expect(layer.elements).toHaveLength(1);
   });
 });
 
 describe('outil curseur', () => {
-  const mountWithShape = () => {
-    const layer = createLayer({ elements: [createElement('ellipse', 100, 100, { filled: true })] });
+  const mountWithShape = (overrides = {}) => {
+    const layer = createLayer({ elements: [createElement('ellipse', 100, 100, { filled: true })], ...overrides });
     const other = createLayer();
-    const store = createStore({ layers: [layer, other], activeLayerId: other.id, activeElementId: null });
+    /* Des modificateurs : le calque est actif, pour que ses repères se tracent. */
+    const activeLayerId = overrides.modifiers ? layer.id : other.id;
+    const store = createStore({ layers: [layer, other], activeLayerId, activeElementId: null });
     const svg = stage();
     globalThis.DOMPoint = class {
       constructor(x, y) {
@@ -462,6 +465,38 @@ describe('outil curseur', () => {
 
     expect(store.get().activeElementId).toBe(layer.elements[0].id);
     expect(store.get().layers[0].elements[0]).toMatchObject({ x: 140, y: 110 });
+  });
+
+  it('glisser la croix déplace le pivot du calque, sans saut au départ', () => {
+    const { store, svg } = mountWithShape({
+      center: { x: 400, y: 300 },
+      modifiers: [{ type: 'axial', n: 4 }],
+    });
+    on(svg.querySelector('[data-pivot] [data-grip]'), 'pointerdown', 405, 302);
+    on(svg, 'pointermove', 425, 312);
+    on(svg, 'pointerup', 455, 342);
+    expect(store.get().layers[0].center).toEqual({ x: 450, y: 340 });
+    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 100, y: 100 });
+    expect(svg.querySelector('[data-pivot] line').getAttribute('y1')).toBe('340');
+  });
+
+  it('un étage à pivot propre déplace le sien ; l’axe d’un miroir ne bouge que sur x', () => {
+    const { store, svg } = mountWithShape({
+      center: { x: 400, y: 300 },
+      modifiers: [
+        { type: 'mirrorH', n: 2, center: { x: 100, y: 50 } },
+        { type: 'mirrorV', n: 2 },
+      ],
+    });
+    on(svg.querySelector('[data-pivot="0"] [data-grip]'), 'pointerdown', 100, 200);
+    on(svg, 'pointerup', 130, 260);
+    const [layer] = store.get().layers;
+    expect(layer.modifiers[0].center).toEqual({ x: 130, y: 50 });
+    expect(layer.center).toEqual({ x: 400, y: 300 });
+
+    on(svg.querySelector('[data-pivot="1"] [data-grip]'), 'pointerdown', 10, 300);
+    on(svg, 'pointerup', 70, 320);
+    expect(store.get().layers[0].center).toEqual({ x: 400, y: 320 });
   });
 
   it('survoler une forme non sélectionnée ne la surligne pas', () => {
@@ -1438,5 +1473,26 @@ describe('liste des formes : arborescence des booléens', () => {
       layers: [{ ...layer, elements: [{ ...gabarit, booleans: [{ with: forme.id, op: 'union' }] }, forme, libre] }],
     }));
     expect(list.querySelectorAll('li')).toHaveLength(3);
+  });
+});
+
+describe('pivot au canvas', () => {
+  const scene = (layer) => ({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+
+  it('le repère suit le pivot effectivement utilisé par chaque étage', () => {
+    const svg = stage();
+    const layer = repeatLayer({
+      center: { x: 400, y: 300 },
+      modifiers: [
+        { type: 'mirrorH', n: 2, center: { x: 100, y: 50 } },
+        { type: 'axial', n: 4 },
+      ],
+    });
+    render(scene(layer), svg);
+    const [mirror, axial] = svg.querySelectorAll('[data-guides] [data-pivot]');
+    expect(mirror.dataset.pivot).toBe('0');
+    expect(mirror.querySelector('line').getAttribute('x1')).toBe('100');
+    expect(axial.dataset.pivot).toBe('1');
+    expect(axial.querySelector('line').getAttribute('y1')).toBe('300');
   });
 });

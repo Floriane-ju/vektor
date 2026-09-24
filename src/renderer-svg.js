@@ -4,6 +4,7 @@ import {
   getActiveElement,
   getActiveLayer,
   getRenderedChildren,
+  pivotOf,
   SHAPES,
   STAGE,
 } from './scene.js';
@@ -97,27 +98,41 @@ const guideLine = (x1, y1, x2, y2) => guideNode('line', { x1, y1, x2, y2 });
  * Trait plein : les tirets du groupe partent du début de chaque branche, donc
  * une croix pointillée rend des bras inégaux et le centre paraît décalé.
  */
-const guideCenter = ({ center }) => {
+const guideCenter = (center) => {
   const cross = [
     guideLine(center.x - GUIDE_MARK, center.y, center.x + GUIDE_MARK, center.y),
     guideLine(center.x, center.y - GUIDE_MARK, center.x, center.y + GUIDE_MARK),
   ];
   for (const branch of cross) branch.setAttribute('stroke-dasharray', 'none');
-  return cross;
+  /* Zone de saisie invisible : une croix de 1 px ne se viserait pas. */
+  const grip = guideNode('circle', { cx: center.x, cy: center.y, r: GUIDE_MARK });
+  grip.dataset.grip = '';
+  grip.setAttribute('fill', 'transparent');
+  grip.setAttribute('stroke', 'none');
+  grip.setAttribute('pointer-events', 'all');
+  return [...cross, grip];
 };
 
 /** Axe de symétrie d'un miroir : la seule chose que `n` ne déplace plus. */
-const mirrorGuides = (axis) => (layer) =>
-  axis === 'x'
-    ? [guideLine(layer.center.x, 0, layer.center.x, STAGE.height)]
-    : [guideLine(0, layer.center.y, STAGE.width, layer.center.y)];
+const mirrorGuides = (axis) => (center) => {
+  const line =
+    axis === 'x'
+      ? guideLine(center.x, 0, center.x, STAGE.height)
+      : guideLine(0, center.y, STAGE.width, center.y);
+  /* Même axe en trait épais transparent : c'est lui qu'on saisit. */
+  const grip = line.cloneNode();
+  grip.dataset.grip = '';
+  grip.setAttribute('stroke-opacity', '0');
+  grip.setAttribute('stroke-width', String(GUIDE_MARK));
+  grip.setAttribute('pointer-events', 'stroke');
+  return [line, grip];
+};
 
 /**
  * Repères propres à chaque modificateur : l'axe pour un miroir, le centre de
- * rotation pour l'axial et la spirale.
+ * rotation pour l'axial et la spirale, posés sur le pivot de l'étage.
  *
- * `none` et `step` n'y figurent pas : le premier ne duplique rien, le second
- * translate sans pivot ni axe — il n'a pas de lieu à montrer.
+ * Mêmes types que `PIVOTING` : `none` et `step` n'ont pas de lieu à montrer.
  */
 const GUIDES = {
   mirrorH: mirrorGuides('x'),
@@ -128,7 +143,8 @@ const GUIDES = {
 
 /**
  * Repères de la pile de modificateurs du calque actif : chaque modificateur qui
- * a un lieu à montrer y pose le sien, dans l'ordre de la pile.
+ * a un lieu à montrer y pose le sien, dans l'ordre de la pile, dans un groupe
+ * `data-pivot` = son rang — la toolbar le saisit pour déplacer le pivot.
  *
  * Ils vivent dans le `<svg>` de la scène : même viewBox, donc ils restent
  * alignés sous le zoom sans qu'aucune coordonnée soit recalculée. `toSvgDocument`
@@ -136,12 +152,14 @@ const GUIDES = {
  */
 const createGuides = (layer) => {
   const marked = layer?.visible
-    ? layer.modifiers.filter((modifier) => Object.hasOwn(GUIDES, modifier.type))
+    ? layer.modifiers
+        .map((modifier, index) => ({ modifier, index }))
+        .filter(({ modifier }) => Object.hasOwn(GUIDES, modifier.type))
     : [];
   if (marked.length === 0) return null;
 
   const group = document.createElementNS(SVG_NS, 'g');
-  group.dataset.guides = marked.map((modifier) => modifier.type).join(' ');
+  group.dataset.guides = marked.map(({ modifier }) => modifier.type).join(' ');
   group.setAttribute('fill', 'none');
   /* Gris neutre : un repère ne doit pas se confondre avec un trait dessiné,
      dont l'accent est la couleur par défaut. */
@@ -152,9 +170,16 @@ const createGuides = (layer) => {
   /* Le trait garde son épaisseur à l'écran quel que soit le zoom : un repère
      qui grossit avec le dessin finit par le cacher. */
   group.setAttribute('vector-effect', 'non-scaling-stroke');
-  /* Un glissement sur un repère dessine comme ailleurs. */
+  /* Seules les zones de saisie des pivots captent le pointeur. */
   group.setAttribute('pointer-events', 'none');
-  group.append(...marked.flatMap((modifier) => GUIDES[modifier.type](layer, modifier)));
+  group.append(
+    ...marked.map(({ modifier, index }) => {
+      const pivot = document.createElementNS(SVG_NS, 'g');
+      pivot.dataset.pivot = String(index);
+      pivot.append(...GUIDES[modifier.type](pivotOf(layer, index)));
+      return pivot;
+    }),
+  );
   return group;
 };
 

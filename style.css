@@ -147,6 +147,9 @@ input[type="range"] {
 #stage[data-tool="cursor"][data-has-selection],
 #stage[data-tool="cursor"][data-has-selection] * { cursor: grab; }
 
+/* Le repère d'un pivot se saisit pour le déplacer. */
+#stage[data-tool="cursor"] [data-pivot] [data-grip] { cursor: move; }
+
 #stage[data-tool="cursor"][data-dragging],
 #stage[data-tool="cursor"][data-dragging] * { cursor: grabbing; }
 
