@@ -296,6 +296,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   const spanLabels = { signed: ['Écart X', 'Écart Y'], default: ['Largeur', 'Hauteur'] };
 
   const geometryRow = row(radiusField, widthField, heightField, field('X', posX), field('Y', posY));
+  /* Deux par ligne : les quatre champs tronquaient leurs valeurs sur une seule. */
+  geometryRow.classList.add('is-grid');
   const rotationField = field('Rotation (°)', rotation);
   /* 100 % : polygone convexe ; en deçà, étoile. */
   const polygonRow = row(field('Côtés', sides), field('Rayon intérieur (%)', inner));
