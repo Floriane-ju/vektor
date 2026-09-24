@@ -2,7 +2,7 @@
 {
   "id": "T-0082",
   "titre": "Carte trait : couleur et épaisseur toujours visibles",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui"],
   "cree": "2026-09-24",
@@ -17,8 +17,8 @@ Couleur et épaisseur de trait sont enfouies dans le panneau de la forme. Comme 
 
 ## Critères d'acceptation
 
-- [ ] Une carte en haut à droite, à gauche de la pastille annuler/rétablir, montre la couleur et l'épaisseur de la forme active.
-- [ ] Cliquer la pastille de couleur ouvre un popover : palette globale (couleurs du dessin) + sélecteur de couleur + hex.
-- [ ] L'épaisseur se règle depuis la carte.
-- [ ] Couleur et épaisseur ne sont plus dans le panneau de la forme.
-- [ ] Sans forme active, la carte règle couleur et épaisseur des prochaines formes.
+- [x] Une carte en haut à droite, à gauche de la pastille annuler/rétablir, montre la couleur et l'épaisseur de la forme active.
+- [x] Cliquer la pastille de couleur ouvre un popover : palette globale (couleurs du dessin) + sélecteur de couleur + hex.
+- [x] L'épaisseur se règle depuis la carte.
+- [x] Couleur et épaisseur ne sont plus dans le panneau de la forme.
+- [x] Sans forme active, la carte règle couleur et épaisseur des prochaines formes.
