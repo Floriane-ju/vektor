@@ -8,11 +8,9 @@ import {
   updateInterpolation,
   updateInterpolationRange,
 } from '../scene.js';
-import { copyCount, effectiveCount, MODIFIER_LABELS } from '../modifiers.js';
-import { CURVE_LABELS, lerp, ramp } from '../interpolate.js';
+import { MODIFIER_LABELS } from '../modifiers.js';
+import { CURVE_LABELS } from '../interpolate.js';
 
-/* Au-delà, l'aperçu de la rampe ne montre qu'un échantillon régulier. */
-const PREVIEW_DOTS = 12;
 /* Les bornes se saisissent en pourcentage : 1 = 100 %. */
 const PERCENT = 100;
 import { iconButton, rebuildWithFocus } from './list.js';
@@ -70,12 +68,29 @@ export const interpolationSection = ({ store }) => {
     return wrap;
   };
 
+  /* Borne d'une interpolation de couleur : le sélecteur natif, qui ne lit et
+     n'écrit que `#rrggbb`, le format du modèle. */
+  const colorControl = (interpolation, index, labelText) => {
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.id = `interp-${++uid}`;
+    input.addEventListener('input', () => apply(updateInterpolationRange, interpolation.id, index, input.value));
+    bounds.push({
+      sync: (layer) => {
+        const current = layer.interpolations.find((candidate) => candidate.id === interpolation.id);
+        if (current && document.activeElement !== input) input.value = current.range[index];
+      },
+    });
+    return field(labelText, input);
+  };
+
   /**
    * Une borne de la plage, en pourcentage. Le champ prend les bornes de la
    * propriété : passer une interpolation d'opacité à l'échelle reconstruit le
    * bloc, donc le `min` et le `max` suivent sans réglage à la main.
    */
   const boundControl = (interpolation, index, labelText) => {
+    if (RANGE_BOUNDS[interpolation.property].color) return colorControl(interpolation, index, labelText);
     const { min, max, step, unit = '%' } = RANGE_BOUNDS[interpolation.property];
     /* Les facteurs s'affichent en pourcentage, la rotation en degrés tels quels. */
     const ratio = unit === '%' ? PERCENT : 1;
@@ -112,39 +127,6 @@ export const interpolationSection = ({ store }) => {
     wrapper.append(number, suffix);
     wrap.append(wrapper);
     return wrap;
-  };
-
-  /**
-   * Aperçu de la rampe : une pastille par copie suivie, estompée ou réduite
-   * comme le fera le dessin. Il ne montre que cette interpolation, pas le
-   * produit de toute la pile.
-   */
-  const preview = (interpolation) => {
-    const root = document.createElement('div');
-    root.className = 'ramp-preview';
-    root.setAttribute('aria-hidden', 'true');
-    bounds.push({
-      sync: (layer) => {
-        const current = layer.interpolations.find((candidate) => candidate.id === interpolation.id);
-        if (!current) return;
-        const stage = current.binding == null ? null : layer.modifiers[current.binding];
-        const n = stage ? effectiveCount(stage) : copyCount(layer.modifiers);
-        const shown = Math.min(n, PREVIEW_DOTS);
-        const dots = Array.from({ length: shown }, (_, i) => {
-          const value = lerp(current.range[0], current.range[1], ramp(current.curve, Math.round((i * (n - 1)) / Math.max(1, shown - 1)), n));
-          const dot = document.createElement('span');
-          if (current.property === 'opacity') dot.style.opacity = String(value);
-          else if (current.property === 'rotation') dot.style.transform = `rotate(${value}deg)`;
-          else if (current.property === 'strokeWidth') dot.style.boxShadow = `inset 0 0 0 ${Math.min(value * 2, 7)}px var(--layer-color, var(--accent))`;
-          else dot.style.transform = `scale(${Math.min(value, 1.6)})`;
-          return dot;
-        });
-        /* Une pastille ronde ne montre pas sa rotation : la vrille s'aperçoit en barrettes. */
-        root.classList.toggle('is-rotation', current.property === 'rotation');
-        root.replaceChildren(...dots);
-      },
-    });
-    return root;
   };
 
   /**
@@ -216,7 +198,7 @@ export const interpolationSection = ({ store }) => {
     range.append(boundControl(interpolation, 0, 'Début'), boundControl(interpolation, 1, 'Fin'));
 
     const binding = bindingField(interpolation, modifiers);
-    root.append(head, ...(binding ? [binding] : []), curveField(interpolation), range, preview(interpolation));
+    root.append(head, ...(binding ? [binding] : []), curveField(interpolation), range);
     return root;
   };
 

@@ -598,15 +598,6 @@ input[type="range"] {
 .unit-input input { padding-right: 28px; }
 .unit-input span { position: absolute; right: 12px; color: var(--text-dim); pointer-events: none; }
 
-.ramp-preview { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.ramp-preview span {
-  width: 14px;
-  height: 14px;
-  border-radius: var(--pill);
-  box-shadow: inset 0 0 0 2px var(--layer-color, var(--accent));
-}
-.ramp-preview.is-rotation span { height: 4px; border-radius: 2px; }
-
 /* ---- Statut ---- */
 
 .status {
