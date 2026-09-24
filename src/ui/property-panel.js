@@ -14,7 +14,6 @@ import {
   removeModifier,
   DASH_PRESETS,
   LINECAPS,
-  parseDash,
   setLayerCenter,
   setLayerEvenOdd,
   SHAPES,
@@ -306,9 +305,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   const filledField = switchField('Remplir', filled);
 
   /* Trait : le type de motif se lit sur le tableau de tirets — vide, plein ;
-     un premier tiret nul, des points ; sinon des tirets. La saisie libre garde
-     tous les motifs que les segments ne nomment pas. Valeurs en multiples de
-     l'épaisseur de la forme. */
+     un premier tiret nul, des points ; sinon des tirets, réglés par tiret et espace.
+     Valeurs en multiples de l'épaisseur de la forme. */
   const dashKind = (dash) => (dash.length === 0 ? 'solid' : dash[0] === 0 ? 'dotted' : 'dashed');
   const dashSegments = segmented(
     'Trait',
@@ -330,13 +328,21 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       });
     },
   );
-  const dashText = bind(
-    input('text', { placeholder: 'ex. 4 2' }),
-    (element) => element.dash.join(' '),
-    (element, value) => store.apply(updateElement, element.id, { dash: value }),
-    { event: 'change', parse: parseDash },
-  );
-  const dashTextField = field('Motif libre (× épaisseur)', dashText);
+  /* Motif tiret/espace ; un motif plus long (import) perd ses valeurs au-delà
+     de la deuxième dès qu'on touche l'un des deux champs. */
+  const dashPart = (index) =>
+    bind(
+      input('number', { min: '0', step: '0.5' }),
+      (element) => element.dash[index] ?? 2,
+      (element, value) => {
+        const [dash = 4, gap = 2] = element.dash;
+        const pair = [dash, gap];
+        pair[index] = Math.max(0, value);
+        store.apply(updateElement, element.id, { dash: clampDash(pair) });
+      },
+      { event: 'change' },
+    );
+  const dashPairRow = row(field('Tiret (× ép.)', dashPart(0)), field('Espace (× ép.)', dashPart(1)));
   const linecapSegments = segmented(
     'Bout',
     Object.entries(LINECAPS),
@@ -344,7 +350,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     (element, value) => store.apply(updateElement, element.id, { linecap: clampLinecap(value) }),
   );
   const strokeGroup = el('div', 'group');
-  strokeGroup.append(dashSegments, dashLength, dashTextField, linecapSegments);
+  strokeGroup.append(dashSegments, dashLength, dashPairRow, linecapSegments);
 
   const shapeDetail = el('div', 'inspector-body');
   shapeDetail.dataset.kind = 'shape';
@@ -618,6 +624,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       strokeGroup.hidden = dot;
       strokeSeparator.hidden = dot;
       dashLength.hidden = dashKind(element.dash) !== 'dashed';
+      dashPairRow.hidden = dashLength.hidden;
       /* Un point tourné reste identique : rien à régler. */
       rotationField.hidden = dot;
       polygonRow.hidden = geometry !== 'polygon';

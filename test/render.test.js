@@ -1427,7 +1427,7 @@ describe('style de trait', () => {
 });
 
 describe('panneau : motif de trait', () => {
-  it('le segment Points pose tirets et bout rond, la saisie libre garde son motif', async () => {
+  it('le segment Points pose tirets et bout rond, tiret et espace se règlent à part', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const element = createElement('ellipse', 0, 0);
     const layer = createLayer({ elements: [element, createElement('ellipse', 50, 0)] });
@@ -1456,10 +1456,14 @@ describe('panneau : motif de trait', () => {
     range.dispatchEvent(new Event('input'));
     expect(shapes()[0].dash).toEqual([6, 2]);
 
-    const text = shapeDetail.querySelector('input[placeholder="ex. 4 2"]');
-    text.value = '3 1 1 1';
-    text.dispatchEvent(new Event('change'));
-    expect(shapes()[0].dash).toEqual([3, 1, 1, 1]);
+    const numberFor = (label) =>
+      shapeDetail.querySelector(`#${[...shapeDetail.querySelectorAll('label')].find((l) => l.textContent === label).htmlFor}`);
+    const gap = numberFor('Espace (× ép.)');
+    expect(gap.closest('.field-row').hidden).toBe(false);
+    gap.value = '3';
+    gap.dispatchEvent(new Event('change'));
+    expect(shapes()[0].dash).toEqual([6, 3]);
+    expect(numberFor('Tiret (× ép.)').value).toBe('6');
     expect(radio(trait, 'dashed').checked).toBe(true);
   });
 });
