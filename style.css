@@ -468,6 +468,8 @@ input[type="range"] {
 
 .group { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .stack { display: flex; flex-direction: column; gap: 8px; }
+/* Vide, il garderait le `gap` du groupe et décentrerait le titre entre ses séparateurs. */
+.group > .stack:empty { display: none; }
 
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .section-head h3 { margin: 0; font: 600 14px/1 var(--font); }
