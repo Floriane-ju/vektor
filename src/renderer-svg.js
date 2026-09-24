@@ -646,6 +646,20 @@ const flipAbout = ({ x, y }) => `translate(${round(x)} ${round(y)}) scale(-1 1) 
  * fichier n'embarque que ce qui a un sens hors de la page — les repères du
  * modificateur, la sélection et le survol en sont donc retirés.
  */
+/* Ce que l'écran pose pour lui-même : le style de la racine (zoom, grille), les
+   marqueurs `data-*` du curseur et de l'outil, la cible de clic, et les
+   opacités pleines, valeur par défaut qui ne fait que grossir le fichier. */
+const stripScreenAttributes = (root) => {
+  for (const node of [root, ...root.querySelectorAll('*')]) {
+    for (const { name, value } of [...node.attributes]) {
+      const opaque = (name === 'fill-opacity' || name === 'stroke-opacity') && value === '1';
+      if (name === 'style' || name === 'pointer-events' || name.startsWith('data-') || opaque) {
+        node.removeAttribute(name);
+      }
+    }
+  }
+};
+
 export const toSvgDocument = (svgRoot) => {
   const clone = svgRoot.cloneNode(true);
   clone.querySelector('[data-guides]')?.remove();
@@ -655,6 +669,7 @@ export const toSvgDocument = (svgRoot) => {
   clone.removeAttribute('id');
   clone.removeAttribute('role');
   clone.removeAttribute('aria-label');
+  stripScreenAttributes(clone);
   clone.setAttribute('xmlns', SVG_NS);
   clone.setAttribute('width', String(STAGE.width));
   clone.setAttribute('height', String(STAGE.height));

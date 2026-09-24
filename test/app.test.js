@@ -184,5 +184,17 @@ it('démarre et rend après un placement', async () => {
   expect(stage.querySelectorAll('[data-element-id]')).toHaveLength(1);
   key(false);
   expect(layerCount()).toBe(0);
+
+  /* Dessiner sur un calque masqué le réaffiche : la forme ne reste pas invisible. */
+  pointer('pointerdown', 300, 300);
+  pointer('pointerup', 330, 300);
+  document.querySelector('[data-focus-key^="visible-"]').click();
+  expect(stage.querySelectorAll('[data-element-id]')).toHaveLength(0);
+  pointer('pointerdown', 500, 500);
+  pointer('pointerup', 530, 500);
+  expect(stage.querySelectorAll('[data-element-id]')).toHaveLength(2);
+  /* Un seul ⌘Z défait forme et réaffichage ensemble. */
+  key(false);
+  expect(stage.querySelectorAll('[data-element-id]')).toHaveLength(0);
 });
 

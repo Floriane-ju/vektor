@@ -1,9 +1,9 @@
 ---
 {
-  "status": "open",
+  "status": "closed",
   "title": "Paramètres : grille + aimantation",
   "opened": "2026-09-23",
-  "closed": null,
+  "closed": "2026-09-23",
   "commits": [
     {
       "sha": "16f11fb",

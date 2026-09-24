@@ -197,6 +197,25 @@ describe('export SVG', () => {
     expect(svg.id).toBe('stage');
     expect(svg.getAttribute('aria-label')).toBe('Illustration en cours');
   });
+
+  it('laisse le style et les marqueurs d’écran hors du fichier', () => {
+    const svg = stage();
+    render({ layers: [repeatLayer()], activeLayerId: null, activeElementId: null }, svg);
+    svg.style.width = '7200px';
+    svg.style.backgroundImage = 'url("data:image/svg+xml,grille")';
+    svg.dataset.tool = 'draw';
+    svg.dataset.grid = '';
+    svg.querySelector('ellipse').setAttribute('pointer-events', 'visible');
+    const document_ = toSvgDocument(svg);
+
+    expect(document_).not.toContain('style=');
+    expect(document_).not.toContain('data-');
+    expect(document_).not.toContain('pointer-events');
+    expect(document_).not.toContain('opacity="1"');
+    /* L'écran garde tout. */
+    expect(svg.style.width).toBe('7200px');
+    expect(svg.querySelector('[data-element-id]')).not.toBeNull();
+  });
 });
 
 describe('copie du SVG', () => {

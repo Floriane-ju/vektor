@@ -15,6 +15,7 @@ import {
   setActiveLayer,
   setLayerCenter,
   SHAPES,
+  toggleVisibility,
   updateElement,
   updateModifier,
 } from '../scene.js';
@@ -448,6 +449,8 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     /* Sans calque, le premier geste en crée un : même pas d'historique que
        la forme (pointerdown→pointerup), un seul ⌘Z annule les deux. */
     if (!getActiveLayer(store.get())) store.apply(addLayer);
+    /* Calque masqué : on le réaffiche, sinon la forme naîtrait invisible. */
+    if (!getActiveLayer(store.get()).visible) store.apply(toggleVisibility, store.get().activeLayerId);
     const layer = getActiveLayer(store.get());
     const { x, y } = stagePoint(event);
     if (tool === 'polyline') {
