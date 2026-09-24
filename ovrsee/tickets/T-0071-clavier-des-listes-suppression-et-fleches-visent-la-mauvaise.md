@@ -2,7 +2,7 @@
 {
   "id": "T-0071",
   "titre": "Clavier des listes : suppression et flèches visent la mauvaise cible",
-  "colonne": "pret",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "s",
   "tags": [
@@ -28,6 +28,6 @@ de la liste déplacent la forme sur le plan au lieu de parcourir l'arbre.
 
 ## Critères d'acceptation
 
-- [ ] Suppr et Retour arrière sur une ligne ayant le focus suppriment cette ligne-là.
-- [ ] ↑/↓ sur une ligne de l'arbre déplacent le focus d'une ligne à l'autre ; le nudge ne joue que hors listes.
-- [ ] Test app sur les deux comportements.
+- [x] Suppr et Retour arrière sur une ligne ayant le focus suppriment cette ligne-là.
+- [x] ↑/↓ sur une ligne de l'arbre déplacent le focus d'une ligne à l'autre ; le nudge ne joue que hors listes.
+- [x] Test app sur les deux comportements.

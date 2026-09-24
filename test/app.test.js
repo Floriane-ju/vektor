@@ -132,6 +132,27 @@ it('démarre et rend après un placement', async () => {
   key(false);
   expect(layerCount()).toBe(before);
 
+  /* Clavier de l'arbre : ↑/↓ parcourent les lignes sans pousser la forme,
+     Retour arrière supprime la ligne qui a le focus, pas la sélection. */
+  const rows = () => [...document.querySelectorAll('#layer-panel .layer-name')];
+  const shapeIds = () => [...document.querySelectorAll('#shape-list [data-element-id]')].map((n) => n.dataset.elementId);
+  const onRow = (row, key) => row.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  document.querySelector('#shape-list .layer-name').click();
+  const selected = () => stage.querySelector('[data-element-id]').getAttribute('cx');
+  const [kept, target] = shapeIds();
+  const position = selected();
+  const shapeRows = () => rows().filter((row) => row.closest('#shape-list'));
+  shapeRows()[0].focus();
+  onRow(shapeRows()[0], 'ArrowDown');
+  expect(document.activeElement).toBe(shapeRows()[1]);
+  expect(selected()).toBe(position);
+  onRow(shapeRows()[1], 'ArrowUp');
+  expect(document.activeElement).toBe(shapeRows()[0]);
+  onRow(shapeRows()[1], 'Backspace');
+  expect(shapeIds()).toEqual([kept]);
+  expect(shapeIds()).not.toContain(target);
+  key(false);
+
   /* Grille : la case pose le fond, et le geste suivant tombe sur un croisement. */
   const grid = document.getElementById('settings-grid');
   grid.checked = true;

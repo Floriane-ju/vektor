@@ -105,14 +105,22 @@ export const dragHandle = () => {
 };
 
 /**
- * Alt + ↑/↓ sur le nom d'une ligne la fait monter (vers le premier plan) ou
- * descendre : le chemin clavier du glisser-déposer. `move(delta)` reçoit +1 ou -1.
+ * Clavier du nom d'une ligne d'arbre : Suppr ou Retour arrière suppriment
+ * cette ligne-là (pas la sélection, que vise le raccourci global), ↑/↓
+ * passent à la ligne voisine, Alt + ↑/↓ la font monter (vers le premier plan)
+ * ou descendre — le chemin clavier du glisser-déposer. `move(delta)` reçoit
+ * +1 ou -1. Les lignes voisines se cherchent dans l'ancêtre `[data-tree]`.
  */
-export const reorderKeys = (name, move) =>
+export const rowKeys = (name, { move, remove }) =>
   name.addEventListener('keydown', (event) => {
-    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+    const arrow = event.key === 'ArrowUp' || event.key === 'ArrowDown';
+    if (event.key === 'Delete' || event.key === 'Backspace') remove();
+    else if (arrow && event.altKey) move(event.key === 'ArrowUp' ? 1 : -1);
+    else if (arrow) {
+      const names = [...(name.closest('[data-tree]') ?? document).querySelectorAll('.layer-name')];
+      names[names.indexOf(name) + (event.key === 'ArrowUp' ? -1 : 1)]?.focus();
+    } else return;
     event.preventDefault();
-    move(event.key === 'ArrowUp' ? 1 : -1);
   });
 
 /**
@@ -132,7 +140,7 @@ export const dropIndex = (list, item, target, where) => {
  * ou `null` (refusé) ; `drop(item, position)` applique le dépôt.
  *
  * ponytail: glisser natif, donc souris seulement — au clavier, Alt + ↑/↓ sur
- * le nom de la ligne (`reorderKeys`) ; le tactile n'a pas de chemin.
+ * le nom de la ligne (`rowKeys`) ; le tactile n'a pas de chemin.
  */
 export const sortableRow = (row, item, { accepts, drop }) => {
   row.draggable = true;

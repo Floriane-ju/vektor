@@ -1,4 +1,4 @@
-import { dragHandle, dropIndex, iconButton, rebuildWithFocus, reorderKeys, sortableRow, whenChanged } from './list.js';
+import { dragHandle, dropIndex, iconButton, rebuildWithFocus, rowKeys, sortableRow, whenChanged } from './list.js';
 import { icon } from './icons.js';
 import {
   addLayer,
@@ -19,6 +19,8 @@ import {
  * fois ; l'arbre ne fait que la déplacer.
  */
 export const mountLayerPanel = ({ store, container, status, children = null }) => {
+  /* Racine de l'arbre calques → formes, parcouru par ↑/↓ (`rowKeys`). */
+  container.dataset.tree = '';
   /* Calque replié. Ne vaut que tant qu'il reste actif : en sélectionner un
      autre puis y revenir le rouvre. */
   let collapsedId = null;
@@ -119,13 +121,6 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
       const next = prompt('Nom du calque', layer.name);
       if (next?.trim()) store.apply(renameLayer, layer.id, next.trim());
     });
-    /* La touche Suppr agit sur le calque qui a le focus, comme le bouton. */
-    name.addEventListener('keydown', (event) => {
-      if (event.key === 'Delete') {
-        event.preventDefault();
-        remove(layer);
-      }
-    });
 
     /* Visibles au survol, au focus et sur la ligne active (voir `style.css`). */
     const actions = document.createElement('span');
@@ -147,7 +142,7 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
       }),
     );
 
-    reorderKeys(name, (delta) => store.apply(moveLayer, layer.id, delta));
+    rowKeys(name, { move: (delta) => store.apply(moveLayer, layer.id, delta), remove: () => remove(layer) });
 
     row.append(dragHandle(), chevron, name, actions);
     /* Un calque se range entre les autres ; une forme d'un autre calque y

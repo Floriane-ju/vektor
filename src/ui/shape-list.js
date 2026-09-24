@@ -10,7 +10,7 @@ import {
   SHAPES,
 } from '../scene.js';
 import { clearHover, shapePreview, showHover } from '../renderer-svg.js';
-import { dragHandle, dropIndex, iconButton, rebuildWithFocus, reorderKeys, shapeName, sortableRow, whenChanged } from './list.js';
+import { dragHandle, dropIndex, iconButton, rebuildWithFocus, rowKeys, shapeName, sortableRow, whenChanged } from './list.js';
 import { icon } from './icons.js';
 import { DUPLICATE_OFFSET } from './shortcuts.js';
 
@@ -167,16 +167,13 @@ export const mountShapeList = ({
     name.dataset.focusKey = `name-${element.id}`;
     name.setAttribute('aria-pressed', String(isActive));
     name.addEventListener('click', () => store.apply(setActiveElement, element.id));
-    name.addEventListener('keydown', (event) => {
-      if (event.key === 'Delete') {
-        event.preventDefault();
-        remove(element, name.textContent);
-      }
-    });
 
     const actions = document.createElement('span');
     actions.className = 'row-actions';
-    reorderKeys(name, (delta) => store.apply(moveElement, element.id, delta));
+    rowKeys(name, {
+      move: (delta) => store.apply(moveElement, element.id, delta),
+      remove: () => remove(element, name.textContent),
+    });
     const glyph = icon(element.type, GLYPH_SIZE);
     glyph.classList.add('shape-glyph');
     row.append(dragHandle(), glyph, name, actions);
