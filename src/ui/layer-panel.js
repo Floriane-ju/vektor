@@ -17,9 +17,6 @@ import {
  * fois ; l'arbre ne fait que la déplacer.
  */
 export const mountLayerPanel = ({ store, container, status, children = null }) => {
-  /* Hors de la scène : c'est un état d'interface, pas une donnée du projet —
-     il ne doit ni partir à l'export ni survivre à un rechargement. */
-  let pendingDeleteId = null;
   /* Calque replié. Ne vaut que tant qu'il reste actif : en sélectionner un
      autre puis y revenir le rouvre. */
   let collapsedId = null;
@@ -30,7 +27,6 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
     JSON.stringify([
       scene.activeLayerId,
       scene.activeElementId !== null,
-      pendingDeleteId,
       collapsedId,
       scene.layers.map((layer) => [layer.id, layer.name, layer.visible]),
     ]);
@@ -85,7 +81,6 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
   const layerRow = (scene, layer) => {
     const index = scene.layers.indexOf(layer);
     const isActive = layer.id === scene.activeLayerId;
-    const isPending = layer.id === pendingDeleteId;
     const isOpen = isActive && collapsedId !== layer.id;
 
     const card = document.createElement('li');
@@ -138,7 +133,7 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
     name.addEventListener('keydown', (event) => {
       if (event.key === 'Delete') {
         event.preventDefault();
-        askDelete(layer);
+        remove(layer);
       }
     });
 
@@ -167,23 +162,14 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
         disabled: index === 0,
         onClick: () => store.apply(moveLayer, layer.id, -1),
       }),
-      isPending
-        ? iconButton({
-            label: `Confirmer la suppression de ${layer.name}`,
-            text: 'Sûr ?',
-            focusKey: `delete-${layer.id}`,
-            danger: true,
-            onClick: () => confirmDelete(layer),
-          })
-        : iconButton({
-            label: `Supprimer ${layer.name}`,
-            text: '×',
-            focusKey: `delete-${layer.id}`,
-            danger: true,
-            onClick: () => askDelete(layer),
-          }),
+      iconButton({
+        label: `Supprimer ${layer.name}`,
+        text: '×',
+        focusKey: `delete-${layer.id}`,
+        danger: true,
+        onClick: () => remove(layer),
+      }),
     );
-    if (isPending) actions.dataset.pending = '';
 
     row.append(chevron, swatch, name, actions);
     return card;
@@ -201,14 +187,8 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
     return button;
   };
 
-  const askDelete = (layer) => {
-    pendingDeleteId = layer.id;
-    status.show(`Supprimer « ${layer.name} » ? Confirmer dans le panneau.`, 'error');
-    render(store.get());
-  };
-
-  const confirmDelete = (layer) => {
-    pendingDeleteId = null;
+  /* Pas de confirmation : ⌘Z rend le calque et tout son contenu. */
+  const remove = (layer) => {
     status.show(`« ${layer.name} » supprimé.`);
     store.apply(removeLayer, layer.id);
   };

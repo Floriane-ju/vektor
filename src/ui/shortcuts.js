@@ -2,7 +2,9 @@ import {
   duplicateElement,
   duplicateLayer,
   getActiveElement,
+  getActiveLayer,
   removeElement,
+  removeLayer,
   setActiveElement,
   SHAPES,
   updateElement,
@@ -40,7 +42,7 @@ const toolLabel = (type) => (type === 'cursor' ? 'Curseur' : SHAPES[type].label)
 
 const LIST = [
   ...Object.entries(TOOL_KEYS).map(([key, type]) => [key.toUpperCase(), toolLabel(type)]),
-  ['Suppr', 'Supprimer la forme sélectionnée'],
+  ['Suppr', 'Supprimer la forme sélectionnée (sinon le calque)'],
   ['⌘/Ctrl + D', 'Dupliquer la forme sélectionnée (sinon le calque)'],
   ['Échap', 'Désélectionner'],
   ['Flèches', 'Déplacer de 1 px (Maj : 10 px)'],
@@ -116,6 +118,10 @@ export const mountShortcuts = ({ store, container, status }) => {
     else if ((event.key === 'Delete' || event.key === 'Backspace') && element) {
       store.apply(removeElement, element.id);
       status.show(`${SHAPES[element.type].label} supprimé.`);
+    } else if ((event.key === 'Delete' || event.key === 'Backspace') && getActiveLayer(store.get())) {
+      const layer = getActiveLayer(store.get());
+      store.apply(removeLayer, layer.id);
+      status.show(`« ${layer.name} » supprimé.`);
     } else if (ARROWS[event.key] && element && !target.closest?.(ARROW_OWNER)) {
       const [dx, dy] = ARROWS[event.key];
       const step = event.shiftKey ? NUDGE_FAST : NUDGE;

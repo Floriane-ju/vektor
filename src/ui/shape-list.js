@@ -211,8 +211,7 @@ export const mountShapeList = ({
     return card;
   };
 
-  /* Pas de confirmation ici, contrairement au calque : une forme se redessine
-     d'un glissement, alors qu'un calque emporte tout son contenu. */
+  /* Pas de confirmation, comme pour le calque : ⌘Z la rend. */
   const remove = (element, label) => {
     store.apply(removeElement, element.id);
     status.show(`${label} supprimé.`);

@@ -124,6 +124,16 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   document.body.append(field);
   field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
   expect(circles()).toBe(2 * 2);
+  field.remove();
+
+  /* Sans forme sélectionnée, Suppr vise le calque actif. */
+  const layerCount = () => document.querySelectorAll('.layer-card[data-layer-id]').length;
+  const before = layerCount();
+  press({ key: 'Escape' });
+  press({ key: 'Delete' });
+  expect(layerCount()).toBe(before - 1);
+  key(false);
+  expect(layerCount()).toBe(before);
 
   /* Grille : la case pose le fond, et le geste suivant tombe sur un croisement. */
   const grid = document.getElementById('settings-grid');

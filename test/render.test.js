@@ -790,7 +790,7 @@ describe('accessibilité au clavier', () => {
     panel.remove();
   });
 
-  it('la suppression confirmée rend le focus au bouton d’ajout', async () => {
+  it('la suppression d’un calque, sans confirmation, rend le focus au bouton d’ajout', async () => {
     const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
     const layer = repeatLayer();
     const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
@@ -801,11 +801,6 @@ describe('accessibilité au clavier', () => {
     const remove = panel.querySelector(`[data-focus-key="delete-${layer.id}"]`);
     remove.focus();
     remove.click();
-
-    /* Le bouton « Sûr ? » a remplacé « × » au même endroit et garde le focus :
-       la confirmation se fait sans retourner chercher le bouton à la souris. */
-    expect(document.activeElement.dataset.focusKey).toBe(`delete-${layer.id}`);
-    document.activeElement.click();
 
     expect(store.get().layers).toHaveLength(0);
     expect(document.activeElement.dataset.focusKey).toBe('add-layer');

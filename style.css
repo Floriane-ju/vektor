@@ -389,7 +389,6 @@ input[type="range"] {
 .row-actions { display: flex; gap: 0; opacity: 0; }
 .layer-row:hover .row-actions,
 .layer-row:focus-within .row-actions,
-.row-actions[data-pending],
 .layer-card[data-active="true"] > .layer-row .row-actions { opacity: 1; }
 .layer-card[data-visible="false"] > .layer-row .row-actions { opacity: 1; }
 
