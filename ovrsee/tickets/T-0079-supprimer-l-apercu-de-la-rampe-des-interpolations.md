@@ -2,7 +2,7 @@
 {
   "id": "T-0079",
   "titre": "Supprimer l'aperçu de la rampe des interpolations",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui"],
   "cree": "2026-09-24",
