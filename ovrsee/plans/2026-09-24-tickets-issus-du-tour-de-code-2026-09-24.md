@@ -37,6 +37,30 @@
       "sha": "ef41bdd",
       "date": "2026-09-24",
       "files": []
+    },
+    {
+      "sha": "34fd7b7",
+      "date": "2026-09-24",
+      "files": [
+        "CLAUDE.md",
+        "src/interpolate.js",
+        "src/path.js",
+        "src/persistence.js",
+        "src/renderer-svg.js",
+        "src/scene.js",
+        "src/ui/icons.js",
+        "src/ui/layer-panel.js",
+        "src/ui/list.js",
+        "src/ui/property-panel.js",
+        "src/ui/shape-list.js",
+        "src/ui/shortcuts.js",
+        "src/ui/toolbar.js",
+        "style.css",
+        "test/app.test.js",
+        "test/core.test.js",
+        "test/render.test.js",
+        "test/scrub.test.js"
+      ]
     }
   ]
 }
