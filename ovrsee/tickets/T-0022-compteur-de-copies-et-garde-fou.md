@@ -2,7 +2,7 @@
 {
   "id": "T-0022",
   "titre": "Compteur de copies et garde-fou",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "basse",
   "tags": [
     "modificateurs",

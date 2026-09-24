@@ -2,7 +2,7 @@
 {
   "id": "T-0025",
   "titre": "Courbe de rampe des interpolations",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "interpolation"

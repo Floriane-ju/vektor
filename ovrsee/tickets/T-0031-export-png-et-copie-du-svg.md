@@ -2,7 +2,7 @@
 {
   "id": "T-0031",
   "titre": "Export PNG et copie du SVG",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "basse",
   "tags": [
     "export"

@@ -2,7 +2,7 @@
 {
   "id": "T-0028",
   "titre": "Remplissage pair-impair du calque",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "rendu"
