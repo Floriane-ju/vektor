@@ -560,12 +560,12 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       (value) => ({ stepY: value }),
     );
     const angleStep = bindModifier(
-      input('number', { step: '0.05' }),
+      input('number', { step: '0.001' }),
       (layer) => layer.modifiers[index].angleStep,
       (value) => ({ angleStep: value }),
     );
     const radiusStep = bindModifier(
-      input('number', { step: '1' }),
+      input('number', { step: '0.1' }),
       (layer) => layer.modifiers[index].radiusStep,
       (value) => ({ radiusStep: value }),
     );
