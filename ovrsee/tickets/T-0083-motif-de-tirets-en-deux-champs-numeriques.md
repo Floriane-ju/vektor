@@ -2,7 +2,7 @@
 {
   "id": "T-0083",
   "titre": "Motif de tirets en deux champs numériques",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui"],
   "cree": "2026-09-24",
