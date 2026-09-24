@@ -11,6 +11,7 @@ import { mountHistory } from './ui/history.js';
 import { mountShortcuts } from './ui/shortcuts.js';
 import { mountSettings } from './ui/settings.js';
 import { mountScrub } from './ui/scrub.js';
+import { mountStrokeCard } from './ui/stroke-card.js';
 
 const svgRoot = document.getElementById('stage');
 const statusNode = document.getElementById('status');
@@ -57,6 +58,7 @@ const { getTool } = mountToolbar({
   status,
 });
 mountPropertyPanel({ store, container: document.getElementById('inspector') });
+mountStrokeCard({ store, container: document.getElementById('stroke-card') });
 mountShapeList({ store, container: shapeList, svgRoot, getTool, status });
 /* L'arbre loge la liste des formes sous le calque actif déplié. */
 mountLayerPanel({

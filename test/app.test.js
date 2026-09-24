@@ -14,6 +14,7 @@ it('démarre et rend après un placement', async () => {
   document.body.innerHTML = `
     <div id="toolbar-shapes"></div>
     <div id="toolbar-actions"></div>
+    <div id="stroke-card"></div>
     <div id="view-controls"></div>
     <div id="inspector"></div>
     <svg id="stage" viewBox="0 0 900 900"></svg>
@@ -154,16 +155,25 @@ it('démarre et rend après un placement', async () => {
   const rects = stage.querySelectorAll('rect[data-element-id]');
   expect([rects[1].getAttribute('x'), rects[1].getAttribute('y')]).toEqual(['380', '236.25']);
 
-  /* Nuancier de la forme active : la couleur hors palette y figure, cerclée,
+  /* Nuancier de la carte du trait : la couleur hors palette y figure, cerclée,
      et marquée puisque l'autre rectangle la porte ; un clic en applique une autre. */
-  const swatch = (color) => inspector.querySelector(`.swatch[data-color="${color}"]`);
+  const card = document.getElementById('stroke-card');
+  expect(inspector.querySelector('.swatch')).toBeNull();
+  expect(card.querySelector('.stroke-current').style.getPropertyValue('--swatch')).toBe('#7dd3c0');
+  const swatch = (color) => card.querySelector(`.swatch[data-color="${color}"]`);
   expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('true');
   expect(swatch('#7dd3c0').hasAttribute('data-used')).toBe(true);
   swatch('#ee4722').click();
   expect(swatch('#ee4722').getAttribute('aria-pressed')).toBe('true');
   expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('false');
   expect(swatch('#7dd3c0').title).toContain('Calque 1');
-  expect(inspector.querySelectorAll('.swatch[data-color="#ee4722"]')).toHaveLength(1);
+  expect(card.querySelectorAll('.swatch[data-color="#ee4722"]')).toHaveLength(1);
+  /* L'épaisseur se règle depuis la carte. */
+  const width = document.getElementById('stroke-width');
+  width.value = '4';
+  width.dispatchEvent(new Event('change'));
+  const active = rects[1].dataset.elementId;
+  expect(stage.querySelector(`rect[data-element-id="${active}"]`).getAttribute('stroke-width')).toBe('4');
   /* Une couleur par forme, copies confondues. */
   const strokes = () => [
     ...new Map(
@@ -178,8 +188,17 @@ it('démarre et rend après un placement', async () => {
   swatch('#7dd3c0').click();
   expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('true');
   /* Palette globale : accent + blanc, plus les couleurs portées par le dessin. */
-  const colors = () => [...inspector.querySelectorAll('.swatch[data-color]')].map((s) => s.dataset.color);
+  const colors = () => [...card.querySelectorAll('.swatch[data-color]')].map((s) => s.dataset.color);
   expect(colors()).toEqual(['#ee4722', '#fcfaf3', '#7dd3c0']);
+
+  /* Sans sélection, la carte règle le style des prochaines formes. */
+  press({ key: 'Escape' });
+  expect(card.querySelector('.stroke-current').disabled).toBe(false);
+  swatch('#fcfaf3').click();
+  expect(strokes()).toEqual(['#7dd3c0', '#ee4722', '#7dd3c0']);
+  pointer('pointerdown', 200, 460);
+  pointer('pointerup', 200, 460);
+  expect(strokes().at(-1)).toBe('#fcfaf3');
 
   /* Sans calque, dessiner en crée un ; un seul ⌘Z défait calque et forme. */
   while (layerCount()) {

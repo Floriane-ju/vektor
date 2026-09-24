@@ -3,6 +3,8 @@ import { clampCount, CURVES, lerpColor, ramp as curveRamp, stackValues, t } from
 import { copyCount, createModifier, MAX_COPIES, MODIFIERS, orients } from '../src/modifiers.js';
 import {
   addBoolean,
+  currentStyle,
+  setStyle,
   addElement,
   addInterpolation,
   addModifier,
@@ -561,6 +563,21 @@ describe('formes d’un calque', () => {
     /* Sans forme active, la dernière du calque sert de modèle. */
     scene = addElement({ ...scene, activeElementId: null }, scene.layers[0].id, 'rect', 40, 40);
     expect(scene.layers[0].elements.at(-1)).toMatchObject({ stroke: '#ff0000', strokeWidth: 4 });
+  });
+
+  it('sans forme active, le style courant règle les prochaines formes', () => {
+    let scene = { ...withTwo(), activeElementId: null };
+    const before = scene.layers;
+    scene = setStyle(scene, { stroke: '#123456', strokeWidth: 7 });
+    /* Aucune forme touchée : pas d'entrée d'historique. */
+    expect(scene.layers).toBe(before);
+    expect(currentStyle(scene)).toEqual({ stroke: '#123456', strokeWidth: 7 });
+    scene = addElement(scene, scene.layers[0].id, 'rect', 30, 30);
+    expect(scene.layers[0].elements.at(-1)).toMatchObject({ stroke: '#123456', strokeWidth: 7 });
+    /* Avec une forme active, le réglage la modifie et devient le style courant. */
+    scene = setStyle(scene, { strokeWidth: 2 });
+    expect(scene.layers[0].elements.at(-1).strokeWidth).toBe(2);
+    expect(currentStyle({ ...scene, activeElementId: null })).toEqual({ stroke: '#123456', strokeWidth: 2 });
   });
 
   it('supprimer la forme active en réactive une autre', () => {

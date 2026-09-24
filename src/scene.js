@@ -565,24 +565,51 @@ export const placeLayer = (scene, id, index) => {
  * Ajoute une forme au calque et la rend active.
  *
  * La nouvelle forme reprend le remplissage, la couleur et l'épaisseur de la
- * dernière forme créée, quel que soit son type — dessiner dix formes pleines
- * d'affilée ne doit pas demander de cocher dix fois.
- *
- * ponytail: « dernière créée » = la forme active (une forme naît active), à
- * défaut la dernière du calque. Sélectionner une autre forme change donc le
- * modèle ; un champ « dernier style » dans la scène le jour où ça gêne.
+ * forme active — dessiner dix formes pleines d'affilée ne doit pas demander de
+ * cocher dix fois. Sans forme active, couleur et épaisseur viennent du style
+ * courant (`scene.style`, réglé depuis la carte du trait), le remplissage de
+ * la dernière forme du calque. La forme créée devient le style courant.
  */
 export const addElement = (scene, layerId, type, x, y, overrides = {}) => {
-  const previous =
-    getActiveElement(scene) ?? scene.layers.find((layer) => layer.id === layerId)?.elements.at(-1);
-  const style = previous
-    ? { filled: previous.filled, stroke: previous.stroke, strokeWidth: previous.strokeWidth }
-    : {};
+  const active = getActiveElement(scene);
+  const previous = active ?? scene.layers.find((layer) => layer.id === layerId)?.elements.at(-1);
+  const style = {
+    ...(previous && { filled: previous.filled, stroke: previous.stroke, strokeWidth: previous.strokeWidth }),
+    ...(!active && scene.style),
+  };
   const element = createElement(type, x, y, { ...style, ...overrides });
   return {
     ...mapLayer(scene, layerId, (layer) => ({ ...layer, elements: [...layer.elements, element] })),
     activeElementId: element.id,
+    style: { stroke: element.stroke, strokeWidth: element.strokeWidth },
   };
+};
+
+/**
+ * Couleur et épaisseur affichées par la carte du trait : celles de la forme
+ * active, sinon le style courant, à défaut la dernière forme du calque actif.
+ *
+ * ponytail: `scene.style` n'est pas sauvegardé — après rechargement on
+ * retombe sur la dernière forme du calque. Le sérialiser (format @21) si ça gêne.
+ */
+export const currentStyle = (scene) => {
+  const source = getActiveElement(scene) ?? { ...getActiveLayer(scene)?.elements.at(-1), ...scene.style };
+  return {
+    stroke: source.stroke ?? DEFAULT_STROKE,
+    strokeWidth: source.strokeWidth ?? DEFAULT_STROKE_WIDTH,
+  };
+};
+
+/**
+ * Règle couleur et/ou épaisseur : sur la forme active s'il y en a une, et
+ * toujours sur le style courant, repris par les formes suivantes. Sans forme
+ * active, `layers` ne change pas : le réglage n'entre pas dans l'historique,
+ * comme une sélection.
+ */
+export const setStyle = (scene, patch) => {
+  const active = getActiveElement(scene);
+  const next = { ...scene, style: { ...currentStyle(scene), ...patch } };
+  return active ? updateElement(next, active.id, patch) : next;
 };
 
 /**

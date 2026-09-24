@@ -21,7 +21,7 @@ import {
   updateElement,
   updateModifier,
 } from '../scene.js';
-import { iconButton, rebuildWithFocus, shapeName, whenChanged } from './list.js';
+import { iconButton, rebuildWithFocus, shapeName } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
 import { booleanSection } from './boolean-section.js';
 import { copyCount, FIXED_COPIES, MAX_COPIES, MODIFIER_LABELS, ORIENTING, orients, PIVOTING } from '../modifiers.js';
@@ -36,20 +36,10 @@ import { copyCount, FIXED_COPIES, MAX_COPIES, MODIFIER_LABELS, ORIENTING, orient
  * slider disparaîtrait sous la souris au premier pixel.
  */
 
-/* Pastilles de base (l'accent et le blanc du thème) ; les couleurs du dessin
-   s'y ajoutent, cf. `swatchColors`. */
-const PALETTE = [
-  ['#ee4722', 'Accent'],
-  ['#fcfaf3', 'Blanc'],
-];
-
 /* Bornes des curseurs. Le champ numérique voisin accepte au-delà : le curseur
    couvre l'usage courant sans plafonner le modèle. */
-const STROKE_SLIDER = { min: '0', max: '20', step: '0.5' };
 const COUNT_SLIDER = { min: '1', max: '64', step: '1' };
 const DASH_SLIDER = { min: '0.5', max: '16', step: '0.5' };
-
-const HEX = /^#?([0-9a-f]{6})$/i;
 
 let uid = 0;
 const nextId = () => `prop-${++uid}`;
@@ -356,106 +346,6 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   const strokeGroup = el('div', 'group');
   strokeGroup.append(dashSegments, dashLength, dashTextField, linecapSegments);
 
-  /* L'épaisseur et la couleur appartiennent à la forme ; un point y trouve
-     son diamètre. */
-  const setStroke = (value) => {
-    const element = getActiveElement(store.get());
-    if (element) store.apply(updateElement, element.id, { stroke: value });
-  };
-
-  /* Palette fixe, puis les couleurs hors palette déjà portées par une forme :
-     réaccorder deux formes se fait d'un clic, sans recopier l'hexadécimal. */
-  const swatchColors = (scene) => {
-    const labels = new Map(PALETTE);
-    for (const { stroke: value } of scene.layers.flatMap((layer) => layer.elements)) {
-      const key = value.toLowerCase();
-      if (!labels.has(key)) labels.set(key, key.toUpperCase());
-    }
-    return [...labels];
-  };
-
-  const swatchButton = ([value, label]) => {
-    const swatch = el('button', 'swatch');
-    swatch.type = 'button';
-    swatch.dataset.color = value;
-    swatch.dataset.focusKey = `swatch-${value}`;
-    swatch.dataset.label = label;
-    swatch.style.setProperty('--swatch', value);
-    swatch.addEventListener('click', () => setStroke(value));
-    return swatch;
-  };
-
-  const swatchList = el('div', 'swatch-list');
-  const rebuildSwatches = whenChanged(
-    (scene) => JSON.stringify(swatchColors(scene)),
-    (scene) =>
-      rebuildWithFocus(swatchList, () => {
-        swatchList.append(...swatchColors(scene).map(swatchButton));
-        return null;
-      }),
-  );
-  const stroke = bind(
-    input('color'),
-    (element) => element.stroke,
-    (element, value) => store.apply(updateElement, element.id, { stroke: value }),
-    { parse: String },
-  );
-  stroke.setAttribute('aria-label', 'Autre couleur');
-  const custom = el('label', 'swatch is-custom', '+');
-  custom.title = 'Autre couleur';
-  custom.append(stroke);
-
-  const hex = bind(
-    input('text', { spellcheck: false, maxLength: 7 }),
-    (element) => element.stroke.toUpperCase(),
-    (element, value) => {
-      const match = HEX.exec(value.trim());
-      if (match) store.apply(updateElement, element.id, { stroke: `#${match[1].toLowerCase()}` });
-      else hex.value = element.stroke.toUpperCase();
-    },
-    { event: 'change', parse: String },
-  );
-  hex.className = 'hex';
-  controls.push({
-    subject: 'element',
-    sync: (element) => {
-      const scene = store.get();
-      rebuildSwatches(scene);
-      const current = element.stroke.toLowerCase();
-      for (const swatch of swatchList.children) {
-        /* Calques où une autre forme porte déjà cette couleur. */
-        const users = scene.layers.filter((layer) =>
-          layer.elements.some(
-            (other) => other.id !== element.id && other.stroke.toLowerCase() === swatch.dataset.color,
-          ),
-        );
-        swatch.setAttribute('aria-pressed', String(swatch.dataset.color === current));
-        swatch.toggleAttribute('data-used', users.length > 0);
-        const label = users.length
-          ? `${swatch.dataset.label} — sur ${users.map((other) => other.name).join(', ')}`
-          : swatch.dataset.label;
-        swatch.setAttribute('aria-label', label);
-        swatch.title = label;
-      }
-    },
-  });
-
-  const swatchRow = el('div', 'swatches');
-  swatchRow.append(swatchList, custom);
-  const hexRow = el('div', 'hex-row');
-  const hexLabel = el('label', null, 'Hex');
-  hexLabel.htmlFor = hex.id;
-  hexRow.append(hexLabel, hex);
-  const colorGroup = el('div', 'field');
-  colorGroup.append(el('span', 'field-label', 'Couleur'), swatchRow, hexRow);
-
-  const strokeWidth = slider(
-    'Épaisseur',
-    STROKE_SLIDER,
-    (element) => element.strokeWidth,
-    (element, value) => store.apply(updateElement, element.id, { strokeWidth: Math.max(0, value) }),
-  );
-
   const shapeDetail = el('div', 'inspector-body');
   shapeDetail.dataset.kind = 'shape';
   shapeDetail.setAttribute('aria-label', 'Réglages de la forme');
@@ -468,11 +358,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     polygonRow,
     arcRow,
     closedField,
-    separator(),
-    colorGroup,
-    strokeWidth,
-    filledField,
     strokeSeparator,
+    filledField,
     strokeGroup,
     separator(),
     booleans.root,

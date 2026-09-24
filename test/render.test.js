@@ -1445,8 +1445,8 @@ describe('panneau : motif de trait', () => {
     expect(radio(bout, 'round').checked).toBe(true);
 
     /* Tirets : le curseur de longueur apparaît et ne touche que le premier tiret. */
-    /* Le premier curseur est l'épaisseur. */
-    const length = shapeDetail.querySelectorAll('.slider-field')[1];
+    /* L'épaisseur vit dans la carte du trait : le seul curseur est la longueur de tiret. */
+    const length = shapeDetail.querySelectorAll('.slider-field')[0];
     expect(length.hidden).toBe(true);
     radio(trait, 'dashed').checked = true;
     radio(trait, 'dashed').dispatchEvent(new Event('change'));
