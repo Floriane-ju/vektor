@@ -44,7 +44,8 @@ export const createStore = (initialState) => {
   /* Prend la dernière scène de `from`, pousse la courante sur `to`. */
   const travel = (from, to) => {
     if (from.length === 0) return [from, to];
-    gesture = null;
+    // Geste en cours : sa suite part de la scène restaurée, en un seul pas.
+    if (gesture) gesture.recorded = false;
     const moved = [from.slice(0, -1), [...to, state]];
     state = from.at(-1);
     notify();

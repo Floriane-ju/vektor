@@ -2,7 +2,7 @@
 {
   "id": "T-0062",
   "titre": "Annuler pendant un glisser casse le regroupement d'historique",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "xs",
   "tags": [
@@ -23,5 +23,5 @@ et vide `future` : dizaines de pas parasites, rétablir perdu.
 
 ## Critères d'acceptation
 
-- [ ] Après ⌘Z en plein geste, la suite du geste compte pour un seul pas.
-- [ ] Test dans le store : begin → apply → undo → apply ×3 → end ⇒ un seul pas ajouté.
+- [x] Après ⌘Z en plein geste, la suite du geste compte pour un seul pas.
+- [x] Test dans le store : begin → apply → undo → apply ×3 → end ⇒ un seul pas ajouté.

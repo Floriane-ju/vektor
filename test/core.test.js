@@ -1080,6 +1080,22 @@ describe('historique', () => {
     expect(store.get()).toBe(before);
   });
 
+  it('annuler en plein geste : la suite du geste reste un seul pas', () => {
+    const store = createStore(createScene());
+    store.apply(addLayer);
+    const base = store.get();
+    store.begin('g');
+    store.apply(addLayer);
+    store.undo();
+    expect(store.get()).toBe(base);
+    for (let i = 0; i < 3; i += 1) store.apply(addLayer);
+    store.end('g');
+    store.undo();
+    expect(store.get()).toBe(base);
+    store.undo();
+    expect(store.get().layers).toHaveLength(1);
+  });
+
   it('une nouvelle transition vide la pile de rétablissement', () => {
     const store = createStore(createScene());
     store.apply(addLayer);
