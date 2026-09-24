@@ -44,25 +44,57 @@ const step = (point, i, n, center, { stepX = 60, stepY = 0 } = {}) => ({
   flip: false,
 });
 
+/* Cosinus et sinus d'un angle en degrés, sans le résidu flottant de π : un
+   axe à 90° reste exactement vertical. */
+const unit = (degrees) => {
+  const radians = (degrees * Math.PI) / 180;
+  const snap = (value) => (Math.abs(value) < 1e-12 ? 0 : value);
+  return { x: snap(Math.cos(radians)), y: snap(Math.sin(radians)) };
+};
+
 /**
- * Miroir : l'original et son reflet par rapport à l'axe vertical passant par
- * `center.x`, et rien d'autre.
+ * Axe d'un miroir, en degrés depuis l'horizontale (sens horaire à l'écran).
+ * Chaque type a le sien par défaut : `mirrorH` reflète par l'axe vertical,
+ * `mirrorV` par l'horizontal. Un angle réglé (`modifier.axis`) le remplace.
+ */
+export const MIRROR_AXIS = { mirrorH: 90, mirrorV: 0 };
+
+/** Un axe n'a pas de sens : 190° et 10° sont le même. */
+export const clampAxis = (degrees) => ((degrees % 180) + 180) % 180;
+
+export const axisAngle = (modifier) =>
+  Number.isFinite(modifier.axis) ? modifier.axis : MIRROR_AXIS[modifier.type];
+
+/** Vecteur unitaire le long de l'axe du miroir. */
+export const axisDirection = (modifier) => unit(axisAngle(modifier));
+
+/**
+ * Miroir : l'original et son reflet par rapport à l'axe passant par `center`,
+ * et rien d'autre. Le reflet par un axe d'angle θ est `R(2θ + π)·S`, S le
+ * reflet par l'axe vertical : à 90° la copie ne tourne pas, à 0° elle fait un
+ * demi-tour.
  *
  * Deux copies exactement. Répartir `n` copies entre le point et son reflet
  * rapprocherait les formes d'un même calque les unes des autres — chacune
  * parcourant sa propre distance à l'axe — et le motif se serait affaissé d'une
  * copie à l'autre. Répéter est le travail de `step`.
  */
-const mirrorH = (point, i, n, center) =>
-  i === 0
-    ? { x: point.x, y: point.y, angle: 0, flip: false }
-    : { x: 2 * center.x - point.x, y: point.y, angle: 0, flip: true };
+const mirror = (type) => (point, i, n, center, { axis } = {}) => {
+  if (i === 0) return { x: point.x, y: point.y, angle: 0, flip: false };
+  const degrees = axisAngle({ type, axis });
+  const { x: cos, y: sin } = unit(2 * degrees);
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+  return {
+    x: center.x + dx * cos + dy * sin,
+    y: center.y + dx * sin - dy * cos,
+    angle: ((((2 * degrees + 180) % 360) + 360) % 360) * (Math.PI / 180),
+    flip: true,
+  };
+};
 
-/** Idem sur l'axe horizontal passant par `center.y` : reflet vertical puis demi-tour. */
-const mirrorV = (point, i, n, center) =>
-  i === 0
-    ? { x: point.x, y: point.y, angle: 0, flip: false }
-    : { x: point.x, y: 2 * center.y - point.y, angle: Math.PI, flip: true };
+const mirrorH = mirror('mirrorH');
+const mirrorV = mirror('mirrorV');
 
 /** Copies réparties sur un tour complet autour de `center`. */
 const axial = (point, i, n, center) => {

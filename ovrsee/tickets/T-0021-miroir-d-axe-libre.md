@@ -2,11 +2,13 @@
 {
   "id": "T-0021",
   "titre": "Miroir d'axe libre",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "basse",
-  "tags": ["modificateurs"],
+  "tags": [
+    "modificateurs"
+  ],
   "cree": "2026-09-23",
-  "maj": "2026-09-23",
+  "maj": "2026-09-24",
   "plan": null,
   "epic": "T-0018"
 }
@@ -24,6 +26,6 @@ et 0°, et leur comportement ne change pas.
 
 ## Critères d'acceptation
 
-- [ ] Un champ « Angle de l'axe » sur les modificateurs miroir.
-- [ ] À 0° et 90°, le rendu est identique à celui d'aujourd'hui.
-- [ ] Le repère de l'axe suit l'angle réglé.
+- [x] Un champ « Angle de l'axe » sur les modificateurs miroir.
+- [x] À 0° et 90°, le rendu est identique à celui d'aujourd'hui.
+- [x] Le repère de l'axe suit l'angle réglé.

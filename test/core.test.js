@@ -3,6 +3,7 @@ import { clampCount, CURVES, lerpColor, ramp as curveRamp, stackValues, t } from
 import { copyCount, createModifier, MAX_COPIES, MODIFIERS, orients } from '../src/modifiers.js';
 import {
   addBoolean,
+  updateModifier,
   closesLoop,
   currentStyle,
   setStyle,
@@ -126,6 +127,30 @@ describe('modificateurs', () => {
     const children = copies('mirrorV', { x: 9, y: 100 }, 2);
     expect(children.map((c) => c.y)).toEqual([100, -100]);
     expect(children.every((c) => c.x === 9)).toBe(true);
+  });
+
+  it('miroir d’axe libre : 90° et 0° redonnent mirrorH et mirrorV, 45° échange x et y', () => {
+    const point = { x: 30, y: 7 };
+    expect(copies('mirrorH', point, 2, { axis: 90 })).toEqual(copies('mirrorH', point, 2));
+    expect(copies('mirrorV', point, 2, { axis: 0 })).toEqual(copies('mirrorV', point, 2));
+    expect(copies('mirrorH', point, 2, { axis: 0 })).toEqual(copies('mirrorV', point, 2));
+    const [, diagonal] = copies('mirrorV', point, 2, { axis: 45 });
+    expect(diagonal.x).toBeCloseTo(7);
+    expect(diagonal.y).toBeCloseTo(30);
+    expect(diagonal.flip).toBe(true);
+    expect(diagonal.angle).toBeCloseTo(Math.PI * 1.5);
+  });
+
+  it('l’angle d’axe se borne à [0, 180), tombe au changement de type, survit à la sauvegarde', () => {
+    const layer = createLayer({ modifiers: [createModifier({ type: 'mirrorH' })] });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    const tilted = updateModifier(scene, layer.id, 0, { axis: 225 });
+    expect(tilted.layers[0].modifiers[0].axis).toBe(45);
+    expect(deserialize(serialize(tilted)).layers[0].modifiers[0].axis).toBe(45);
+    expect(updateModifier(tilted, layer.id, 0, { type: 'mirrorV' }).layers[0].modifiers[0]).not.toHaveProperty('axis');
+    const raw = JSON.parse(serialize(tilted));
+    raw.layers[0].modifiers[0].axis = 'nope';
+    expect(deserialize(JSON.stringify(raw)).layers[0].modifiers[0]).not.toHaveProperty('axis');
   });
 
   it('step translate chaque copie d’un pas constant', () => {
@@ -1356,7 +1381,7 @@ describe('rotation et épaisseur interpolées', () => {
       layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
     });
     const again = deserialize(serialize(deserialize(old)));
-    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@20');
+    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@21');
     expect(orients(again.layers[0].modifiers[0])).toBe(true);
   });
 

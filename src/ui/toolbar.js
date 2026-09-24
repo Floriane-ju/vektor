@@ -19,6 +19,7 @@ import {
   updateElement,
   updateModifier,
 } from '../scene.js';
+import { axisDirection, MIRROR_AXIS } from '../modifiers.js';
 import { clearHover, toPng, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
 import { parseTrace } from '../path.js';
@@ -259,9 +260,14 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   /* Glissement d'un pivot, par son repère. */
   let pivotDrag = null;
 
-  /* Un miroir ne lit qu'une coordonnée de son pivot : l'autre ne bouge pas,
-     sinon traîner l'axe décalerait en douce le centre d'un étage voisin. */
-  const LOCKED = { mirrorH: 'y', mirrorV: 'x' };
+  /* Un miroir ne lit de son pivot que la distance à l'axe : il ne bouge que
+     perpendiculairement à lui, sinon traîner l'axe décalerait en douce le
+     centre d'un étage voisin. */
+  const axisNormal = (modifier) => {
+    if (!Object.hasOwn(MIRROR_AXIS, modifier.type)) return null;
+    const { x, y } = axisDirection(modifier);
+    return { x: -y, y: x };
+  };
 
   const startPivot = (event, grip) => {
     const layer = getActiveLayer(store.get());
@@ -274,7 +280,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
       layerId: layer.id,
       index,
       own: Boolean(modifier.center),
-      locked: LOCKED[modifier.type],
+      normal: axisNormal(modifier),
       origin,
       offset: { x: origin.x - point.x, y: origin.y - point.y },
     };
@@ -286,10 +292,11 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   /* Sans pivot propre, l'étage montre celui du calque : c'est lui qui bouge,
      avec tous les étages qui le partagent. */
   const movePivot = (event) => {
-    const { layerId, index, own, locked, origin, offset } = pivotDrag;
+    const { layerId, index, own, normal, origin, offset } = pivotDrag;
     const point = toStagePoint(svgRoot, event);
-    const target = { ...snap({ x: point.x + offset.x, y: point.y + offset.y }) };
-    if (locked) target[locked] = origin[locked];
+    const free = snap({ x: point.x + offset.x, y: point.y + offset.y });
+    const along = normal && (free.x - origin.x) * normal.x + (free.y - origin.y) * normal.y;
+    const target = normal ? { x: origin.x + along * normal.x, y: origin.y + along * normal.y } : { ...free };
     if (own) store.apply(updateModifier, layerId, index, { center: target });
     else store.apply(setLayerCenter, layerId, target);
   };

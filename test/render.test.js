@@ -107,6 +107,16 @@ describe('repères du modificateur', () => {
     ]);
   });
 
+  it('l’axe du miroir suit son angle', () => {
+    const svg = stage();
+    const layer = repeatLayer({ center: { x: 400, y: 300 }, modifiers: [{ type: 'mirrorH', n: 2, axis: 45 }] });
+    render(scene(layer), svg);
+    const line = svg.querySelector('[data-guides] line:not([data-grip])');
+    const [x1, y1, x2, y2] = ['x1', 'y1', 'x2', 'y2'].map((name) => Number(line.getAttribute(name)));
+    expect(x2 - x1).toBeCloseTo(y2 - y1);
+    expect(y1 - 300).toBeCloseTo(x1 - 400);
+  });
+
   it('marque le centre de la spirale', () => {
     const svg = stage();
     const layer = repeatLayer({
@@ -1043,6 +1053,26 @@ describe('accessibilité au clavier', () => {
     expect(stack()).toEqual([]);
     /* Le focus retombe sur le bouton d'ajout, pas en haut de la page. */
     expect(document.activeElement.dataset.focusKey).toBe('add-interpolation');
+    panel.remove();
+  });
+
+  it('règle l’angle de l’axe d’un miroir, et seulement d’un miroir', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const { createLayer } = await import('../src/scene.js');
+    const layer = createLayer({ modifiers: [{ type: 'mirrorH', n: 2 }, { type: 'step', n: 2 }] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const panel = document.createElement('div');
+    document.body.append(panel);
+    panel.append(mountPropertyPanel({ store }).layerDetail);
+    const axisField = (block) =>
+      [...block.querySelectorAll('label')].find((node) => node.textContent.startsWith("Angle de l'axe"));
+    const [mirror, step] = panel.querySelectorAll('.modifier-block');
+    expect(axisField(step).closest('[hidden]')).not.toBeNull();
+    const input = axisField(mirror).closest('.field').querySelector('input');
+    expect(input.value).toBe('90');
+    input.value = '45';
+    input.dispatchEvent(new Event('input'));
+    expect(store.get().layers[0].modifiers[0].axis).toBe(45);
     panel.remove();
   });
 

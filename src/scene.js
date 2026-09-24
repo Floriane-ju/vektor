@@ -1,4 +1,4 @@
-import { applyStack, copyCount, createModifier, effectiveCount, MAX_COPIES, stackCopies } from './modifiers.js';
+import { applyStack, clampAxis, copyCount, createModifier, effectiveCount, MAX_COPIES, stackCopies } from './modifiers.js';
 import { clampCount, ramp, stackValues } from './interpolate.js';
 
 export const STAGE = { width: 900, height: 900 };
@@ -825,9 +825,16 @@ export const updateModifier = (scene, id, index, patch) =>
     ...layer,
     modifiers: layer.modifiers.map((current, i) => {
       if (i !== index) return current;
-      /* `center: null` rend l'étage au pivot du calque : la clé disparaît. */
-      const { center, ...modifier } = { ...current, ...patch };
-      return { ...modifier, n: clampCount(modifier.n), ...(center ? { center } : {}) };
+      /* `center: null` rend l'étage au pivot du calque : la clé disparaît.
+         Changer de type rend l'axe par défaut du nouveau miroir. */
+      const { center, axis, ...modifier } = { ...current, ...patch };
+      const keepAxis = Number.isFinite(axis) && modifier.type === current.type;
+      return {
+        ...modifier,
+        n: clampCount(modifier.n),
+        ...(center ? { center } : {}),
+        ...(keepAxis ? { axis: clampAxis(axis) } : {}),
+      };
     }),
   }));
 

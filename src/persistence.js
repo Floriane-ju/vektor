@@ -1,4 +1,4 @@
-import { createModifier, MODIFIERS } from './modifiers.js';
+import { clampAxis, createModifier, MODIFIERS } from './modifiers.js';
 import { clampCount, CURVES } from './interpolate.js';
 import {
   ARC_CLOSURES,
@@ -28,7 +28,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@20';
+export const FORMAT = 'vektor/scene@21';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -59,7 +59,10 @@ export const FORMAT = 'vektor/scene@20';
    - `@1` à `@18` n'interpolaient pas la couleur : rien à convertir. Le bump
      empêche une version antérieure de relire un dégradé comme une opacité ;
    - `@4` à `@19` portaient couleur et épaisseur sur le calque : chaque forme
-     reprend celles de son calque, même dessin. */
+     reprend celles de son calque, même dessin ;
+   - `@1` à `@20` n'inclinaient pas l'axe des miroirs : axe par défaut du
+     type, même dessin. Le bump empêche une version antérieure de redresser
+     un axe incliné sans le dire. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -81,6 +84,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@17',
   'vektor/scene@18',
   'vektor/scene@19',
+  'vektor/scene@20',
   FORMAT,
 ]);
 
@@ -272,6 +276,7 @@ const readModifier = (raw, legacy) =>
     angleStep: num(raw?.angleStep, 0.4),
     radiusStep: num(raw?.radiusStep, 12),
     ...readPivot(raw?.center),
+    ...(Number.isFinite(raw?.axis) ? { axis: clampAxis(raw.axis) } : {}),
   });
 
 /**
@@ -379,7 +384,7 @@ export const deserialize = (text) => {
   if (!Array.isArray(raw.layers)) fail('`layers` doit être un tableau.');
 
   /* Avant `@13`, pas d'orientation des copies. */
-  const legacy = !['illu/scene@13', 'illu/scene@14', 'illu/scene@15', 'illu/scene@16', 'vektor/scene@16', 'vektor/scene@17', 'vektor/scene@18', 'vektor/scene@19', FORMAT].includes(raw.format);
+  const legacy = !['illu/scene@13', 'illu/scene@14', 'illu/scene@15', 'illu/scene@16', 'vektor/scene@16', 'vektor/scene@17', 'vektor/scene@18', 'vektor/scene@19', 'vektor/scene@20', FORMAT].includes(raw.format);
   const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy));
   if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
     fail('Deux calques portent le même identifiant.');

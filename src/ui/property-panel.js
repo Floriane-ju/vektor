@@ -23,7 +23,17 @@ import {
 import { iconButton, rebuildWithFocus, shapeName } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
 import { booleanSection } from './boolean-section.js';
-import { copyCount, FIXED_COPIES, MAX_COPIES, MODIFIER_LABELS, ORIENTING, orients, PIVOTING } from '../modifiers.js';
+import {
+  axisAngle,
+  copyCount,
+  FIXED_COPIES,
+  MAX_COPIES,
+  MIRROR_AXIS,
+  MODIFIER_LABELS,
+  ORIENTING,
+  orients,
+  PIVOTING,
+} from '../modifiers.js';
 
 /**
  * Panneau de droite : les réglages du calque actif, ou ceux de la forme
@@ -464,6 +474,13 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       (layer) => layer.modifiers[index].radiusStep,
       (value) => ({ radiusStep: value }),
     );
+    /* Angle de l'axe d'un miroir : 90° vertical, 0° horizontal, entre les deux
+       les symétries diagonales. */
+    const axis = bindModifier(
+      input('number', { step: '1' }),
+      (layer) => axisAngle(layer.modifiers[index]),
+      (value) => ({ axis: value }),
+    );
     /* Décochée, la copie ne fait que se déplacer : des carrés droits posés en
        cercle sont un motif aussi légitime que des rayons. */
     const orient = bindModifier(
@@ -526,12 +543,13 @@ export const mountPropertyPanel = ({ store, container = null }) => {
 
     const stepRow = row(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
     const spiralRow = row(field('Pas angulaire (rad)', angleStep), field('Croissance (%)', radiusStep));
+    const axisField = field("Angle de l'axe (°)", axis);
     const orientField = switchField('Orienter les copies', orient);
     const ownPivotField = switchField('Pivot personnalisé', ownPivot);
     const pivotRow = row(field('Pivot X', pivotInput('x')), field('Pivot Y', pivotInput('y')));
 
     const root = el('div', 'modifier-block');
-    root.append(head, countField, stepRow, spiralRow, orientField, ownPivotField, pivotRow);
+    root.append(head, countField, stepRow, spiralRow, axisField, orientField, ownPivotField, pivotRow);
 
     const sync = (layer) => {
       const modifier = layer.modifiers[index];
@@ -545,6 +563,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       countField.hidden = Object.hasOwn(FIXED_COPIES, modifier.type);
       stepRow.hidden = modifier.type !== 'step';
       spiralRow.hidden = modifier.type !== 'spiral';
+      axisField.hidden = !Object.hasOwn(MIRROR_AXIS, modifier.type);
       /* Un pas ne tourne rien : rien à orienter. */
       orientField.hidden = !ORIENTING.has(modifier.type);
       ownPivotField.hidden = !PIVOTING.has(modifier.type);

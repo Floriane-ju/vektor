@@ -8,6 +8,7 @@ import {
   SHAPES,
   STAGE,
 } from './scene.js';
+import { axisDirection } from './modifiers.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -132,12 +133,22 @@ const guideCenter = (center) => {
   return [...cross, grip];
 };
 
-/** Axe de symétrie d'un miroir : la seule chose que `n` ne déplace plus. */
-const mirrorGuides = (axis) => (center) => {
-  const line =
-    axis === 'x'
-      ? guideLine(center.x, 0, center.x, STAGE.height)
-      : guideLine(0, center.y, STAGE.width, center.y);
+/**
+ * Axe de symétrie d'un miroir : la seule chose que `n` ne déplace plus.
+ * Prolongé d'un bord du plan à l'autre ; incliné, il est coupé par le premier
+ * bord atteint de chaque côté du pivot.
+ */
+const mirrorGuides = (center, modifier) => {
+  const d = axisDirection(modifier);
+  const spans = [
+    [center.x, d.x, STAGE.width],
+    [center.y, d.y, STAGE.height],
+  ]
+    .filter(([, dir]) => dir !== 0)
+    .map(([from, dir, size]) => [-from / dir, (size - from) / dir].sort((a, b) => a - b));
+  const start = Math.max(...spans.map((span) => span[0]));
+  const end = Math.min(...spans.map((span) => span[1]));
+  const line = guideLine(center.x + start * d.x, center.y + start * d.y, center.x + end * d.x, center.y + end * d.y);
   /* Même axe en trait épais transparent : c'est lui qu'on saisit. */
   const grip = line.cloneNode();
   grip.dataset.grip = '';
@@ -154,8 +165,8 @@ const mirrorGuides = (axis) => (center) => {
  * Mêmes types que `PIVOTING` : `none` et `step` n'ont pas de lieu à montrer.
  */
 const GUIDES = {
-  mirrorH: mirrorGuides('x'),
-  mirrorV: mirrorGuides('y'),
+  mirrorH: mirrorGuides,
+  mirrorV: mirrorGuides,
   axial: guideCenter,
   spiral: guideCenter,
 };
@@ -195,7 +206,7 @@ const createGuides = (layer) => {
     ...marked.map(({ modifier, index }) => {
       const pivot = document.createElementNS(SVG_NS, 'g');
       pivot.dataset.pivot = String(index);
-      pivot.append(...GUIDES[modifier.type](pivotOf(layer, index)));
+      pivot.append(...GUIDES[modifier.type](pivotOf(layer, index), modifier));
       return pivot;
     }),
   );
