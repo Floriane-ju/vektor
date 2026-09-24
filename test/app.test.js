@@ -176,5 +176,17 @@ it('démarre, affiche l’aide et rend après un placement', async () => {
   /* Palette globale : accent + blanc, plus les couleurs portées par le dessin. */
   const colors = () => [...inspector.querySelectorAll('.swatch[data-color]')].map((s) => s.dataset.color);
   expect(colors()).toEqual(['#ee4722', '#fcfaf3', '#7dd3c0']);
+
+  /* Sans calque, dessiner en crée un ; un seul ⌘Z défait calque et forme. */
+  while (layerCount()) {
+    press({ key: 'Escape' });
+    press({ key: 'Delete' });
+  }
+  pointer('pointerdown', 300, 300);
+  pointer('pointerup', 330, 300);
+  expect(layerCount()).toBe(1);
+  expect(stage.querySelectorAll('[data-element-id]')).toHaveLength(1);
+  key(false);
+  expect(layerCount()).toBe(0);
 });
 
