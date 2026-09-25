@@ -119,9 +119,8 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
      le pointeur brut et aimantent la position d'arrivée : sur une grille ronde,
      un écart entre deux croisements ne mène pas d'un croisement à un autre. */
   /* Sur un calque en plan 3D, le pointeur est ramené dans le repère du plan :
-     dessin, déplacement, sommets et pivots y vivent.
-     ponytail: l'aimantation s'applique dans ce repère, la grille affichée
-     reste à plat. */
+     dessin, déplacement, sommets et pivots y vivent, l'aimantation aussi —
+     la grille affichée est projetée de même (`gridImage`). */
   const planePoint = (event) => {
     const point = toStagePoint(svgRoot, event);
     const plane = activePlane(getActiveLayer(store.get()));
@@ -384,6 +383,18 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
 
   /* ---- Dessin au glisser ---- */
 
+  /* Sur un calque en 3D, la forme naît sur le plan incliné mais sans
+     profondeur : son volume n'apparaît qu'au relâchement (`depth` = celle que
+     `addElement` lui a donnée, rendue à la fin du geste). */
+  const addFlat = (layerId, type, x, y, options) => {
+    store.apply(addElement, layerId, type, x, y, options);
+    const element = getActiveElement(store.get());
+    const depth = element.height ?? 0;
+    if (depth > 0) store.apply(updateElement, element.id, { height: 0 });
+    return { elementId: element.id, depth };
+  };
+  const restoreDepth = (depth) => (depth > 0 ? { height: depth } : {});
+
   /* Le `pointerdown` ajoute la forme, les mouvements ne font plus que la
      redimensionner : chaque geste crée une forme de plus sur le calque au lieu
      de remplacer la précédente. */
@@ -420,8 +431,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   const traceClick = (layer, x, y) => {
     const element = trace && elementById(store.get(), trace.elementId);
     if (!element) {
-      store.apply(addElement, layer.id, 'polyline', x, y, { points: [{ x: 0, y: 0 }], closed: false });
-      trace = { elementId: store.get().activeElementId };
+      trace = addFlat(layer.id, 'polyline', x, y, { points: [{ x: 0, y: 0 }], closed: false });
       return;
     }
     const [first] = absolutePoints(element);
@@ -438,7 +448,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
      fond. Un tracé réduit à un sommet ne dessine rien et disparaît. */
   function finishTrace(closed) {
     if (!trace) return;
-    const { elementId } = trace;
+    const { elementId, depth } = trace;
     trace = null;
     clearHover(svgRoot);
     const element = elementById(store.get(), elementId);
@@ -450,7 +460,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
       store.apply(removeElement, elementId);
       return;
     }
-    store.apply((scene) => recenterTrace(updateElement(scene, elementId, { points, closed }), elementId));
+    store.apply((scene) => recenterTrace(updateElement(scene, elementId, { points, closed, ...restoreDepth(depth) }), elementId));
   }
 
   svgRoot.addEventListener('dblclick', () => finishTrace(false));
@@ -475,8 +485,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
       traceClick(layer, x, y);
       return;
     }
-    store.apply(addElement, layer.id, tool, x, y, { rx: 0, ry: 0 });
-    stroke = { x, y, elementId: store.get().activeElementId };
+    stroke = { x, y, ...addFlat(layer.id, tool, x, y, { rx: 0, ry: 0 }) };
     /* La capture garde les mouvements même quand le curseur sort du stage :
        sans elle, un glissement large laisserait la forme figée à mi-course. */
     svgRoot.setPointerCapture?.(event.pointerId);
@@ -509,7 +518,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     const isClick =
       Math.abs(patch.rx) < DRAG_THRESHOLD && Math.abs(patch.ry) < DRAG_THRESHOLD;
     const { rx, ry } = isClick ? SHAPES[tool].defaults : patch;
-    store.apply(updateElement, stroke.elementId, { ...patch, rx, ry });
+    store.apply(updateElement, stroke.elementId, { ...patch, rx, ry, ...restoreDepth(stroke.depth) });
     svgRoot.releasePointerCapture?.(event.pointerId);
     stroke = null;
   });
@@ -518,6 +527,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
      dernière taille plutôt que de disparaître — l'utilisateur la reprend par
      les champs du panneau ou la supprime. */
   svgRoot.addEventListener('pointercancel', () => {
+    if (stroke?.depth > 0) store.apply(updateElement, stroke.elementId, restoreDepth(stroke.depth));
     stroke = null;
     drag = null;
     vertexDrag = null;

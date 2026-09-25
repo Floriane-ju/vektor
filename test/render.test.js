@@ -4,6 +4,8 @@ import { areaPath, childBounds, render, shapePreview, toSvgDocument } from '../s
 import { createElement, createInterpolation, createLayer, STAGE } from '../src/scene.js';
 import { createStore } from '../src/store.js';
 import { mountToolbar } from '../src/ui/toolbar.js';
+import { gridImage } from '../src/ui/settings.js';
+import { planeMatrix } from '../src/plane.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -315,6 +317,18 @@ describe('dessin au glisser', () => {
     radio.checked = true;
     radio.dispatchEvent(new Event('change'));
   };
+
+  it('sur un calque en 3D, la forme reste sans profondeur pendant le geste', async () => {
+    const { setLayerPlane, DEFAULT_DEPTH } = await import('../src/scene.js');
+    const { store, svg, shapes } = withLayer();
+    store.apply(setLayerPlane, store.get().activeLayerId, {});
+    pick(shapes, 'rect');
+    pointer(svg, 'pointerdown', 300, 200);
+    pointer(svg, 'pointermove', 340, 260);
+    expect(store.get().layers[0].elements.at(-1).height).toBe(0);
+    pointer(svg, 'pointerup', 340, 260);
+    expect(store.get().layers[0].elements.at(-1).height).toBe(DEFAULT_DEPTH);
+  });
 
   it('un glissement à l’outil arc pose un secteur du rayon du geste', () => {
     const { store, svg, shapes } = withLayer();
@@ -2111,5 +2125,41 @@ describe('forme logée : rendu, panneau, arbre', () => {
     expect(guest.closest(`[data-element-id="${disk.id}"]`)).not.toBeNull();
     expect(container.querySelector('.boolean-branch')).toBeNull();
     container.remove();
+  });
+});
+
+describe('gridImage', () => {
+  const settings = { gridType: 'square', divisions: 4, circles: 2 };
+  const decode = (url) => decodeURIComponent(url.slice('url("data:image/svg+xml,'.length, -2));
+
+  it('reste à plat sans plan', () => {
+    expect(decode(gridImage(settings, '#333'))).not.toContain('transform');
+  });
+
+  it('suit la matrice du plan 3D', () => {
+    const svg = decode(gridImage(settings, '#333', { tilt: 60, heading: 0 }));
+    const m = planeMatrix({ tilt: 60, heading: 0 });
+    expect(svg).toContain(`transform="matrix(${[m.a, m.b, m.c, m.d, m.e, m.f].map((v) => Math.round(v * 100) / 100).join(' ')})"`);
+  });
+});
+
+describe('gridImage en plan 3D', () => {
+  it('prolonge la grille ronde au même pas jusqu’aux coins de l’écran', () => {
+    const decode = (url) => decodeURIComponent(url.slice('url("data:image/svg+xml,'.length, -2));
+    const settings = { gridType: 'polar', divisions: 4, circles: 5 };
+    const flat = decode(gridImage(settings, '#333'));
+    const tilted = decode(gridImage(settings, '#333', { tilt: 60, heading: 0 }));
+    /* Coin de la scène : hypot(450, 450) ≈ 636, soit 8 cercles de 90. */
+    expect(flat.match(/a\d/g)).toHaveLength(16);
+    /* Coin déplié le plus loin : hypot(450, 900) ≈ 1006, soit 12 cercles de 90. */
+    expect(tilted.match(/a\d/g)).toHaveLength(24);
+  });
+
+  it('déplie la grille carrée jusqu’aux coins de l’écran', () => {
+    const decode = (url) => decodeURIComponent(url.slice('url("data:image/svg+xml,'.length, -2));
+    const svg = decode(gridImage({ gridType: 'square', divisions: 10, circles: 2 }, '#333', { tilt: 60, heading: 0 }));
+    /* cos 60° = ½ : le plan couvre deux fois la hauteur de l'écran, 19 traits horizontaux au lieu de 9. */
+    expect(svg.match(/H/g)).toHaveLength(19);
+    expect(svg.match(/V/g)).toHaveLength(9);
   });
 });

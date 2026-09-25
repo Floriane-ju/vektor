@@ -48,7 +48,7 @@ mountZoom({
   scroller: svgRoot.closest('.stage-wrap') ?? svgRoot.parentElement,
   container: viewControls,
 });
-const { snap } = mountSettings({ svgRoot, container: viewControls });
+const { snap } = mountSettings({ store, svgRoot, container: viewControls });
 const { getTool } = mountToolbar({
   store,
   svgRoot,

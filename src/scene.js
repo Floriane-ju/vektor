@@ -18,13 +18,14 @@ export const POLAR_GRID = {
 
 /**
  * Ramène un point au croisement le plus proche de `circles` cercles
- * équidistants et `divisions` rayons. Au-delà du dernier cercle, on s'y tient.
+ * équidistants et `divisions` rayons. Au-delà du cercle `last` (par défaut le
+ * dernier), on s'y tient — une grille dépliée en 3D en trace davantage.
  */
-export const snapToPolarGrid = ({ x, y }, circles, divisions) => {
+export const snapToPolarGrid = ({ x, y }, circles, divisions, last = circles) => {
   const { center, radius } = POLAR_GRID;
   const ring = radius / circles;
   const sector = (2 * Math.PI) / divisions;
-  const r = Math.min(circles, Math.round(Math.hypot(x - center.x, y - center.y) / ring)) * ring;
+  const r = Math.min(last, Math.round(Math.hypot(x - center.x, y - center.y) / ring)) * ring;
   /* Angle compté depuis le haut, dans le sens horaire (y descend à l'écran). */
   const angle = Math.round(Math.atan2(x - center.x, center.y - y) / sector) * sector;
   return { x: center.x + r * Math.sin(angle), y: center.y - r * Math.cos(angle) };

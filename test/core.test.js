@@ -1447,6 +1447,7 @@ describe('grille ronde', () => {
   it('ramène au centre près du centre, au dernier cercle au-delà', () => {
     near(snapToPolarGrid({ x: 470, y: 440 }, 5, 4), { x: 450, y: 450 });
     near(snapToPolarGrid({ x: 450, y: -200 }, 5, 4), { x: 450, y: 0 });
+    near(snapToPolarGrid({ x: 450, y: -200 }, 5, 4, 8), { x: 450, y: -180 });
   });
 });
 
