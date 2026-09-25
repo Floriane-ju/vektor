@@ -9,6 +9,51 @@ const FIT_MARGIN = 32;
 
 export const clampZoom = (zoom) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 
+const button = (text, title, onClick) => {
+  const node = document.createElement('button');
+  node.type = 'button';
+  node.className = text.length === 1 ? 'pill-btn is-square' : 'pill-btn';
+  node.textContent = text;
+  node.title = title;
+  node.setAttribute('aria-label', title);
+  node.addEventListener('click', onClick);
+  return node;
+};
+
+const zoomButtons = (label, { zoomIn, zoomOut, fit }) => {
+  const group = document.createElement('div');
+  group.className = 'zoom-controls';
+  group.append(
+    button('−', 'Dézoomer', zoomOut),
+    label,
+    button('+', 'Zoomer', zoomIn),
+    button('Ajuster', 'Cadrer le dessin', fit),
+  );
+  return group;
+};
+
+/* Ctrl/⌘ + molette, et le pincement trackpad (émis comme wheel + ctrlKey) ;
+   sinon la molette déplace la vue. Ctrl/⌘ + « + », « − », « 0 » au clavier. */
+const listenZoom = (svgRoot, { zoomAt, pan, fit }) => {
+  svgRoot.addEventListener(
+    'wheel',
+    (event) => {
+      event.preventDefault();
+      if (event.ctrlKey || event.metaKey) zoomAt(Math.exp(-event.deltaY * 0.01), { x: event.clientX, y: event.clientY });
+      else pan(event.deltaX, event.deltaY);
+    },
+    { passive: false },
+  );
+  window.addEventListener('keydown', (event) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    if (event.key === '+' || event.key === '=') zoomAt(STEP);
+    else if (event.key === '-') zoomAt(1 / STEP);
+    else if (event.key === '0') fit();
+    else return;
+    event.preventDefault();
+  });
+};
+
 /**
  * Vue du plan de travail infini.
  *
@@ -70,49 +115,17 @@ export const mountZoom = ({ svgRoot, container }) => {
     });
   };
 
-  const button = (text, title, onClick) => {
-    const node = document.createElement('button');
-    node.type = 'button';
-    node.className = text.length === 1 ? 'pill-btn is-square' : 'pill-btn';
-    node.textContent = text;
-    node.title = title;
-    node.setAttribute('aria-label', title);
-    node.addEventListener('click', onClick);
-    return node;
-  };
-
-  const group = document.createElement('div');
-  group.className = 'zoom-controls';
-  group.append(
-    button('−', 'Dézoomer', () => zoomAt(view.zoom / STEP)),
-    label,
-    button('+', 'Zoomer', () => zoomAt(view.zoom * STEP)),
-    button('Ajuster', 'Cadrer le dessin', fit),
+  container.append(
+    zoomButtons(label, {
+      zoomIn: () => zoomAt(view.zoom * STEP),
+      zoomOut: () => zoomAt(view.zoom / STEP),
+      fit,
+    }),
   );
-  container.append(group);
-
-  /* Ctrl/⌘ + molette, et le pincement trackpad (émis comme wheel + ctrlKey) ;
-     sinon la molette déplace la vue. */
-  svgRoot.addEventListener(
-    'wheel',
-    (event) => {
-      event.preventDefault();
-      if (event.ctrlKey || event.metaKey) {
-        zoomAt(view.zoom * Math.exp(-event.deltaY * 0.01), { x: event.clientX, y: event.clientY });
-        return;
-      }
-      apply({ ...view, x: view.x + event.deltaX / view.zoom, y: view.y + event.deltaY / view.zoom });
-    },
-    { passive: false },
-  );
-
-  window.addEventListener('keydown', (event) => {
-    if (!event.ctrlKey && !event.metaKey) return;
-    if (event.key === '+' || event.key === '=') zoomAt(view.zoom * STEP);
-    else if (event.key === '-') zoomAt(view.zoom / STEP);
-    else if (event.key === '0') fit();
-    else return;
-    event.preventDefault();
+  listenZoom(svgRoot, {
+    zoomAt: (factor, anchor) => zoomAt(view.zoom * factor, anchor),
+    pan: (dx, dy) => apply({ ...view, x: view.x + dx / view.zoom, y: view.y + dy / view.zoom }),
+    fit,
   });
 
   /* Le coin haut gauche reste en place ; la vue s'étend ou se réduit. */

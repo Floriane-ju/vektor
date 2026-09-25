@@ -57,6 +57,169 @@ const insideParents = (displayed, tools) => {
   return parents;
 };
 
+/* Sous-liste rangée sous une forme : ses outils booléens, ou ses formes logées. */
+const branch = (className, label, rows) => {
+  const node = document.createElement('ul');
+  node.className = `layer-list ${className}`;
+  node.setAttribute('aria-label', label);
+  node.append(...rows);
+  return node;
+};
+
+/* Réordonner parmi les formes du même calque. */
+const sortShape = (store, row, layer, element) =>
+  sortableRow(row, { kind: 'shape', id: element.id }, {
+    accepts: (item) =>
+      item.kind === 'shape' && item.id !== element.id && layer.elements.some((el) => el.id === item.id) ? 'sort' : null,
+    drop: (item, where) => {
+      const current = store.get().layers.find((candidate) => candidate.id === layer.id);
+      const find = (id) => current.elements.find((el) => el.id === id);
+      store.apply(placeElement, item.id, layer.id, dropIndex(current.elements, find(item.id), find(element.id), where));
+    },
+  });
+
+/* Survol d'une card : il surligne la forme sur le plan. */
+const hoverCard = (ctx, card, element) => {
+  card.addEventListener('pointerenter', () => ctx.highlight(element.id));
+  /* Revenir d'un outil imbriqué sur sa forme ne rentre pas dans la card :
+     seul `pointerover` le dit. */
+  card.addEventListener('pointerover', (event) => {
+    if (event.target.closest('li') === card && ctx.hoveredId() !== element.id) ctx.highlight(element.id);
+  });
+  card.addEventListener('pointerleave', ctx.leave);
+};
+
+/* Nom, aperçu et actions d'une forme. */
+const shapeLine = ({ store, remove }, layer, element, isActive) => {
+  /* Même ligne que l'arbre des calques, sans la bascule de visibilité : une
+     forme se masque en la supprimant ou en masquant son calque. */
+  const row = document.createElement('div');
+  row.className = 'layer-row is-shape';
+
+  const name = document.createElement('button');
+  name.type = 'button';
+  name.className = 'layer-name';
+  name.textContent = shapeName(layer, element, SHAPES);
+  name.dataset.focusKey = `name-${element.id}`;
+  name.setAttribute('aria-pressed', String(isActive));
+  name.addEventListener('click', () => store.apply(setActiveElement, element.id));
+
+  const actions = document.createElement('span');
+  actions.className = 'row-actions';
+  rowKeys(name, {
+    move: (delta) => store.apply(moveElement, element.id, delta),
+    remove: () => remove(element, name.textContent),
+  });
+  const glyph = icon(element.type, GLYPH_SIZE);
+  glyph.classList.add('shape-glyph');
+  row.append(dragHandle(), glyph, name, actions);
+  actions.append(
+    iconButton({
+      label: `Dupliquer ${name.textContent}`,
+      text: '⧉',
+      focusKey: `duplicate-${element.id}`,
+      onClick: () => store.apply(duplicateElement, element.id, DUPLICATE_OFFSET),
+    }),
+    iconButton({
+      label: `Supprimer ${name.textContent}`,
+      text: '×',
+      focusKey: `delete-${element.id}`,
+      danger: true,
+      onClick: () => remove(element, name.textContent),
+    }),
+  );
+  sortShape(store, row, layer, element);
+  return { row, label: name.textContent };
+};
+
+/**
+ * Card d'une forme, avec ses outils booléens et ses formes logées rangés
+ * dessous. `tree` = `{ layer, activeElementId, displayed, parents, hosts }`.
+ */
+const shapeRow = (ctx, tree, element) => {
+  const { layer, activeElementId, displayed, parents, hosts } = tree;
+  const isActive = element.id === activeElementId;
+  const card = document.createElement('li');
+  card.className = 'layer-card';
+  card.dataset.active = String(isActive);
+  card.dataset.elementId = element.id;
+  hoverCard(ctx, card, element);
+  const { row, label } = shapeLine(ctx, layer, element, isActive);
+  card.append(row);
+
+  /* Outils de cette forme, rangés sous elle : ils ne se dessinent pas,
+     ils la façonnent. */
+  const templates = displayed.filter((candidate) => parents.get(candidate.id) === element.id);
+  if (templates.length > 0) {
+    card.append(
+      branch('boolean-branch', `Booléen de ${label}`, templates.map((template) => {
+        const child = shapeRow(ctx, tree, template);
+        child.dataset.template = 'true';
+        child.title = 'Outil booléen : ne se dessine pas';
+        return child;
+      })),
+    );
+  }
+
+  /* Formes logées dans celle-ci : filet pointillé, pour ne pas les confondre
+     avec des outils — elles se dessinent, cachées par son volume en 3D. */
+  const guests = displayed.filter((candidate) => hosts.get(candidate.id) === element.id);
+  if (guests.length > 0) {
+    card.append(
+      branch('inside-branch', `Dans ${label}`, guests.map((guest) => {
+        const child = shapeRow(ctx, tree, guest);
+        child.dataset.inside = 'true';
+        child.title = `À l'intérieur de ${label}`;
+        return child;
+      })),
+    );
+  }
+  return card;
+};
+
+/* Les formes du calque actif, leur type et la sélection : ce que montrent
+   les cards. Position et taille se règlent sur place, sans reconstruire. */
+const signature = (scene) => {
+  const layer = getActiveLayer(scene);
+  return JSON.stringify([
+    layer?.id ?? null,
+    scene.activeElementId,
+    layer?.elements.map((element) => [element.id, element.type, element.booleans.map((step) => step.with), element.inside]) ?? [],
+  ]);
+};
+
+/* Seul chemin non-pointeur vers la création d'une forme : le glissement sur le
+   plan de travail n'a pas d'équivalent clavier. La forme naît au centre du
+   calque, prête à être déplacée par les champs X/Y. */
+const addShapeButton = ({ store, getTool, status }, layer) => {
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.textContent = '+ Ajouter une forme';
+  add.dataset.focusKey = 'add-shape';
+  add.disabled = !layer;
+  add.addEventListener('click', () => {
+    const { x, y } = layer.center;
+    store.apply(addElement, layer.id, getTool(), x, y);
+    status.show(`${SHAPES[getTool()].label} ajouté au centre du calque.`);
+  });
+  add.className = 'add-shape';
+  return add;
+};
+
+/* Couleur et géométrie changent en continu pendant qu'on les règle : on
+   redessine l'aperçu sur place plutôt que de reconstruire la liste.
+   ponytail: tous les aperçus du calque à chaque rendu ; ne redessiner que
+   la forme modifiée si un calque très chargé rame. */
+const refreshGlyphs = (container, scene) => {
+  for (const element of getActiveLayer(scene)?.elements ?? []) {
+    const glyph = container.querySelector(`[data-element-id="${element.id}"] > .layer-row > .shape-glyph`);
+    if (!glyph) continue;
+    glyph.style.setProperty('--shape-color', element.stroke);
+    const preview = shapePreview(element, GLYPH_SIZE);
+    if (preview) glyph.replaceChildren(preview);
+  }
+};
+
 /**
  * Liste des formes du calque actif, logée par l'arbre sous sa ligne.
  *
@@ -89,54 +252,41 @@ export const mountShapeList = ({
     else clearHover(svgRoot);
   };
 
-  /* Les formes du calque actif, leur type et la sélection : ce que montrent
-     les cards. Position et taille se règlent sur place, sans reconstruire. */
-  const signature = (scene) => {
-    const layer = getActiveLayer(scene);
-    return JSON.stringify([
-      layer?.id ?? null,
-      scene.activeElementId,
-      layer?.elements.map((element) => [element.id, element.type, element.booleans.map((step) => step.with), element.inside]) ?? [],
-    ]);
+  const ctx = {
+    store,
+    getTool,
+    status,
+    highlight,
+    hoveredId: () => hoveredId,
+    leave: () => {
+      leaveTimer = setTimeout(() => highlight(null), HOVER_LEAVE_DELAY);
+    },
+    /* Pas de confirmation, comme pour le calque : ⌘Z la rend. */
+    remove: (element, label) => {
+      store.apply(removeElement, element.id);
+      status.show(`${label} supprimé.`);
+    },
   };
 
   const rebuild = whenChanged(signature, (scene) =>
     rebuildWithFocus(container, () => {
       const layer = getActiveLayer(scene);
-
-      const add = document.createElement('button');
-      add.type = 'button';
-      add.textContent = '+ Ajouter une forme';
-      add.dataset.focusKey = 'add-shape';
-      add.disabled = !layer;
-      /* Seul chemin non-pointeur vers la création d'une forme : le glissement
-         sur le plan de travail n'a pas d'équivalent clavier. La forme naît au
-         centre du calque, prête à être déplacée par les champs X/Y. */
-      add.addEventListener('click', () => {
-        const { x, y } = layer.center;
-        store.apply(addElement, layer.id, getTool(), x, y);
-        status.show(`${SHAPES[getTool()].label} ajouté au centre du calque.`);
-      });
-
-      add.className = 'add-shape';
+      const add = addShapeButton(ctx, layer);
       if (!layer || layer.elements.length === 0) {
         container.append(add);
         return add;
       }
-
-      const list = document.createElement('ul');
-      list.className = 'layer-list';
       /* Affiché du premier plan vers le fond, comme le panneau calques : la
          liste se lit à l'envers du tableau, et « ↑ » veut dire « devant ». */
       const displayed = [...layer.elements].reverse();
       const parents = booleanParents(displayed);
       const hosts = insideParents(displayed, parents);
-      for (const element of displayed) {
-        if (!parents.has(element.id) && !hosts.has(element.id)) {
-          list.append(shapeRow(layer, element, scene.activeElementId, displayed, parents, hosts));
-        }
-      }
-
+      const tree = { layer, activeElementId: scene.activeElementId, displayed, parents, hosts };
+      const list = document.createElement('ul');
+      list.className = 'layer-list';
+      list.append(
+        ...displayed.filter((element) => !parents.has(element.id) && !hosts.has(element.id)).map((element) => shapeRow(ctx, tree, element)),
+      );
       container.append(list, add);
       return add;
     }),
@@ -145,123 +295,7 @@ export const mountShapeList = ({
   const render = (scene) => {
     if (hoveredId) highlight(hoveredId);
     rebuild(scene);
-    /* Couleur et géométrie changent en continu pendant qu'on les règle : on
-       redessine l'aperçu sur place plutôt que de reconstruire la liste.
-       ponytail: tous les aperçus du calque à chaque rendu ; ne redessiner que
-       la forme modifiée si un calque très chargé rame. */
-    for (const element of getActiveLayer(scene)?.elements ?? []) {
-      const glyph = container.querySelector(`[data-element-id="${element.id}"] > .layer-row > .shape-glyph`);
-      if (!glyph) continue;
-      glyph.style.setProperty('--shape-color', element.stroke);
-      const preview = shapePreview(element, GLYPH_SIZE);
-      if (preview) glyph.replaceChildren(preview);
-    }
-  };
-
-  const shapeRow = (layer, element, activeElementId, displayed, parents, hosts) => {
-    const isActive = element.id === activeElementId;
-
-    const card = document.createElement('li');
-    card.className = 'layer-card';
-    card.dataset.active = String(isActive);
-    card.dataset.elementId = element.id;
-    card.addEventListener('pointerenter', () => highlight(element.id));
-    /* Revenir d'un outil imbriqué sur sa forme ne rentre pas dans la card :
-       seul `pointerover` le dit. */
-    card.addEventListener('pointerover', (event) => {
-      if (event.target.closest('li') === card && hoveredId !== element.id) highlight(element.id);
-    });
-    card.addEventListener('pointerleave', () => {
-      leaveTimer = setTimeout(() => highlight(null), HOVER_LEAVE_DELAY);
-    });
-    /* Même ligne que l'arbre des calques, sans la bascule de visibilité : une
-       forme se masque en la supprimant ou en masquant son calque. */
-    const row = document.createElement('div');
-    row.className = 'layer-row is-shape';
-    card.append(row);
-
-    const name = document.createElement('button');
-    name.type = 'button';
-    name.className = 'layer-name';
-    name.textContent = shapeName(layer, element, SHAPES);
-    name.dataset.focusKey = `name-${element.id}`;
-    name.setAttribute('aria-pressed', String(isActive));
-    name.addEventListener('click', () => store.apply(setActiveElement, element.id));
-
-    const actions = document.createElement('span');
-    actions.className = 'row-actions';
-    rowKeys(name, {
-      move: (delta) => store.apply(moveElement, element.id, delta),
-      remove: () => remove(element, name.textContent),
-    });
-    const glyph = icon(element.type, GLYPH_SIZE);
-    glyph.classList.add('shape-glyph');
-    row.append(dragHandle(), glyph, name, actions);
-    actions.append(
-      iconButton({
-        label: `Dupliquer ${name.textContent}`,
-        text: '⧉',
-        focusKey: `duplicate-${element.id}`,
-        onClick: () => store.apply(duplicateElement, element.id, DUPLICATE_OFFSET),
-      }),
-      iconButton({
-        label: `Supprimer ${name.textContent}`,
-        text: '×',
-        focusKey: `delete-${element.id}`,
-        danger: true,
-        onClick: () => remove(element, name.textContent),
-      }),
-    );
-
-    sortableRow(row, { kind: 'shape', id: element.id }, {
-      accepts: (item) =>
-        item.kind === 'shape' && item.id !== element.id && layer.elements.some((el) => el.id === item.id) ? 'sort' : null,
-      drop: (item, where) => {
-        const current = store.get().layers.find((candidate) => candidate.id === layer.id);
-        const find = (id) => current.elements.find((el) => el.id === id);
-        store.apply(placeElement, item.id, layer.id, dropIndex(current.elements, find(item.id), find(element.id), where));
-      },
-    });
-
-    /* Outils de cette forme, rangés sous elle : ils ne se dessinent pas,
-       ils la façonnent. */
-    const templates = displayed.filter((candidate) => parents.get(candidate.id) === element.id);
-    if (templates.length > 0) {
-      const branch = document.createElement('ul');
-      branch.className = 'layer-list boolean-branch';
-      branch.setAttribute('aria-label', `Booléen de ${name.textContent}`);
-      for (const template of templates) {
-        const child = shapeRow(layer, template, activeElementId, displayed, parents, hosts);
-        child.dataset.template = 'true';
-        child.title = 'Outil booléen : ne se dessine pas';
-        branch.append(child);
-      }
-      card.append(branch);
-    }
-
-    /* Formes logées dans celle-ci : filet pointillé, pour ne pas les confondre
-       avec des outils — elles se dessinent, cachées par son volume en 3D. */
-    const guests = displayed.filter((candidate) => hosts.get(candidate.id) === element.id);
-    if (guests.length > 0) {
-      const branch = document.createElement('ul');
-      branch.className = 'layer-list inside-branch';
-      branch.setAttribute('aria-label', `Dans ${name.textContent}`);
-      for (const guest of guests) {
-        const child = shapeRow(layer, guest, activeElementId, displayed, parents, hosts);
-        child.dataset.inside = 'true';
-        child.title = `À l'intérieur de ${name.textContent}`;
-        branch.append(child);
-      }
-      card.append(branch);
-    }
-
-    return card;
-  };
-
-  /* Pas de confirmation, comme pour le calque : ⌘Z la rend. */
-  const remove = (element, label) => {
-    store.apply(removeElement, element.id);
-    status.show(`${label} supprimé.`);
+    refreshGlyphs(container, scene);
   };
 
   store.subscribe(render);

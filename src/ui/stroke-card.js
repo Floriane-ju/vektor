@@ -1,5 +1,6 @@
 import { currentStyle, getActiveElement, setStyle } from '../scene.js';
 import { rebuildWithFocus, whenChanged } from './list.js';
+import { el } from './fields.js';
 
 /**
  * Carte du trait, en haut à droite : couleur et épaisseur de la forme active,
@@ -22,13 +23,6 @@ const HEX = /^#?([0-9a-f]{6})$/i;
 /* Écart entre la carte et la palette qu'elle ouvre. */
 const POPOVER_GAP = 8;
 
-const el = (tag, className, text) => {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text != null) node.textContent = text;
-  return node;
-};
-
 /* Palette fixe, puis les couleurs hors palette déjà portées par une forme :
    réaccorder deux formes se fait d'un clic, sans recopier l'hexadécimal. */
 const swatchColors = (scene) => {
@@ -40,46 +34,45 @@ const swatchColors = (scene) => {
   return [...labels];
 };
 
-export const mountStrokeCard = ({ store, container = null }) => {
-  const setStroke = (patch) => store.apply(setStyle, patch);
+const swatchButton = (setStroke, [value, label]) => {
+  const swatch = el('button', 'swatch');
+  swatch.type = 'button';
+  swatch.dataset.color = value;
+  swatch.dataset.focusKey = `swatch-${value}`;
+  swatch.dataset.label = label;
+  swatch.style.setProperty('--swatch', value);
+  swatch.addEventListener('click', () => setStroke({ stroke: value }));
+  return swatch;
+};
 
+/* Pastille cochée si c'est la couleur courante, marquée si une autre forme la
+   porte déjà — avec les calques concernés dans l'infobulle. */
+const markSwatch = (swatch, scene, element, current) => {
+  const users = scene.layers.filter((layer) =>
+    layer.elements.some((other) => other.id !== element?.id && other.stroke.toLowerCase() === swatch.dataset.color),
+  );
+  swatch.setAttribute('aria-pressed', String(swatch.dataset.color === current));
+  swatch.toggleAttribute('data-used', users.length > 0);
+  const label = users.length
+    ? `${swatch.dataset.label} — sur ${users.map((layer) => layer.name).join(', ')}`
+    : swatch.dataset.label;
+  swatch.setAttribute('aria-label', label);
+  swatch.title = label;
+};
+
+/* Palette : pastilles, sélecteur natif et champ hexadécimal. */
+const colorPalette = (store, setStroke) => {
   const palette = el('div', 'stroke-palette');
   palette.id = 'stroke-palette';
   palette.popover = 'auto';
   palette.setAttribute('aria-label', 'Couleur du trait');
-
-  const trigger = el('button', 'pill-btn is-square stroke-current');
-  trigger.type = 'button';
-  trigger.title = 'Couleur du trait';
-  trigger.setAttribute('aria-label', 'Couleur du trait');
-  trigger.setAttribute('popovertarget', palette.id);
-
-  /* Sous la pastille : la carte glisse avec la largeur de la barre voisine,
-     une position fixe en CSS tomberait à côté. */
-  palette.addEventListener('beforetoggle', (event) => {
-    if (event.newState !== 'open') return;
-    const box = trigger.getBoundingClientRect();
-    palette.style.top = `${box.bottom + POPOVER_GAP}px`;
-    palette.style.left = `${box.left}px`;
-  });
-
-  const swatchButton = ([value, label]) => {
-    const swatch = el('button', 'swatch');
-    swatch.type = 'button';
-    swatch.dataset.color = value;
-    swatch.dataset.focusKey = `swatch-${value}`;
-    swatch.dataset.label = label;
-    swatch.style.setProperty('--swatch', value);
-    swatch.addEventListener('click', () => setStroke({ stroke: value }));
-    return swatch;
-  };
 
   const swatchList = el('div', 'swatch-list');
   const rebuildSwatches = whenChanged(
     (scene) => JSON.stringify(swatchColors(scene)),
     (scene) =>
       rebuildWithFocus(swatchList, () => {
-        swatchList.append(...swatchColors(scene).map(swatchButton));
+        swatchList.append(...swatchColors(scene).map((entry) => swatchButton(setStroke, entry)));
         return null;
       }),
   );
@@ -97,6 +90,11 @@ export const mountStrokeCard = ({ store, container = null }) => {
   hex.id = 'stroke-hex';
   hex.spellcheck = false;
   hex.maxLength = 7;
+  hex.addEventListener('change', () => {
+    const match = HEX.exec(hex.value.trim());
+    if (match) setStroke({ stroke: `#${match[1].toLowerCase()}` });
+    else hex.value = currentStyle(store.get()).stroke.toUpperCase();
+  });
   const hexLabel = el('label', null, 'Hex');
   hexLabel.htmlFor = hex.id;
   const hexRow = el('div', 'hex-row');
@@ -106,7 +104,18 @@ export const mountStrokeCard = ({ store, container = null }) => {
   swatchRow.append(swatchList, custom);
   palette.append(el('h2', null, 'Couleur'), swatchRow, hexRow);
 
-  /* Champ numérique : flèches natives, glisser horizontal via `ui/scrub.js`. */
+  const sync = (scene, current) => {
+    if (document.activeElement !== hex) hex.value = current.toUpperCase();
+    picker.value = current;
+    rebuildSwatches(scene);
+    const element = getActiveElement(scene);
+    for (const swatch of swatchList.children) markSwatch(swatch, scene, element, current);
+  };
+  return { root: palette, sync };
+};
+
+/* Champ numérique : flèches natives, glisser horizontal via `ui/scrub.js`. */
+const widthInput = (setStroke) => {
   const width = el('input', 'stroke-width');
   width.type = 'number';
   width.id = 'stroke-width';
@@ -117,41 +126,41 @@ export const mountStrokeCard = ({ store, container = null }) => {
   width.addEventListener('change', () => {
     if (width.value !== '') setStroke({ strokeWidth: Math.max(0, Number(width.value)) });
   });
+  return width;
+};
+
+export const mountStrokeCard = ({ store, container = null }) => {
+  const setStroke = (patch) => store.apply(setStyle, patch);
+  const palette = colorPalette(store, setStroke);
+
+  const trigger = el('button', 'pill-btn is-square stroke-current');
+  trigger.type = 'button';
+  trigger.title = 'Couleur du trait';
+  trigger.setAttribute('aria-label', 'Couleur du trait');
+  trigger.setAttribute('popovertarget', palette.root.id);
+
+  /* Sous la pastille : la carte glisse avec la largeur de la barre voisine,
+     une position fixe en CSS tomberait à côté. */
+  palette.root.addEventListener('beforetoggle', (event) => {
+    if (event.newState !== 'open') return;
+    const box = trigger.getBoundingClientRect();
+    palette.root.style.top = `${box.bottom + POPOVER_GAP}px`;
+    palette.root.style.left = `${box.left}px`;
+  });
+
+  const width = widthInput(setStroke);
   const widthField = el('label', 'stroke-width-field');
   widthField.append(el('span', 'stroke-line'), width);
 
-  container?.append(trigger, widthField, palette);
+  container?.append(trigger, widthField, palette.root);
 
   const sync = (scene) => {
-    const element = getActiveElement(scene);
     const style = currentStyle(scene);
     const current = style.stroke.toLowerCase();
     trigger.style.setProperty('--swatch', current);
     if (document.activeElement !== width) width.value = String(style.strokeWidth);
-    if (document.activeElement !== hex) hex.value = current.toUpperCase();
-    picker.value = current;
-
-    rebuildSwatches(scene);
-    for (const swatch of swatchList.children) {
-      /* Calques où une autre forme porte déjà cette couleur. */
-      const users = scene.layers.filter((layer) =>
-        layer.elements.some((other) => other.id !== element?.id && other.stroke.toLowerCase() === swatch.dataset.color),
-      );
-      swatch.setAttribute('aria-pressed', String(swatch.dataset.color === current));
-      swatch.toggleAttribute('data-used', users.length > 0);
-      const label = users.length
-        ? `${swatch.dataset.label} — sur ${users.map((layer) => layer.name).join(', ')}`
-        : swatch.dataset.label;
-      swatch.setAttribute('aria-label', label);
-      swatch.title = label;
-    }
+    palette.sync(scene, current);
   };
-
-  hex.addEventListener('change', () => {
-    const match = HEX.exec(hex.value.trim());
-    if (match) setStroke({ stroke: `#${match[1].toLowerCase()}` });
-    else hex.value = currentStyle(store.get()).stroke.toUpperCase();
-  });
 
   store.subscribe(sync);
   sync(store.get());

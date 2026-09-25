@@ -9,7 +9,55 @@ import {
   updateBoolean,
 } from '../scene.js';
 import { iconButton, rebuildWithFocus, shapeName } from './list.js';
-import { collapsible, countLabel } from './fields.js';
+import { addButtonFor, collapsible, countLabel, el, option, sectionHead, segmented } from './fields.js';
+
+/* Outil d'une opération : une autre forme du calque. L'outil actuel reste
+   offert — il ne ferme pas de boucle, sinon il n'aurait pas été posé. */
+const toolSelect = (apply, layer, element, step, index) => {
+  const node = el('select');
+  node.setAttribute('aria-label', `Outil de l'opération ${index + 1}`);
+  node.dataset.focusKey = `boolean-tool${index}`;
+  const tools = layer.elements.filter(
+    (candidate) => candidate !== element && (candidate.id === step.with || !closesLoop(layer, element.id, candidate.id)),
+  );
+  node.append(...tools.map((other) => option(other.id, shapeName(layer, other, SHAPES))));
+  node.value = step.with;
+  node.addEventListener('change', () => apply(updateBoolean, index, { with: node.value }));
+  return node;
+};
+
+const block = (apply, layer, element, step, index) => {
+  const head = el('div', 'modifier-head');
+  head.append(
+    toolSelect(apply, layer, element, step, index),
+    iconButton({
+      label: `Retirer l'opération ${index + 1}`,
+      text: '×',
+      focusKey: `delete-boolean${index}`,
+      danger: true,
+      onClick: () => apply(removeBoolean, index),
+    }),
+  );
+  const mode = segmented(
+    'Mode',
+    Object.entries(BOOLEAN_OPS),
+    (value) => apply(updateBoolean, index, { op: clampBooleanOp(value) }),
+    (value) => `boolean-op${index}-${value}`,
+  );
+  mode.check(step.op);
+  const root = el('div', 'modifier-block');
+  root.append(head, mode.root);
+  return root;
+};
+
+/* Ce que la section montre : la pile, et les formes du calque qui nomment
+   les outils possibles. */
+const signature = (layer, element) =>
+  JSON.stringify([
+    element.id,
+    element.booleans,
+    layer.elements.map((candidate) => [candidate.id, candidate.type, candidate.booleans]),
+  ]);
 
 /**
  * Section « Booléen » d'une forme : une pile d'opérations appliquées dans
@@ -20,109 +68,17 @@ import { collapsible, countLabel } from './fields.js';
  * qu'elle montre, `rebuildWithFocus` rend le focus au contrôle qui l'avait.
  */
 export const booleanSection = ({ store }) => {
-  let uid = 0;
-
   const apply = (transition, ...args) => {
     const element = getActiveElement(store.get());
     if (element) store.apply(transition, element.id, ...args);
   };
 
-  const toolSelect = (layer, element, step, index) => {
-    const node = document.createElement('select');
-    node.id = `boolean-${++uid}`;
-    node.setAttribute('aria-label', `Outil de l'opération ${index + 1}`);
-    node.dataset.focusKey = `boolean-tool${index}`;
-    /* L'outil actuel reste offert : il ne ferme pas de boucle, sinon il n'aurait pas été posé. */
-    const tools = layer.elements.filter(
-      (candidate) => candidate !== element && (candidate.id === step.with || !closesLoop(layer, element.id, candidate.id)),
-    );
-    for (const other of tools) {
-      const option = document.createElement('option');
-      option.value = other.id;
-      option.textContent = shapeName(layer, other, SHAPES);
-      node.append(option);
-    }
-    node.value = step.with;
-    node.addEventListener('change', () => apply(updateBoolean, index, { with: node.value }));
-    return node;
-  };
-
-  const opSegments = (step, index) => {
-    const root = document.createElement('fieldset');
-    root.className = 'segmented';
-    const legend = document.createElement('legend');
-    legend.textContent = 'Mode';
-    const track = document.createElement('div');
-    track.className = 'segments';
-    const name = `boolean-op-${++uid}`;
-    for (const [value, label] of Object.entries(BOOLEAN_OPS)) {
-      const radio = document.createElement('input');
-      radio.type = 'radio';
-      radio.name = name;
-      radio.value = value;
-      radio.checked = step.op === value;
-      radio.dataset.focusKey = `boolean-op${index}-${value}`;
-      radio.addEventListener('change', () => {
-        if (radio.checked) apply(updateBoolean, index, { op: clampBooleanOp(value) });
-      });
-      const wrap = document.createElement('label');
-      wrap.className = 'segment';
-      const text = document.createElement('span');
-      text.textContent = label;
-      wrap.append(radio, text);
-      track.append(wrap);
-    }
-    root.append(legend, track);
-    return root;
-  };
-
-  const block = (layer, element, step, index) => {
-    const head = document.createElement('div');
-    head.className = 'modifier-head';
-    head.append(
-      toolSelect(layer, element, step, index),
-      iconButton({
-        label: `Retirer l'opération ${index + 1}`,
-        text: '×',
-        focusKey: `delete-boolean${index}`,
-        danger: true,
-        onClick: () => apply(removeBoolean, index),
-      }),
-    );
-    const root = document.createElement('div');
-    root.className = 'modifier-block';
-    root.append(head, opSegments(step, index));
-    return root;
-  };
-
-  const set = document.createElement('section');
-  set.className = 'group';
-  const head = document.createElement('div');
-  head.className = 'section-head';
-  const title = document.createElement('h3');
-  title.textContent = 'Booléen';
-  const addButton = document.createElement('button');
-  addButton.type = 'button';
-  addButton.className = 'text-btn';
-  addButton.textContent = '+ Ajouter';
-  addButton.setAttribute('aria-label', 'Ajouter une opération booléenne');
-  addButton.title = 'Ajouter une opération booléenne';
-  addButton.dataset.focusKey = 'add-boolean';
-  addButton.addEventListener('click', () => apply(addBoolean));
-  head.append(title, addButton);
-  const host = document.createElement('div');
-  host.className = 'stack';
+  const addButton = addButtonFor('Ajouter une opération booléenne', 'add-boolean', () => apply(addBoolean));
+  const head = sectionHead('Booléen', addButton);
+  const host = el('div', 'stack');
+  const set = el('section', 'group');
   set.append(head, host);
   const fold = collapsible(set, head, 'booleans');
-
-  /* Ce que la section montre : la pile, et les formes du calque qui nomment
-     les outils possibles. */
-  const signature = (layer, element) =>
-    JSON.stringify([
-      element.id,
-      element.booleans,
-      layer.elements.map((candidate) => [candidate.id, candidate.type, candidate.booleans]),
-    ]);
 
   let last = null;
 
@@ -136,7 +92,7 @@ export const booleanSection = ({ store }) => {
     if (next === last) return;
     last = next;
     rebuildWithFocus(host, () => {
-      host.append(...element.booleans.map((step, index) => block(layer, element, step, index)));
+      host.append(...element.booleans.map((step, index) => block(apply, layer, element, step, index)));
       return addButton;
     });
   };

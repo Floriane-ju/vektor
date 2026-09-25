@@ -9,11 +9,11 @@ import {
 } from '../scene.js';
 import { MODIFIER_LABELS } from '../modifiers.js';
 import { CURVE_LABELS, randomSeed } from '../interpolate.js';
+import { iconButton, rebuildWithFocus } from './list.js';
+import { collapsible, countLabel, el, field, input, row, sectionHead, select, textButton } from './fields.js';
 
 /* Les bornes se saisissent en pourcentage : 1 = 100 %. */
 const PERCENT = 100;
-import { iconButton, rebuildWithFocus } from './list.js';
-import { collapsible, countLabel } from './fields.js';
 
 /**
  * Section « Faire varier les itérations » du calque ou de la forme : un bloc par interpolation,
@@ -30,255 +30,182 @@ import { collapsible, countLabel } from './fields.js';
  * Reconstruite seulement quand la structure de la pile change, jamais sur une
  * valeur de curseur : sans cela le slider disparaîtrait sous la souris au
  * premier pixel de glissement.
+ *
+ * Les blocs reçoivent `ctx` : `apply(transition, ...args)` sur le propriétaire,
+ * `key` (suffixe des clés de focus), `track(sync)` pour les contrôles
+ * rafraîchis sans reconstruction, `sync(interpolation)`.
  */
+
+/* Menu déroulant nommé, câblé à `onChange(value)`. */
+const choice = (label, entries, value, onChange) => {
+  const node = select(entries);
+  node.setAttribute('aria-label', label);
+  node.value = value;
+  node.addEventListener('change', () => onChange(node.value));
+  return node;
+};
+
+/* Relit l'interpolation `id` du propriétaire à chaque synchronisation. */
+const trackOf = (ctx, id, sync) =>
+  ctx.track((owner) => {
+    const current = owner.interpolations.find((candidate) => candidate.id === id);
+    if (current) sync(current);
+  });
+
+/* Borne d'une interpolation de couleur : le sélecteur natif, qui ne lit et
+   n'écrit que `#rrggbb`, le format du modèle. */
+const colorControl = (ctx, interpolation, index, labelText) => {
+  const node = input('color');
+  node.addEventListener('input', () => ctx.apply(updateInterpolationRange, interpolation.id, index, node.value));
+  trackOf(ctx, interpolation.id, (current) => {
+    if (document.activeElement !== node) node.value = current.range[index];
+  });
+  return field(labelText, node);
+};
+
+/**
+ * Une borne de la plage, en pourcentage. Le champ prend les bornes de la
+ * propriété : passer une interpolation d'opacité à l'échelle reconstruit le
+ * bloc, donc le `min` et le `max` suivent sans réglage à la main.
+ */
+const boundControl = (ctx, interpolation, index, labelText) => {
+  if (RANGE_BOUNDS[interpolation.property].color) return colorControl(ctx, interpolation, index, labelText);
+  const { min, max, step, unit = '%' } = RANGE_BOUNDS[interpolation.property];
+  /* Les facteurs s'affichent en pourcentage, la rotation en degrés tels quels. */
+  const ratio = unit === '%' ? PERCENT : 1;
+  const number = input('number', { min: String(min * ratio), max: String(max * ratio), step: String(step * ratio) });
+  number.addEventListener('input', () => {
+    if (number.value === '') return;
+    ctx.apply(updateInterpolationRange, interpolation.id, index, Number(number.value) / ratio);
+  });
+  trackOf(ctx, interpolation.id, (current) => {
+    if (document.activeElement !== number) number.value = String(Math.round(current.range[index] * ratio));
+  });
+
+  const suffix = el('span', null, unit);
+  suffix.setAttribute('aria-hidden', 'true');
+  const wrapper = el('div', 'unit-input');
+  /* `field` pose le libellé et le champ ; le champ passe ensuite dans son
+     habillage à suffixe. */
+  const wrap = field(labelText, number);
+  wrapper.append(number, suffix);
+  wrap.append(wrapper);
+  return wrap;
+};
+
+/**
+ * Rampe suivie : toutes les copies de la pile, ou l'indice d'un seul de ses
+ * étages. Une pile vide n'a pas d'étage à nommer, donc pas de champ — le
+ * proposer promettrait un réglage sans effet.
+ */
+const bindingField = (ctx, interpolation, modifiers) => {
+  if (modifiers.length === 0) return null;
+  const stages = modifiers.map((modifier, index) => [String(index), `${index + 1}. ${MODIFIER_LABELS[modifier.type]}`]);
+  return field(
+    'Rampe',
+    choice('Rampe suivie', [['', 'Toutes les copies'], ...stages], String(interpolation.binding ?? ''), (value) =>
+      ctx.apply(updateInterpolation, interpolation.id, { binding: value === '' ? null : Number(value) }),
+    ),
+  );
+};
+
+/* Forme de la rampe, par interpolation. Resynchronisée sans reconstruction :
+   l'annulation la ramène sans arracher le bloc. Passer à l'aléatoire tire
+   une graine neuve : deux bruits de la pile ne se suivent pas pas à pas. */
+const curveField = (ctx, interpolation) => {
+  const node = choice('Courbe de la rampe', Object.entries(CURVE_LABELS), interpolation.curve, (value) =>
+    ctx.apply(updateInterpolation, interpolation.id, { curve: value, ...(value === 'random' ? { seed: randomSeed() } : {}) }),
+  );
+  /* Même réglage, autre tirage : un pas d'historique. */
+  const reroll = textButton('Relancer', {
+    focusKey: `reroll${ctx.key}${interpolation.id}`,
+    onClick: () => ctx.apply(updateInterpolation, interpolation.id, { seed: randomSeed() }),
+  });
+  reroll.title = 'Tirer une autre graine';
+  trackOf(ctx, interpolation.id, (current) => {
+    node.value = current.curve;
+    reroll.hidden = current.curve !== 'random';
+  });
+  const wrap = field('Courbe', node);
+  wrap.append(reroll);
+  return wrap;
+};
+
+const block = (ctx, interpolation, modifiers) => {
+  const head = el('div', 'interpolation-head');
+  head.append(
+    choice('Propriété interpolée', Object.entries(RANGE_LABELS), interpolation.property, (value) =>
+      ctx.apply(updateInterpolation, interpolation.id, { property: value }),
+    ),
+    iconButton({
+      label: `Supprimer l'interpolation ${RANGE_LABELS[interpolation.property]}`,
+      text: '×',
+      focusKey: `delete-interpolation${ctx.key}${interpolation.id}`,
+      danger: true,
+      onClick: () => ctx.apply(removeInterpolation, interpolation.id),
+    }),
+  );
+  const range = row(boundControl(ctx, interpolation, 0, 'Début'), boundControl(ctx, interpolation, 1, 'Fin'));
+  const binding = bindingField(ctx, interpolation, modifiers);
+  const root = el('div', 'interpolation-block');
+  root.append(head, ...(binding ? [binding] : []), curveField(ctx, interpolation), range);
+  return root;
+};
+
+/* Tout ce que les blocs affichent, sauf les valeurs des curseurs : les types
+   des modificateurs en font partie, ils nomment les options de la rampe. */
+const signature = (owner) =>
+  JSON.stringify([
+    owner.id,
+    owner.interpolations.map((interpolation) => [interpolation.id, interpolation.property, interpolation.binding]),
+    owner.modifiers.map((modifier) => modifier.type),
+  ]);
+
 /* `ownerOf(scene)` = le calque ou la forme dont la pile s'édite, ou `null` ;
    `key` distingue les clés de focus des deux sections montées. */
 export const interpolationSection = ({ store, ownerOf, key = '' }) => {
-  let uid = 0;
   /* Contrôles rafraîchis sans reconstruction : les bornes et leurs lectures. */
   let bounds = [];
-
-  const apply = (transition, ...args) => {
-    const owner = ownerOf(store.get());
-    if (owner) store.apply(transition, owner.id, ...args);
+  const ctx = {
+    key,
+    apply: (transition, ...args) => {
+      const owner = ownerOf(store.get());
+      if (owner) store.apply(transition, owner.id, ...args);
+    },
+    track: (sync) => bounds.push(sync),
   };
 
-  const option = (value, label) => {
-    const node = document.createElement('option');
-    node.value = value;
-    node.textContent = label;
-    return node;
-  };
-
-  const select = (label, options, value, onChange) => {
-    const node = document.createElement('select');
-    node.id = `interp-${++uid}`;
-    node.setAttribute('aria-label', label);
-    node.append(...options.map(([optionValue, optionLabel]) => option(optionValue, optionLabel)));
-    node.value = value;
-    node.addEventListener('change', () => onChange(node.value));
-    return node;
-  };
-
-  const field = (labelText, control) => {
-    const wrap = document.createElement('div');
-    wrap.className = 'field';
-    const label = document.createElement('label');
-    label.textContent = labelText;
-    label.htmlFor = control.id;
-    wrap.append(label, control);
-    return wrap;
-  };
-
-  /* Borne d'une interpolation de couleur : le sélecteur natif, qui ne lit et
-     n'écrit que `#rrggbb`, le format du modèle. */
-  const colorControl = (interpolation, index, labelText) => {
-    const input = document.createElement('input');
-    input.type = 'color';
-    input.id = `interp-${++uid}`;
-    input.addEventListener('input', () => apply(updateInterpolationRange, interpolation.id, index, input.value));
-    bounds.push({
-      sync: (layer) => {
-        const current = layer.interpolations.find((candidate) => candidate.id === interpolation.id);
-        if (current && document.activeElement !== input) input.value = current.range[index];
-      },
-    });
-    return field(labelText, input);
-  };
-
-  /**
-   * Une borne de la plage, en pourcentage. Le champ prend les bornes de la
-   * propriété : passer une interpolation d'opacité à l'échelle reconstruit le
-   * bloc, donc le `min` et le `max` suivent sans réglage à la main.
-   */
-  const boundControl = (interpolation, index, labelText) => {
-    if (RANGE_BOUNDS[interpolation.property].color) return colorControl(interpolation, index, labelText);
-    const { min, max, step, unit = '%' } = RANGE_BOUNDS[interpolation.property];
-    /* Les facteurs s'affichent en pourcentage, la rotation en degrés tels quels. */
-    const ratio = unit === '%' ? PERCENT : 1;
-    const number = document.createElement('input');
-    number.type = 'number';
-    number.id = `interp-${++uid}`;
-    number.min = String(min * ratio);
-    number.max = String(max * ratio);
-    number.step = String(step * ratio);
-    number.addEventListener('input', () => {
-      if (number.value === '') return;
-      apply(updateInterpolationRange, interpolation.id, index, Number(number.value) / ratio);
-    });
-
-    bounds.push({
-      sync: (layer) => {
-        const current = layer.interpolations.find(
-          (candidate) => candidate.id === interpolation.id,
-        );
-        if (!current) return;
-        const value = Math.round(current.range[index] * ratio);
-        if (document.activeElement !== number) number.value = String(value);
-      },
-    });
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'unit-input';
-    const suffix = document.createElement('span');
-    suffix.setAttribute('aria-hidden', 'true');
-    suffix.textContent = unit;
-    /* `field` pose le libellé et le champ ; le champ passe ensuite dans son
-       habillage à suffixe. */
-    const wrap = field(labelText, number);
-    wrapper.append(number, suffix);
-    wrap.append(wrapper);
-    return wrap;
-  };
-
-  /**
-   * Rampe suivie : toutes les copies de la pile, ou l'indice d'un seul de ses
-   * étages. Une pile vide n'a pas d'étage à nommer, donc pas de champ — le
-   * proposer promettrait un réglage sans effet.
-   */
-  const bindingField = (interpolation, modifiers) => {
-    if (modifiers.length === 0) return null;
-    return field(
-      'Rampe',
-      select(
-        'Rampe suivie',
-        [
-          ['', 'Toutes les copies'],
-          ...modifiers.map((modifier, index) => [
-            String(index),
-            `${index + 1}. ${MODIFIER_LABELS[modifier.type]}`,
-          ]),
-        ],
-        String(interpolation.binding ?? ''),
-        (value) =>
-          apply(updateInterpolation, interpolation.id, {
-            binding: value === '' ? null : Number(value),
-          }),
-      ),
-    );
-  };
-
-  /* Forme de la rampe, par interpolation. Resynchronisée sans reconstruction :
-     l'annulation la ramène sans arracher le bloc. Passer à l'aléatoire tire
-     une graine neuve : deux bruits de la pile ne se suivent pas pas à pas. */
-  const curveField = (interpolation) => {
-    const node = select('Courbe de la rampe', Object.entries(CURVE_LABELS), interpolation.curve, (value) =>
-      apply(updateInterpolation, interpolation.id, { curve: value, ...(value === 'random' ? { seed: randomSeed() } : {}) }),
-    );
-    /* Même réglage, autre tirage : un pas d'historique. */
-    const reroll = document.createElement('button');
-    reroll.type = 'button';
-    reroll.className = 'text-btn';
-    reroll.textContent = 'Relancer';
-    reroll.title = 'Tirer une autre graine';
-    reroll.dataset.focusKey = `reroll${key}${interpolation.id}`;
-    reroll.addEventListener('click', () => apply(updateInterpolation, interpolation.id, { seed: randomSeed() }));
-    bounds.push({
-      sync: (layer) => {
-        const current = layer.interpolations.find((candidate) => candidate.id === interpolation.id);
-        if (!current) return;
-        node.value = current.curve;
-        reroll.hidden = current.curve !== 'random';
-      },
-    });
-    const wrap = field('Courbe', node);
-    wrap.append(reroll);
-    return wrap;
-  };
-
-  const block = (interpolation, modifiers) => {
-    const root = document.createElement('div');
-    root.className = 'interpolation-block';
-
-    const head = document.createElement('div');
-    head.className = 'interpolation-head';
-    head.append(
-      select(
-        'Propriété interpolée',
-        Object.entries(RANGE_LABELS),
-        interpolation.property,
-        (value) => apply(updateInterpolation, interpolation.id, { property: value }),
-      ),
-      iconButton({
-        label: `Supprimer l'interpolation ${RANGE_LABELS[interpolation.property]}`,
-        text: '×',
-        focusKey: `delete-interpolation${key}${interpolation.id}`,
-        danger: true,
-        onClick: () => apply(removeInterpolation, interpolation.id),
-      }),
-    );
-
-    const range = document.createElement('div');
-    range.className = 'field-row';
-    range.append(boundControl(interpolation, 0, 'Début'), boundControl(interpolation, 1, 'Fin'));
-
-    const binding = bindingField(interpolation, modifiers);
-    root.append(head, ...(binding ? [binding] : []), curveField(interpolation), range);
-    return root;
-  };
-
-  const set = document.createElement('section');
-  set.className = 'group';
-  const head = document.createElement('div');
-  head.className = 'section-head';
-  const title = document.createElement('h3');
-  title.textContent = 'Faire varier les itérations';
-  const host = document.createElement('div');
-  host.className = 'stack';
-
-  const addButton = document.createElement('button');
-  addButton.type = 'button';
-  addButton.className = 'text-btn';
-  addButton.textContent = '+ Ajouter';
-  addButton.title = 'Ajouter une interpolation';
-  addButton.setAttribute('aria-label', 'Ajouter une interpolation');
-  addButton.dataset.focusKey = `add-interpolation${key}`;
-  addButton.addEventListener('click', () => apply(addInterpolation));
-  head.append(title, addButton);
-
-  const clearButton = document.createElement('button');
-  clearButton.type = 'button';
-  clearButton.className = 'text-btn is-dim';
-  clearButton.textContent = 'Tout retirer';
-  clearButton.dataset.focusKey = `clear-interpolations${key}`;
-  clearButton.addEventListener('click', () => apply(clearInterpolations));
-
+  const host = el('div', 'stack');
+  const addButton = textButton('+ Ajouter', {
+    label: 'Ajouter une interpolation',
+    focusKey: `add-interpolation${key}`,
+    onClick: () => ctx.apply(addInterpolation),
+  });
+  const clearButton = textButton('Tout retirer', {
+    className: 'text-btn is-dim',
+    focusKey: `clear-interpolations${key}`,
+    onClick: () => ctx.apply(clearInterpolations),
+  });
+  const set = el('section', 'group');
+  const head = sectionHead('Faire varier les itérations', addButton);
   set.append(head, host, clearButton);
   const fold = collapsible(set, head, 'interpolations');
 
-  /* Tout ce que les blocs affichent, sauf les valeurs des curseurs : les types
-     des modificateurs en font partie, ils nomment les options de la rampe. */
-  const signature = (layer) =>
-    JSON.stringify([
-      layer.id,
-      layer.interpolations.map((interpolation) => [
-        interpolation.id,
-        interpolation.property,
-        interpolation.binding,
-      ]),
-      layer.modifiers.map((modifier) => modifier.type),
-    ]);
-
   let last = null;
-
-  const sync = (layer) => {
-    if (!layer) return;
-
-    const next = signature(layer);
+  const sync = (owner) => {
+    if (!owner) return;
+    const next = signature(owner);
     if (next !== last) {
       last = next;
       rebuildWithFocus(host, () => {
         bounds = [];
-        host.append(
-          ...layer.interpolations.map((interpolation) => block(interpolation, layer.modifiers)),
-        );
+        host.append(...owner.interpolations.map((interpolation) => block(ctx, interpolation, owner.modifiers)));
         return addButton;
       });
     }
-
-    clearButton.hidden = layer.interpolations.length === 0;
-    fold.summarize(countLabel(layer.interpolations.length, 'interpolation'));
-    for (const control of bounds) control.sync(layer);
+    clearButton.hidden = owner.interpolations.length === 0;
+    fold.summarize(countLabel(owner.interpolations.length, 'interpolation'));
+    for (const control of bounds) control(owner);
   };
 
   return { root: set, sync };

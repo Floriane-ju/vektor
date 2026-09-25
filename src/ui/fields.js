@@ -1,5 +1,6 @@
-/* Briques DOM des panneaux de réglages : partagées par le panneau de droite et
-   la section « Répéter », qui se monte pour le calque comme pour la forme. */
+/* Briques DOM des panneaux de réglages : le seul module de contrôles de
+   formulaire, partagé par le panneau de droite et ses sections (répéter,
+   interpolations, booléens), montées pour le calque comme pour la forme. */
 import { icon } from './icons.js';
 import { loadCollapsed, saveCollapsed } from './settings.js';
 
@@ -29,7 +30,7 @@ export const row = (...children) => {
 
 export const separator = () => el('hr', 'separator');
 
-const option = (value, label) => {
+export const option = (value, label) => {
   const node = el('option', null, label);
   node.value = value;
   return node;
@@ -50,6 +51,55 @@ export const select = (entries) => {
   return node;
 };
 
+/**
+ * Relie un contrôle à la cible que `target()` résout au moment du geste :
+ * rien n'est écrit sans cible. Une case à cocher écrit son état coché, les
+ * autres `parse(node.value)`.
+ */
+export const bindControl = (node, target, write, { event = 'input', parse = Number } = {}) => {
+  node.addEventListener(event, () => {
+    /* Champ vidé pour retaper : rien n'est écrit, `Number('')` vaudrait 0. */
+    if (node.type === 'number' && node.value === '') return;
+    const current = target();
+    if (current) write(current, node.type === 'checkbox' ? node.checked : parse(node.value));
+  });
+  return node;
+};
+
+/* Affiche une valeur lue du modèle, sans écraser le champ en cours de saisie. */
+export const showValue = (node, value) => {
+  if (node.type === 'checkbox') node.checked = Boolean(value);
+  else if (document.activeElement !== node) node.value = value;
+};
+
+/**
+ * Choix exclusif en segments : des radios natifs, donc flèches et annonce du
+ * groupe par le navigateur. `onPick(value)` à chaque radio coché ; `check`
+ * coche la valeur lue du modèle. `focusKeyOf(value)` : clé de focus des
+ * radios d'une section reconstruite.
+ */
+export const segmented = (legendText, entries, onPick, focusKeyOf = null) => {
+  const root = el('fieldset', 'segmented');
+  const track = el('div', 'segments');
+  root.append(el('legend', null, legendText), track);
+  const name = nextId();
+  const radios = entries.map(([value, label]) => {
+    const radio = input('radio', { name, value });
+    if (focusKeyOf) radio.dataset.focusKey = focusKeyOf(value);
+    radio.addEventListener('change', () => {
+      if (radio.checked) onPick(value);
+    });
+    const wrap = el('label', 'segment');
+    wrap.append(radio, el('span', null, label));
+    track.append(wrap);
+    return radio;
+  });
+  const check = (value) => {
+    for (const radio of radios) radio.checked = radio.value === value;
+  };
+  return { root, check };
+};
+
 /* Case à cocher habillée en interrupteur ; la case reste native. */
 export const switchField = (labelText, checkbox) => {
   checkbox.classList.add('switch');
@@ -58,22 +108,27 @@ export const switchField = (labelText, checkbox) => {
   return label;
 };
 
-/* Entête d'une section : titre, et son bouton d'ajout à droite. */
-export const sectionHead = (title, addButton) => {
+/* Entête d'une section : titre, et son éventuel bouton d'ajout à droite. */
+export const sectionHead = (title, addButton = null) => {
   const head = el('div', 'section-head');
-  head.append(el('h3', null, title), addButton);
+  head.append(el('h3', null, title), ...(addButton ? [addButton] : []));
   return head;
 };
 
-export const addButtonFor = (label, focusKey, onClick) => {
-  const node = el('button', 'text-btn', '+ Ajouter');
+/* Bouton texte d'une section ; `label` = infobulle et nom accessible. */
+export const textButton = (text, { label = null, focusKey, onClick, className = 'text-btn' }) => {
+  const node = el('button', className, text);
   node.type = 'button';
-  node.setAttribute('aria-label', label);
-  node.title = label;
+  if (label) {
+    node.setAttribute('aria-label', label);
+    node.title = label;
+  }
   node.dataset.focusKey = focusKey;
   node.addEventListener('click', onClick);
   return node;
 };
+
+export const addButtonFor = (label, focusKey, onClick) => textButton('+ Ajouter', { label, focusKey, onClick });
 
 /**
  * Curseur doublé d'un champ numérique : le curseur pour le geste, le champ

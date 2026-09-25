@@ -1,5 +1,6 @@
 import { activePlane, getActiveElement, insideHosts, setInside, SHAPES } from '../scene.js';
 import { shapeName } from './list.js';
+import { el, option, sectionHead } from './fields.js';
 
 /**
  * « À l'intérieur de » : loge la forme dans une forme fermée du même calque,
@@ -8,15 +9,10 @@ import { shapeName } from './list.js';
  * rendre introuvable.
  */
 export const insideField = ({ store }) => {
-  const root = document.createElement('section');
-  root.className = 'group';
-  const head = document.createElement('div');
-  head.className = 'section-head';
-  const title = document.createElement('h3');
-  title.textContent = "À l'intérieur de";
-  head.append(title);
+  const root = el('section', 'group');
+  const head = sectionHead("À l'intérieur de");
 
-  const select = document.createElement('select');
+  const select = el('select');
   select.id = 'inside-host';
   select.setAttribute('aria-label', "Forme dans laquelle celle-ci est logée");
   select.dataset.focusKey = 'inside-host';
@@ -35,12 +31,6 @@ export const insideField = ({ store }) => {
     const next = JSON.stringify([element.id, element.inside, hosts.map((host) => [host.id, host.type])]);
     if (next === last) return;
     last = next;
-    const option = (value, label) => {
-      const node = document.createElement('option');
-      node.value = value;
-      node.textContent = label;
-      return node;
-    };
     select.replaceChildren(
       option('', 'Aucune'),
       ...hosts.map((host) => option(host.id, shapeName(layer, host, SHAPES))),

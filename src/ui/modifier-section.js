@@ -12,12 +12,171 @@ import {
   PIVOTING,
 } from '../modifiers.js';
 import { iconButton, rebuildWithFocus } from './list.js';
-import { addButtonFor, collapsible, countLabel, el, field, input, row, sectionHead, select, slider, switchField } from './fields.js';
+import {
+  addButtonFor,
+  bindControl,
+  collapsible,
+  countLabel,
+  el,
+  field,
+  input,
+  row,
+  sectionHead,
+  select,
+  showValue,
+  slider,
+  switchField,
+} from './fields.js';
 
 /* Bornes du curseur de copies. Le champ numérique voisin accepte au-delà. */
 const COUNT_SLIDER = { min: '1', max: '64', step: '1' };
 
 const plural = (total) => `${total} copie${total > 1 ? 's' : ''}`;
+
+/* Case « Orienter », « Lisser »… d'un étage : `key` lu et écrit tel quel. */
+const stageFlags = (bindStage) => {
+  const flag = (read, key) => bindStage(input('checkbox'), read, (value) => ({ [key]: value }), { event: 'change' });
+  /* Décochée, la copie ne fait que se déplacer : des carrés droits posés en
+     cercle sont un motif aussi légitime que des rayons. */
+  const orientField = switchField('Orienter les copies', flag(orients, 'orient'));
+  /* Étage d'un point seulement : relie ses copies successives en un tracé. */
+  const linearField = switchField('Activer les répétitions linéaires', flag((modifier) => modifier.linear === true, 'linear'));
+  /* Le tracé relié passe en courbe par les copies au lieu de les joindre en ligne brisée. */
+  const smoothField = switchField('Lisser', flag((modifier) => modifier.smooth === true, 'smooth'));
+  return { orientField, linearField, smoothField };
+};
+
+/* Réglages chiffrés d'un étage : pas, spirale, axe de miroir. */
+const stageNumbers = (bindStage) => {
+  const numberInput = (step, key) =>
+    bindStage(input('number', { step }), (modifier) => modifier[key], (value) => ({ [key]: value }));
+  const stepRow = row(field('Pas X (px)', numberInput('1', 'stepX')), field('Pas Y (px)', numberInput('1', 'stepY')));
+  const spiralRow = row(
+    field('Pas angulaire (rad)', numberInput('0.001', 'angleStep')),
+    field('Croissance (%)', numberInput('0.1', 'radiusStep')),
+  );
+  /* Angle de l'axe d'un miroir : 90° vertical, 0° horizontal, entre les deux
+     les symétries diagonales. */
+  const axisField = field(
+    "Angle de l'axe (°)",
+    bindStage(input('number', { step: '1' }), axisAngle, (value) => ({ axis: value })),
+  );
+  return { stepRow, spiralRow, axisField };
+};
+
+/* Entête d'un étage : son type, et les boutons monter, descendre, supprimer.
+   L'ordre de la pile change le dessin : un pas puis un miroir donne deux
+   rangées face à face, l'inverse une seule rangée doublée. */
+const stageHead = (type, { index, stackSize, suffix, apply }) => {
+  const rank = index + 1;
+  const head = el('div', 'modifier-head');
+  head.append(
+    type,
+    iconButton({
+      label: `Monter le modificateur ${rank}`,
+      text: '↑',
+      focusKey: `up-modifier${suffix}${index}`,
+      disabled: index === 0,
+      onClick: () => apply(moveModifier, index, -1),
+    }),
+    iconButton({
+      label: `Descendre le modificateur ${rank}`,
+      text: '↓',
+      focusKey: `down-modifier${suffix}${index}`,
+      disabled: index === stackSize - 1,
+      onClick: () => apply(moveModifier, index, 1),
+    }),
+    iconButton({
+      label: `Supprimer le modificateur ${rank}`,
+      text: '×',
+      focusKey: `delete-modifier${suffix}${index}`,
+      danger: true,
+      onClick: () => apply(removeModifier, index),
+    }),
+  );
+  return head;
+};
+
+/* Pivot propre d'un étage. Cochée, l'étage part du pivot du calque et le garde
+   ensuite pour lui ; décochée, il le reprend. */
+const stagePivot = (store, bind, index) => {
+  const writeCenter = (toCenter) => ({ layer, owner }, value) =>
+    store.apply(updateModifier, owner.id, index, { center: toCenter(pivotOf(layer, index, owner), value) });
+  const ownPivot = bind(input('checkbox'), ({ owner }) => Boolean(owner.modifiers[index].center), writeCenter((pivot, own) => (own ? pivot : null)), {
+    event: 'change',
+  });
+  const pivotInput = (key) =>
+    bind(
+      input('number', { step: '1' }),
+      ({ layer, owner }) => Math.round(pivotOf(layer, index, owner)[key]),
+      writeCenter((pivot, value) => ({ ...pivot, [key]: value })),
+    );
+  const ownPivotField = switchField('Pivot personnalisé', ownPivot);
+  const pivotRow = row(field('Pivot X', pivotInput('x')), field('Pivot Y', pivotInput('y')));
+  return { ownPivotField, pivotRow };
+};
+
+/* Ce qu'un étage montre selon son type et son propriétaire. */
+const showStage = (parts, modifier, owner, forElement) => {
+  /* `none` et les miroirs décident eux-mêmes de leur nombre de copies : leur
+     proposer un « Copies » promettrait un réglage sans effet. */
+  parts.countField.hidden = Object.hasOwn(FIXED_COPIES, modifier.type);
+  parts.stepRow.hidden = modifier.type !== 'step';
+  parts.spiralRow.hidden = modifier.type !== 'spiral';
+  parts.axisField.hidden = !Object.hasOwn(MIRROR_AXIS, modifier.type);
+  /* Un pas ne tourne rien, un point tourné reste identique : rien à orienter. */
+  parts.orientField.hidden = !ORIENTING.has(modifier.type) || owner.type === 'point';
+  /* Seule la pile d'un point relie ses copies ; celle du calque jamais. */
+  parts.linearField.hidden = !forElement || owner.type !== 'point' || modifier.type === 'none';
+  /* Deux copies (miroir) ne font qu'un segment : rien à courber. */
+  parts.smoothField.hidden = parts.linearField.hidden || !modifier.linear || effectiveCount(modifier) < 3;
+  parts.ownPivotField.hidden = !PIVOTING.has(modifier.type);
+  parts.pivotRow.hidden = parts.ownPivotField.hidden || !modifier.center;
+};
+
+/* Bloc d'un étage de la pile. `current()` rend `{ layer, owner }` ou `null`. */
+const stageBlock = ({ store, current, forElement }, index, stackSize) => {
+  const controls = [];
+  const bind = (node, read, write, options) => {
+    controls.push({ node, read });
+    return bindControl(node, current, write, options);
+  };
+  const stage = ({ owner }) => owner.modifiers[index];
+  const write = (toPatch) => ({ owner }, value) => store.apply(updateModifier, owner.id, index, toPatch(value));
+  const bindStage = (node, read, toPatch, options) => bind(node, (target) => read(stage(target)), write(toPatch), options);
+  const apply = (transition, ...args) => {
+    const target = current();
+    if (target) store.apply(transition, target.owner.id, ...args);
+  };
+
+  const type = select(Object.entries(MODIFIER_LABELS));
+  type.setAttribute('aria-label', `Type du modificateur ${index + 1}`);
+  bindStage(type, (modifier) => modifier.type, (value) => ({ type: value }), { event: 'change', parse: String });
+  const countField = slider(bind, 'Copies', COUNT_SLIDER, (target) => stage(target).n, write((value) => ({ n: value })));
+  const parts = { countField, ...stageNumbers(bindStage), ...stageFlags(bindStage), ...stagePivot(store, bind, index) };
+
+  const node = el('div', 'modifier-block');
+  node.append(
+    stageHead(type, { index, stackSize, suffix: forElement ? '-element' : '', apply }),
+    countField,
+    parts.stepRow,
+    parts.spiralRow,
+    parts.axisField,
+    parts.orientField,
+    parts.linearField,
+    parts.smoothField,
+    parts.ownPivotField,
+    parts.pivotRow,
+  );
+
+  const sync = (target) => {
+    const modifier = stage(target);
+    if (!modifier) return;
+    for (const { node: control, read } of controls) showValue(control, read(target));
+    showStage(parts, modifier, target.owner, forElement);
+  };
+  return { root: node, sync };
+};
 
 /**
  * Section « Répéter » : la pile de modificateurs d'un calque ou d'une forme,
@@ -34,19 +193,6 @@ const plural = (total) => `${total} copie${total > 1 ? 's' : ''}`;
 export const modifierSection = ({ store, ownerOf, forElement = false }) => {
   const current = () => ownerOf(store.get());
 
-  /* Relie un `input` à l'étage ou au calque courant ; `read`/`write` reçoivent
-     `{ layer, owner }`. */
-  const bind = (node, read, write, { event = 'input', parse = Number, into }) => {
-    node.addEventListener(event, () => {
-      /* Champ vidé pour retaper : rien n'est écrit, `Number('')` vaudrait 0. */
-      if (node.type === 'number' && node.value === '') return;
-      const target = current();
-      if (target) write(target, parse(node.value));
-    });
-    into.push({ node, read });
-    return node;
-  };
-
   const root = el('section', 'group');
   const host = el('div', 'stack');
   const addButton = addButtonFor('Ajouter un modificateur', `add-modifier${forElement ? '-element' : ''}`, () => {
@@ -57,13 +203,13 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
   /* Pivot du calque : celui de tout étage qui n'a pas le sien. Se déplace
      aussi à la souris, par la croix ou l'axe des repères. */
   const pivotControls = [];
-  const layerPivotInput = (axis) =>
-    bind(
-      input('number', { step: '1' }),
-      ({ layer }) => Math.round(layer.center[axis]),
-      ({ layer }, value) => store.apply(setLayerCenter, layer.id, { ...layer.center, [axis]: value }),
-      { into: pivotControls },
+  const layerPivotInput = (axis) => {
+    const node = input('number', { step: '1' });
+    pivotControls.push({ node, read: ({ layer }) => Math.round(layer.center[axis]) });
+    return bindControl(node, current, ({ layer }, value) =>
+      store.apply(setLayerCenter, layer.id, { ...layer.center, [axis]: value }),
     );
+  };
   const layerPivot = row(field('Pivot X', layerPivotInput('x')), field('Pivot Y', layerPivotInput('y')));
   /* Total de la pile, qui multiplie : au-delà du plafond, le calque ne se rend plus. */
   const copyTotalNode = el('p', 'copy-count');
@@ -74,159 +220,15 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
 
   let blocks = [];
 
-  const block = (index, stackSize) => {
-    const controls = [];
-    const stage = ({ owner }) => owner.modifiers[index];
-    const write = (toPatch) => ({ owner }, value) => store.apply(updateModifier, owner.id, index, toPatch(value));
-    const bindStage = (node, read, toPatch, options = {}) =>
-      bind(node, (target) => read(stage(target)), write(toPatch), { into: controls, ...options });
-
-    const rank = index + 1;
-    const type = select(Object.entries(MODIFIER_LABELS));
-    type.setAttribute('aria-label', `Type du modificateur ${rank}`);
-    bindStage(type, (modifier) => modifier.type, (value) => ({ type: value }), { event: 'change', parse: String });
-
-    const countField = slider(
-      bind,
-      'Copies',
-      COUNT_SLIDER,
-      (target) => stage(target).n,
-      write((value) => ({ n: value })),
-      { into: controls },
-    );
-    const numberInput = (step, key) =>
-      bindStage(input('number', { step }), (modifier) => modifier[key], (value) => ({ [key]: value }));
-    const stepX = numberInput('1', 'stepX');
-    const stepY = numberInput('1', 'stepY');
-    const angleStep = numberInput('0.001', 'angleStep');
-    const radiusStep = numberInput('0.1', 'radiusStep');
-    /* Angle de l'axe d'un miroir : 90° vertical, 0° horizontal, entre les deux
-       les symétries diagonales. */
-    const axis = bindStage(input('number', { step: '1' }), axisAngle, (value) => ({ axis: value }));
-    /* Décochée, la copie ne fait que se déplacer : des carrés droits posés en
-       cercle sont un motif aussi légitime que des rayons. */
-    const orient = bindStage(input('checkbox'), orients, (value) => ({ orient: value }), {
-      event: 'change',
-      parse: () => orient.checked,
-    });
-    /* Étage d'un point seulement : relie ses copies successives en un tracé. */
-    const linear = bindStage(input('checkbox'), (modifier) => modifier.linear === true, (value) => ({ linear: value }), {
-      event: 'change',
-      parse: () => linear.checked,
-    });
-    /* Le tracé relié passe en courbe par les copies au lieu de les joindre en ligne brisée. */
-    const smooth = bindStage(input('checkbox'), (modifier) => modifier.smooth === true, (value) => ({ smooth: value }), {
-      event: 'change',
-      parse: () => smooth.checked,
-    });
-
-    /* Cochée, l'étage part du pivot du calque et le garde ensuite pour lui ;
-       décochée, il le reprend. */
-    const writeCenter = (toCenter) => ({ layer, owner }, value) =>
-      store.apply(updateModifier, owner.id, index, { center: toCenter(pivotOf(layer, index, owner), value) });
-    const ownPivot = bind(input('checkbox'), (target) => Boolean(stage(target).center), writeCenter((pivot, own) => (own ? pivot : null)), {
-      into: controls,
-      event: 'change',
-      parse: () => ownPivot.checked,
-    });
-    const pivotInput = (key) =>
-      bind(
-        input('number', { step: '1' }),
-        ({ layer, owner }) => Math.round(pivotOf(layer, index, owner)[key]),
-        writeCenter((pivot, value) => ({ ...pivot, [key]: value })),
-        { into: controls },
-      );
-
-    const apply = (transition, ...args) => {
-      const target = current();
-      if (target) store.apply(transition, target.owner.id, ...args);
-    };
-    const suffix = forElement ? '-element' : '';
-
-    const head = el('div', 'modifier-head');
-    head.append(
-      type,
-      /* L'ordre de la pile change le dessin : un pas puis un miroir donne deux
-         rangées face à face, l'inverse une seule rangée doublée. */
-      iconButton({
-        label: `Monter le modificateur ${rank}`,
-        text: '↑',
-        focusKey: `up-modifier${suffix}${index}`,
-        disabled: index === 0,
-        onClick: () => apply(moveModifier, index, -1),
-      }),
-      iconButton({
-        label: `Descendre le modificateur ${rank}`,
-        text: '↓',
-        focusKey: `down-modifier${suffix}${index}`,
-        disabled: index === stackSize - 1,
-        onClick: () => apply(moveModifier, index, 1),
-      }),
-      iconButton({
-        label: `Supprimer le modificateur ${rank}`,
-        text: '×',
-        focusKey: `delete-modifier${suffix}${index}`,
-        danger: true,
-        onClick: () => apply(removeModifier, index),
-      }),
-    );
-
-    const stepRow = row(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
-    const spiralRow = row(field('Pas angulaire (rad)', angleStep), field('Croissance (%)', radiusStep));
-    const axisField = field("Angle de l'axe (°)", axis);
-    const orientField = switchField('Orienter les copies', orient);
-    const linearField = switchField('Activer les répétitions linéaires', linear);
-    const smoothField = switchField('Lisser', smooth);
-    const ownPivotField = switchField('Pivot personnalisé', ownPivot);
-    const pivotRow = row(field('Pivot X', pivotInput('x')), field('Pivot Y', pivotInput('y')));
-
-    const node = el('div', 'modifier-block');
-    node.append(head, countField, stepRow, spiralRow, axisField, orientField, linearField, smoothField, ownPivotField, pivotRow);
-
-    const sync = (target) => {
-      const modifier = stage(target);
-      if (!modifier) return;
-      for (const { node: control, read } of controls) {
-        if (control.type === 'checkbox') control.checked = read(target);
-        else if (document.activeElement !== control) control.value = read(target);
-      }
-      /* `none` et les miroirs décident eux-mêmes de leur nombre de copies : leur
-         proposer un « Copies » promettrait un réglage sans effet. */
-      countField.hidden = Object.hasOwn(FIXED_COPIES, modifier.type);
-      stepRow.hidden = modifier.type !== 'step';
-      spiralRow.hidden = modifier.type !== 'spiral';
-      axisField.hidden = !Object.hasOwn(MIRROR_AXIS, modifier.type);
-      /* Un pas ne tourne rien, un point tourné reste identique : rien à orienter. */
-      orientField.hidden = !ORIENTING.has(modifier.type) || target.owner.type === 'point';
-      /* Seule la pile d'un point relie ses copies ; celle du calque jamais. */
-      linearField.hidden = !forElement || target.owner.type !== 'point' || modifier.type === 'none';
-      /* Deux copies (miroir) ne font qu'un segment : rien à courber. */
-      smoothField.hidden = linearField.hidden || !modifier.linear || effectiveCount(modifier) < 3;
-      ownPivotField.hidden = !PIVOTING.has(modifier.type);
-      pivotRow.hidden = ownPivotField.hidden || !modifier.center;
-    };
-
-    return { root: node, sync };
-  };
-
   const rebuild = (stack) =>
     rebuildWithFocus(host, () => {
-      blocks = stack.map((_, index) => block(index, stack.length));
+      blocks = stack.map((_, index) => stageBlock({ store, current, forElement }, index, stack.length));
       host.append(...blocks.map((entry) => entry.root));
       return addButton;
     });
 
-  const sync = (scene) => {
-    const target = ownerOf(scene);
-    const stack = target?.owner.modifiers ?? [];
-    if (stack.length !== blocks.length) rebuild(stack);
-    addButton.disabled = !target;
-    if (!target) return;
-    const { layer } = target;
-    for (const { node, read } of pivotControls) {
-      if (document.activeElement !== node) node.value = read(target);
-    }
-    layerPivot.hidden = !stack.some((modifier) => PIVOTING.has(modifier.type));
+  /* Total des copies, et son plafond. */
+  const showTotal = (stack, layer) => {
     const own = copyCount(stack);
     const total = copyTotal(layer);
     const over = isSuspended(layer);
@@ -236,6 +238,17 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
       ? `${total.toLocaleString('fr-FR')} copies — rendu suspendu au-delà de ${MAX_COPIES.toLocaleString('fr-FR')}`
       : plural(own);
     fold.summarize(stack.length ? `${countLabel(stack.length, 'étage')} · ${plural(own)}` : countLabel(0, 'étage'));
+  };
+
+  const sync = (scene) => {
+    const target = ownerOf(scene);
+    const stack = target?.owner.modifiers ?? [];
+    if (stack.length !== blocks.length) rebuild(stack);
+    addButton.disabled = !target;
+    if (!target) return;
+    for (const { node, read } of pivotControls) showValue(node, read(target));
+    layerPivot.hidden = !stack.some((modifier) => PIVOTING.has(modifier.type));
+    showTotal(stack, target.layer);
     for (const entry of blocks) entry.sync(target);
   };
 
