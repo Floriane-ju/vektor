@@ -2,9 +2,12 @@
 {
   "id": "T-0113",
   "titre": "Forme logée opaque et chaînes d'hôtes en 3D",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
-  "tags": ["3d", "rendu"],
+  "tags": [
+    "3d",
+    "rendu"
+  ],
   "cree": "2026-09-25",
   "maj": "2026-09-25",
   "plan": null
