@@ -22,6 +22,9 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * seul moteur de rendu, donc rien à garder en phase entre l'écran et le
  * fichier.
  */
+/* Une copie rendue : rang de la copie du calque, puis de la copie propre de la forme. */
+const copyKey = (id, { copy, own = 0 }) => `${id}:${copy}:${own}`;
+
 export const render = (scene, svgRoot) => {
   svgRoot.replaceChildren();
   outlineSerial = 0;
@@ -39,7 +42,7 @@ export const render = (scene, svgRoot) => {
   const shape = (child, host) => {
     const hostShape = host && shapeOccluder(host);
     const node = hostShape ? createInside(child, host, hostShape, defs) : createShape(child);
-    nodeOf.set(`${child.id}:${child.copy}`, { node, host: hostShape ? `${host.id}:${host.copy}` : null });
+    nodeOf.set(copyKey(child.id, child), { node, host: hostShape ? copyKey(host.id, host) : null });
     const silhouette = hostShape ? null : shapeOccluder(child);
     if (silhouette) occluders.set(node, silhouette);
     return node;
@@ -54,7 +57,11 @@ export const render = (scene, svgRoot) => {
     group.dataset.layerId = layer.id;
     /* Un outil booléen ne se dessine pas : il ne vit que dans le résultat. */
     const tools = new Set(layer.elements.flatMap((element) => element.booleans.map((step) => step.with)));
-    const byCopy = new Map(children.map((child) => [`${child.id}:${child.copy}`, child]));
+    const byCopy = new Map(children.map((child) => [copyKey(child.id, child), child]));
+    /* Outil ou hôte de même copie ; répété moins que la forme, sa copie propre 0.
+       ponytail: un outil répété sous une forme qui ne l'est pas n'agit que par
+       sa première copie propre. */
+    const partner = (id, child) => byCopy.get(copyKey(id, child)) ?? byCopy.get(copyKey(id, { ...child, own: 0 }));
     /* Recoupements creux : les aplats rejoignent un tracé commun, chaque forme
        ne garde que son trait. */
     const holes = [];
@@ -63,13 +70,13 @@ export const render = (scene, svgRoot) => {
       if (!bounds.has(child.id)) bounds.set(child.id, childBounds(child));
       if (tools.has(child.id)) continue;
       const steps = child.booleans
-        .map((step) => ({ shape: byCopy.get(`${step.with}:${child.copy}`), op: step.op }))
+        .map((step) => ({ shape: partner(step.with, child), op: step.op }))
         .filter((step) => step.shape);
       if (steps.length > 0) {
         group.append(createBoolean(child, steps));
         continue;
       }
-      const host = child.inside ? byCopy.get(`${child.inside}:${child.copy}`) : null;
+      const host = child.inside ? partner(child.inside, child) : null;
       const area = layer.evenOdd && child.fill !== 'none' ? areaPath(child) : null;
       if (!area) {
         group.append(shape(child, host));
@@ -98,7 +105,9 @@ export const render = (scene, svgRoot) => {
 
   const selection = createSelection(scene, svgRoot);
   if (selection) svgRoot.append(selection);
-  const guides = createGuides(getActiveLayer(scene));
+  const layer = getActiveLayer(scene);
+  const element = getActiveElement(scene);
+  const guides = createGuides(layer, layer?.elements.includes(element) ? element : null);
   if (guides) svgRoot.append(guides);
   const handles = createHandles(scene);
   if (handles) svgRoot.append(handles);
@@ -235,11 +244,13 @@ const GUIDES = {
  * alignés sous le zoom sans qu'aucune coordonnée soit recalculée. `toSvgDocument`
  * les retire — ce sont des repères d'écran, pas du dessin.
  */
-const createGuides = (layer) => {
+const createGuides = (layer, element = null) => {
+  const stages = (owner) => owner.modifiers.map((modifier, index) => ({ modifier, index, owner }));
+  /* La forme sélectionnée montre aussi les étages de sa propre pile. */
   const marked = layer?.visible
-    ? layer.modifiers
-        .map((modifier, index) => ({ modifier, index }))
-        .filter(({ modifier }) => Object.hasOwn(GUIDES, modifier.type))
+    ? [...stages(layer), ...(element ? stages(element) : [])].filter(({ modifier }) =>
+        Object.hasOwn(GUIDES, modifier.type),
+      )
     : [];
   if (marked.length === 0) return null;
 
@@ -259,10 +270,11 @@ const createGuides = (layer) => {
   group.setAttribute('pointer-events', 'none');
   if (activePlane(layer)) group.setAttribute('transform', planeTransform(layer));
   group.append(
-    ...marked.map(({ modifier, index }) => {
+    ...marked.map(({ modifier, index, owner }) => {
       const pivot = document.createElementNS(SVG_NS, 'g');
       pivot.dataset.pivot = String(index);
-      pivot.append(...GUIDES[modifier.type](pivotOf(layer, index), modifier));
+      if (owner !== layer) pivot.dataset.pivotOwner = owner.id;
+      pivot.append(...GUIDES[modifier.type](pivotOf(layer, index, owner), modifier));
       return pivot;
     }),
   );
@@ -598,7 +610,7 @@ const createBoolean = (child, steps) => {
     return node;
   };
   const maskOf = (paint, keep) => {
-    const mask = svgNode('mask', { id: `bool-${child.id}-${child.copy}-${serial++}`, maskUnits: 'userSpaceOnUse' });
+    const mask = svgNode('mask', { id: `bool-${child.id}-${child.copy}-${child.own ?? 0}-${serial++}`, maskUnits: 'userSpaceOnUse' });
     for (const [name, value] of Object.entries(MASK_REGION)) mask.setAttribute(name, round(value));
     if (keep === 'out') mask.append(svgNode('rect', { ...MASK_REGION, fill: '#fff' }));
     mask.append(...(keep === 'out' ? paint('#000', '#fff') : paint('#fff', '#000')));

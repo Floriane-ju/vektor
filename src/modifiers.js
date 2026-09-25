@@ -220,6 +220,9 @@ export const stackCopies = (modifiers) =>
  * Chaque étage tourne autour de son propre pivot s'il en a un, sinon autour de
  * `center`, celui du calque : une couronne dont chaque branche est une petite
  * spirale demande deux pivots.
+ *
+ * Un point qui porte déjà `angle`/`flip` (sortie d'une pile précédente) garde
+ * cette orientation : la pile d'une forme puis celle de son calque s'enchaînent.
  */
 export const applyStack = (point, modifiers, indices, center) =>
   modifiers.reduce(
@@ -238,5 +241,5 @@ export const applyStack = (point, modifiers, indices, center) =>
         flip: next.flip !== current.flip,
       };
     },
-    { x: point.x, y: point.y, angle: 0, flip: false },
+    { x: point.x, y: point.y, angle: point.angle ?? 0, flip: point.flip ?? false },
   );

@@ -1381,7 +1381,7 @@ describe('rotation et épaisseur interpolées', () => {
       layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
     });
     const again = deserialize(serialize(deserialize(old)));
-    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@24');
+    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@25');
     expect(orients(again.layers[0].modifiers[0])).toBe(true);
   });
 
@@ -1921,11 +1921,12 @@ describe('forme logée dans une autre', async () => {
 });
 
 describe('répétition linéaire des points', () => {
-  const pointLayer = (modifiers, linear = true) =>
+  /* La pile est celle du point : c'est elle seule qui décide du lien. */
+  const pointLayer = (modifiers, layerModifiers = []) =>
     createLayer({
       center: { x: 0, y: 0 },
-      elements: [createElement('point', 10, 0, { linear })],
-      modifiers,
+      elements: [createElement('point', 10, 0, { modifiers })],
+      modifiers: layerModifiers,
     });
   const vertices = (child) => child.points.map((p) => [child.x + p.x, child.y + p.y]);
 
@@ -1936,14 +1937,22 @@ describe('répétition linéaire des points', () => {
     expect(vertices(children[0])).toEqual([[10, 0], [60, 0], [110, 0]]);
   });
 
-  it('ignore l’option du point si l’étage ne l’autorise pas', () => {
+  it('ne relie pas sans étage coché', () => {
     const children = getRenderedChildren(pointLayer([createModifier({ n: 3 })]));
     expect(children.map((c) => c.type)).toEqual(['point', 'point', 'point']);
   });
 
-  it('laisse les points tels quels sans l’option du point', () => {
-    const children = getRenderedChildren(pointLayer([createModifier({ n: 3, linear: true })], false));
-    expect(children.every((c) => c.type === 'point')).toBe(true);
+  it('ne relie pas le long des étages du calque', () => {
+    const children = getRenderedChildren(pointLayer([], [createModifier({ n: 3, linear: true })]));
+    expect(children.map((c) => c.type)).toEqual(['point', 'point', 'point']);
+  });
+
+  it('chaque copie du calque porte son propre tracé', () => {
+    const children = getRenderedChildren(
+      pointLayer([createModifier({ n: 2, stepX: 50, linear: true })], [createModifier({ n: 3, stepX: 0, stepY: 40 })]),
+    );
+    expect(children).toHaveLength(3);
+    expect(vertices(children[2])).toEqual([[10, 80], [60, 80]]);
   });
 
   it('un miroir donne un segment, l’axial un tracé fermé', () => {
@@ -1974,8 +1983,139 @@ describe('répétition linéaire des points', () => {
   it('survit à la sauvegarde', () => {
     const scene = { ...createScene(), layers: [pointLayer([createModifier({ linear: true })])] };
     const [layer] = deserialize(serialize(scene)).layers;
-    expect(layer.modifiers[0].linear).toBe(true);
-    expect(layer.elements[0].linear).toBe(true);
+    expect(layer.elements[0].modifiers[0].linear).toBe(true);
+    expect(layer.elements[0]).not.toHaveProperty('linear');
+  });
+
+  it('un fichier @24 relié par le calque redevient des points', () => {
+    const raw = {
+      format: 'vektor/scene@24',
+      layers: [{
+        id: 'L1',
+        modifiers: [{ type: 'step', n: 3, linear: true }],
+        elements: [{ id: 'E1', type: 'point', x: 0, y: 0, linear: true }],
+      }],
+    };
+    const [layer] = deserialize(JSON.stringify(raw)).layers;
+    expect(layer.modifiers[0].linear).toBeUndefined();
+    expect(getRenderedChildren(layer).map((c) => c.type)).toEqual(['point', 'point', 'point']);
+  });
+});
+
+describe('répétitions et itérations de la forme', () => {
+  const at = (child) => [Math.round(child.x), Math.round(child.y)];
+
+  it('la forme se répète d’abord, puis le calque répète le tout', () => {
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      modifiers: [createModifier({ n: 2, stepX: 0, stepY: 100 })],
+      elements: [createElement('ellipse', 0, 0, { modifiers: [createModifier({ n: 3, stepX: 10 })] })],
+    });
+    expect(getRenderedChildren(layer).map(at)).toEqual([[0, 0], [10, 0], [20, 0], [0, 100], [10, 100], [20, 100]]);
+  });
+
+  it('le pivot par défaut d’un étage de forme est celui du calque', () => {
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      elements: [createElement('ellipse', 10, 0, { modifiers: [createModifier({ type: 'axial', n: 2 })] })],
+    });
+    expect(getRenderedChildren(layer).map(at)).toEqual([[10, 0], [-10, 0]]);
+    expect(pivotOf(layer, 0, layer.elements[0])).toEqual({ x: 0, y: 0 });
+  });
+
+  it('l’orientation de la forme se compose avec celle du calque', () => {
+    const layer = createLayer({
+      center: { x: 0, y: 0 },
+      modifiers: [createModifier({ type: 'axial', n: 4 })],
+      elements: [createElement('line', 10, 0, { modifiers: [createModifier({ type: 'axial', n: 2 })] })],
+    });
+    const rotations = getRenderedChildren(layer).map((c) => Math.round(((c.rotation % 360) + 360) % 360));
+    expect(rotations).toEqual([0, 180, 90, 270, 180, 0, 270, 90]);
+  });
+
+  it('les interpolations de la forme courent sur ses copies et se composent avec le calque', () => {
+    const layer = createLayer({
+      modifiers: [createModifier({ n: 2 })],
+      interpolations: [createInterpolation({ property: 'opacity', range: [1, 0.5] })],
+      elements: [
+        createElement('ellipse', 0, 0, {
+          modifiers: [createModifier({ n: 3 })],
+          interpolations: [createInterpolation({ property: 'opacity', range: [1, 0] })],
+        }),
+      ],
+    });
+    expect(getRenderedChildren(layer).map((c) => c.opacity)).toEqual([1, 0.5, 0, 0.5, 0.25, 0]);
+  });
+
+  it('la couleur de la forme l’emporte sur celle du calque', () => {
+    const layer = createLayer({
+      interpolations: [createInterpolation({ property: 'color', range: ['#ff0000', '#ff0000'] })],
+      elements: [createElement('ellipse', 0, 0, {
+        interpolations: [createInterpolation({ property: 'color', range: ['#0000ff', '#0000ff'] })],
+      })],
+    });
+    expect(getRenderedChildren(layer)[0].stroke).toBe('#0000ff');
+  });
+
+  it('une interpolation de forme se lie à un étage de sa pile', () => {
+    const layer = createLayer({
+      elements: [createElement('ellipse', 0, 0, {
+        modifiers: [createModifier({ n: 2 }), createModifier({ n: 2 })],
+        interpolations: [createInterpolation({ property: 'opacity', range: [1, 0], binding: 0 })],
+      })],
+    });
+    expect(getRenderedChildren(layer).map((c) => c.opacity)).toEqual([1, 1, 0, 0]);
+  });
+
+  it('les transitions de pile visent aussi une forme', () => {
+    const base = createScene();
+    let scene = addElement(base, base.layers[0].id, 'ellipse', 0, 0);
+    const id = scene.activeElementId;
+    scene = addModifier(scene, id);
+    scene = addModifier(scene, id);
+    scene = updateModifier(scene, id, 1, { type: 'axial' });
+    scene = addInterpolation(scene, id);
+    const interpolation = scene.layers[0].elements[0].interpolations[0];
+    scene = updateInterpolation(scene, id, interpolation.id, { binding: 1 });
+    scene = moveModifier(scene, id, 1, -1);
+    const [element] = scene.layers[0].elements;
+    expect(element.modifiers.map((m) => m.type)).toEqual(['axial', 'step']);
+    expect(element.interpolations[0].binding).toBe(0);
+    expect(scene.layers[0].modifiers).toEqual([]);
+    scene = removeModifier(scene, id, 0);
+    expect(scene.layers[0].elements[0].interpolations[0].binding).toBe(null);
+  });
+
+  it('suspend le calque sur le total des copies', () => {
+    const big = createModifier({ n: 50 });
+    const layer = createLayer({
+      modifiers: [big],
+      elements: [createElement('ellipse', 0, 0, { modifiers: [big] })],
+    });
+    expect(isSuspended(layer)).toBe(true);
+    expect(getRenderedChildren(layer)).toEqual([]);
+  });
+
+  it('survit à la sauvegarde', () => {
+    const element = createElement('ellipse', 0, 0, {
+      modifiers: [createModifier({ type: 'axial', n: 5, linear: true })],
+      interpolations: [createInterpolation({ property: 'scale', range: [1, 2], binding: 0 })],
+    });
+    const scene = { ...createScene(), layers: [createLayer({ elements: [element] })] };
+    const [read] = deserialize(serialize(scene)).layers[0].elements;
+    expect(read.modifiers).toHaveLength(1);
+    expect(read.modifiers[0]).toMatchObject({ type: 'axial', n: 5 });
+    /* Seul un point relie ses copies. */
+    expect(read.modifiers[0].linear).toBeUndefined();
+    expect(read.interpolations[0]).toMatchObject({ property: 'scale', range: [1, 2], binding: 0 });
+  });
+
+  it('dupliquer un calque renomme les interpolations de ses formes', () => {
+    const element = createElement('ellipse', 0, 0, { interpolations: [createInterpolation()] });
+    const layer = createLayer({ elements: [element] });
+    const scene = duplicateLayer({ ...createScene(), layers: [layer] }, layer.id);
+    const [a, b] = scene.layers.map((l) => l.elements[0].interpolations[0].id);
+    expect(a).not.toBe(b);
   });
 });
 

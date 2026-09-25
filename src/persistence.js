@@ -36,7 +36,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@24';
+export const FORMAT = 'vektor/scene@25';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -74,7 +74,10 @@ export const FORMAT = 'vektor/scene@24';
    - `@1` à `@21` n'avaient pas de contour double : option éteinte, même dessin ;
    - `@1` à `@22` n'avaient ni plan 3D ni hauteur : calques à plat, même dessin ;
    - `@1` à `@23` ne reliaient pas les points : répétition linéaire éteinte,
-     même dessin. */
+     même dessin ;
+   - `@1` à `@24` n'avaient de piles que sur le calque : formes sans pile
+     propre, même dessin. Un point de `@24` relié le long des étages du calque
+     redevient une suite de points — le lien suit désormais la pile du point. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -100,6 +103,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@21',
   'vektor/scene@22',
   'vektor/scene@23',
+  'vektor/scene@24',
   FORMAT,
 ]);
 
@@ -278,8 +282,14 @@ const readElement = (input, style) => {
         }
       : {}),
     ...(raw.type === 'polyline' ? { points: readPoints(raw.points), closed: Boolean(raw.closed) } : {}),
-    ...(raw.type === 'point' && raw.linear === true ? { linear: true } : {}),
+    ...readStacks(raw, raw.type === 'point'),
   });
+};
+
+/* Piles propres d'une forme ; seul l'étage d'un point relie ses copies (`linear`). */
+const readStacks = (raw, linkable) => {
+  const modifiers = Array.isArray(raw.modifiers) ? raw.modifiers.map((entry) => readModifier(entry, false, linkable)) : [];
+  return { modifiers, interpolations: readInterpolations({ interpolations: raw.interpolations ?? [] }, modifiers.length) };
 };
 
 /* Pivot propre d'un modificateur : absent ou invalide, l'étage reprend celui du calque. */
@@ -287,7 +297,8 @@ const readPivot = (raw) =>
   Number.isFinite(raw?.x) && Number.isFinite(raw?.y) ? { center: { x: raw.x, y: raw.y } } : {};
 
 /* `orient` absent d'un fichier courant = réglage par défaut du type. */
-const readModifier = (raw, legacy) =>
+/* `linkable` : étage d'une pile de point, le seul qui puisse relier ses copies. */
+const readModifier = (raw, legacy, linkable = false) =>
   createModifier({
     ...(legacy ? { orient: false } : typeof raw?.orient === 'boolean' ? { orient: raw.orient } : {}),
     type: Object.hasOwn(MODIFIERS, raw?.type) ? raw.type : 'none',
@@ -298,7 +309,7 @@ const readModifier = (raw, legacy) =>
     radiusStep: num(raw?.radiusStep, 12),
     ...readPivot(raw?.center),
     ...(Number.isFinite(raw?.axis) ? { axis: clampAxis(raw.axis) } : {}),
-    ...(raw?.linear === true ? { linear: true } : {}),
+    ...(linkable && raw?.linear === true ? { linear: true } : {}),
   });
 
 /**

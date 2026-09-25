@@ -303,6 +303,10 @@ export const createElement = (type, x, y, overrides = {}) => ({
   /* Forme hôte du même calque dans laquelle celle-ci est logée (`setInside`) :
      en 3D, le volume de l'hôte la cache, sauf à travers son trou. */
   inside: null,
+  /* Piles propres de la forme, appliquées avant celles du calque : ses copies
+     se multiplient avec les siennes (`getRenderedChildren`). */
+  modifiers: [],
+  interpolations: [],
   ...SHAPES[type].defaults,
   type,
   x,
@@ -413,8 +417,11 @@ export const reserveIds = (layers) => {
   };
   for (const layer of layers) {
     take(layer.id);
-    for (const element of layer.elements) take(element.id);
     for (const interpolation of layer.interpolations) take(interpolation.id);
+    for (const element of layer.elements) {
+      take(element.id);
+      for (const interpolation of element.interpolations) take(interpolation.id);
+    }
   }
 };
 
@@ -448,54 +455,81 @@ export const getActiveElement = (scene) =>
  */
 
 /**
- * Facteur de rampe d'une interpolation pour la copie `i` de la pile.
+ * Facteur de rampe d'une interpolation pour la copie `i` de la pile de `owner`
+ * (calque ou forme).
  *
  * Liée à un modificateur, l'interpolation ne lit que l'indice de cet étage :
  * deux copies qui n'en diffèrent pas partagent la même valeur. Une liaison qui
  * ne désigne plus de modificateur — fichier importé, étage supprimé ailleurs —
  * retombe sur la rampe globale plutôt que de rendre `NaN`.
  */
-const rangeFactor = (layer, { binding, curve }, indices, i, total) => {
-  const modifier = binding === null ? null : layer.modifiers[binding];
+const rangeFactor = (owner, { binding, curve }, indices, i, total) => {
+  const modifier = binding === null ? null : owner.modifiers[binding];
   return modifier ? ramp(curve, indices[binding], effectiveCount(modifier)) : ramp(curve, i, total);
 };
 
-/** Pile qui dépasse `MAX_COPIES` : le calque n'est pas rendu, le panneau le dit. */
-export const isSuspended = (layer) => copyCount(layer.modifiers) > MAX_COPIES;
+/**
+ * Copies dessinées du calque : celles de sa pile, fois celles de chaque forme.
+ * Un calque vide compte comme une forme sans pile : sa pile trop lourde se
+ * signale avant la première forme posée.
+ */
+export const copyTotal = (layer) =>
+  copyCount(layer.modifiers) * (layer.elements.reduce((sum, element) => sum + copyCount(element.modifiers), 0) || 1);
 
+/** Pile qui dépasse `MAX_COPIES` : le calque n'est pas rendu, le panneau le dit. */
+export const isSuspended = (layer) => copyTotal(layer) > MAX_COPIES;
+
+/**
+ * Chaque copie `i` du calque répète chaque forme, et chaque forme ses copies
+ * propres `j` : la pile de la forme s'applique d'abord, celle du calque ensuite
+ * (orientation comprise). Les interpolations de la forme courent sur ses
+ * copies propres et se composent avec celles du calque — la couleur de la
+ * forme, dernière de la pile, l'emporte.
+ *
+ * `copy` = rang de la copie du calque, `own` = rang de la copie propre : le
+ * booléen et la forme logée s'apparient sur les deux.
+ */
 export const getRenderedChildren = (layer) => {
   if (layer.elements.length === 0 || isSuspended(layer)) return [];
   const copies = stackCopies(layer.modifiers);
-
   const children = [];
   copies.forEach((indices, i) => {
-    const { rotation: twist = 0, strokeWidth: widthFactor = 1, color, ...properties } = stackValues(
-      layer.interpolations,
-      (interpolation) => rangeFactor(layer, interpolation, indices, i, copies.length),
-      RANGE_BOUNDS,
-    );
     for (const element of layer.elements) {
-      const { x, y, angle, flip } = applyStack(element, layer.modifiers, indices, layer.center);
-      /* Orientation de la copie puis rotation propre : `R(a)·S·R(r) = R(a − r)·S`,
-         le reflet inverse le sens de l'angle propre — vrille interpolée comprise,
-         pour qu'un motif miroir vrille en miroir. */
-      const own = (element.rotation ?? 0) + twist;
-      children.push({
-        ...element,
-        strokeWidth: element.strokeWidth * widthFactor,
-        stroke: color ?? element.stroke,
-        fill: element.filled ? (color ?? element.stroke) : 'none',
-        x,
-        y,
-        rotation: (angle * 180) / Math.PI + (flip ? -own : own),
-        flip,
-        /* Rang de la copie : le booléen apparie chaque copie à celle de son outil. */
-        copy: i,
-        ...properties,
+      const ownCopies = stackCopies(element.modifiers);
+      const own = ownCopies.map((ownIndices, j) => {
+        const factors = new Map([
+          ...layer.interpolations.map((it) => [it, rangeFactor(layer, it, indices, i, copies.length)]),
+          ...element.interpolations.map((it) => [it, rangeFactor(element, it, ownIndices, j, ownCopies.length)]),
+        ]);
+        const { rotation: twist = 0, strokeWidth: widthFactor = 1, color, ...properties } = stackValues(
+          [...factors.keys()],
+          (interpolation) => factors.get(interpolation),
+          RANGE_BOUNDS,
+        );
+        const local = applyStack(element, element.modifiers, ownIndices, layer.center);
+        const { x, y, angle, flip } = applyStack(local, layer.modifiers, indices, layer.center);
+        /* Orientation de la copie puis rotation propre : `R(a)·S·R(r) = R(a − r)·S`,
+           le reflet inverse le sens de l'angle propre — vrille interpolée comprise,
+           pour qu'un motif miroir vrille en miroir. */
+        const spin = (element.rotation ?? 0) + twist;
+        return {
+          ...element,
+          strokeWidth: element.strokeWidth * widthFactor,
+          stroke: color ?? element.stroke,
+          fill: element.filled ? (color ?? element.stroke) : 'none',
+          x,
+          y,
+          rotation: (angle * 180) / Math.PI + (flip ? -spin : spin),
+          flip,
+          copy: i,
+          own: j,
+          ...properties,
+        };
       });
+      children.push(...(element.type === 'point' ? linkPoints(element.modifiers, ownCopies, own) : own));
     }
   });
-  return linkPoints(layer, copies, children);
+  return children;
 };
 
 /**
@@ -532,28 +566,26 @@ const chain = (from, links, closed) => ({
 });
 
 /**
- * Répétition linéaire : un point qui la demande ne se dessine plus copie par
- * copie ; le long de chaque étage coché, ses copies successives forment un
- * tracé, émis à la première copie de la rangée. Aucun étage coché : les
- * points restent des points.
+ * Répétition linéaire : portée par l'étage, pas par le point. Un point ne se
+ * dessine plus copie par copie ; le long de chaque étage coché de **sa propre** pile, ses copies
+ * successives forment un tracé, émis à la première copie de la rangée. Les
+ * étages du calque ne relient jamais : chaque copie du calque porte ses
+ * propres tracés. Aucun étage coché : les points restent des points.
  *
  * ponytail: une chaîne n'a qu'une couleur, une opacité, une épaisseur — celles
  * de sa première copie. Un dégradé le long du tracé demanderait de le
  * découper, ce que le contour double interdit.
  */
-const linkPoints = (layer, copies, children) => {
-  const stages = linearStages(layer.modifiers);
-  if (stages.length === 0) return children;
-  const count = layer.elements.length;
-  return children.flatMap((child, c) => {
-    if (child.type !== 'point' || !child.linear) return [child];
-    const i = Math.floor(c / count);
-    return stages
-      .filter(({ k }) => copies[i][k] === 0)
+const linkPoints = (modifiers, copies, points) => {
+  const stages = linearStages(modifiers);
+  if (stages.length === 0) return points;
+  return points.flatMap((point, j) =>
+    stages
+      .filter(({ k }) => copies[j][k] === 0)
       .map(({ n, stride, wrap }) =>
-        chain(child, Array.from({ length: n }, (_, step) => children[c + step * stride * count]), wrap),
-      );
-  });
+        chain(point, Array.from({ length: n }, (_, step) => points[j + step * stride]), wrap),
+      ),
+  );
 };
 
 /* ---- Transitions immuables : chaque fonction renvoie une nouvelle Scene ---- */
@@ -598,6 +630,7 @@ export const duplicateLayer = (scene, id) => {
     elements: source.elements.map((element) => ({
       ...element,
       id: ids.get(element.id),
+      interpolations: element.interpolations.map((interpolation) => ({ ...interpolation, id: nextId('I') })),
       booleans: element.booleans.map((step) => ({ ...step, with: ids.get(step.with) ?? step.with })),
       inside: element.inside && (ids.get(element.inside) ?? null),
     })),
@@ -625,8 +658,11 @@ export const setLayerCenter = (scene, id, { x, y }) =>
     ? mapLayer(scene, id, (layer) => ({ ...layer, center: { x, y } }))
     : scene;
 
-/** Pivot effectivement utilisé par l'étage `index` : le sien, ou celui du calque. */
-export const pivotOf = (layer, index) => layer.modifiers[index]?.center ?? layer.center;
+/**
+ * Pivot effectivement utilisé par l'étage `index` de la pile de `owner` (le
+ * calque, ou l'une de ses formes) : le sien, ou celui du calque.
+ */
+export const pivotOf = (layer, index, owner = layer) => owner.modifiers[index]?.center ?? layer.center;
 
 export const setLayerEvenOdd = (scene, id, evenOdd) =>
   mapLayer(scene, id, (layer) => ({ ...layer, evenOdd: Boolean(evenOdd) }));
@@ -909,7 +945,13 @@ export const setInside = (scene, elementId, hostId) => {
 export const duplicateElement = (scene, elementId, offset) => {
   const source = scene.layers.flatMap((layer) => layer.elements).find((el) => el.id === elementId);
   if (!source) return scene;
-  const copy = { ...source, id: nextId('E'), x: source.x + offset, y: source.y + offset };
+  const copy = {
+    ...source,
+    id: nextId('E'),
+    x: source.x + offset,
+    y: source.y + offset,
+    interpolations: source.interpolations.map((interpolation) => ({ ...interpolation, id: nextId('I') })),
+  };
   return {
     ...mapElement(scene, elementId, (elements) =>
       elements.flatMap((element) => (element.id === elementId ? [element, copy] : [element])),
@@ -963,17 +1005,34 @@ export const placeElement = (scene, elementId, layerId, index) => {
 
 /* ---- Pile de modificateurs ---- */
 
+/**
+ * Calque ou forme d'id `id` : tous deux portent une pile de modificateurs et
+ * une pile d'interpolations, et les transitions de pile valent pour l'un comme
+ * pour l'autre.
+ */
+const mapOwner = (scene, id, fn) =>
+  scene.layers.some((layer) => layer.id === id)
+    ? mapLayer(scene, id, fn)
+    : {
+        ...scene,
+        layers: scene.layers.map((layer) =>
+          layer.elements.some((element) => element.id === id)
+            ? { ...layer, elements: layer.elements.map((element) => (element.id === id ? fn(element) : element)) }
+            : layer,
+        ),
+      };
+
 export const addModifier = (scene, id) =>
-  mapLayer(scene, id, (layer) => ({ ...layer, modifiers: [...layer.modifiers, createModifier()] }));
+  mapOwner(scene, id, (owner) => ({ ...owner, modifiers: [...owner.modifiers, createModifier()] }));
 
 /**
- * Une liaison d'interpolation désigne un rang dans la pile de modificateurs du
- * calque : remuer la pile doit l'emmener, sinon l'opacité passerait en silence
+ * Une liaison d'interpolation désigne un rang dans la pile de modificateurs de
+ * son propriétaire (calque ou forme) : remuer la pile doit l'emmener, sinon l'opacité passerait en silence
  * à l'étage du voisin.
  */
-const remapBindings = (layer, fn) => ({
-  ...layer,
-  interpolations: layer.interpolations.map((interpolation) =>
+const remapBindings = (owner, fn) => ({
+  ...owner,
+  interpolations: owner.interpolations.map((interpolation) =>
     interpolation.binding === null
       ? interpolation
       : { ...interpolation, binding: fn(interpolation.binding) },
@@ -981,9 +1040,9 @@ const remapBindings = (layer, fn) => ({
 });
 
 export const removeModifier = (scene, id, index) =>
-  mapLayer(scene, id, (layer) =>
+  mapOwner(scene, id, (owner) =>
     remapBindings(
-      { ...layer, modifiers: layer.modifiers.filter((_, i) => i !== index) },
+      { ...owner, modifiers: owner.modifiers.filter((_, i) => i !== index) },
       /* L'étage supprimé emporte sa liaison ; ceux du dessus reculent d'un rang. */
       (rank) => (rank === index ? null : rank > index ? rank - 1 : rank),
     ),
@@ -991,20 +1050,20 @@ export const removeModifier = (scene, id, index) =>
 
 /** `delta` = -1 vers le début de la pile, +1 vers la fin. L'ordre change le dessin. */
 export const moveModifier = (scene, id, index, delta) =>
-  mapLayer(scene, id, (layer) => {
+  mapOwner(scene, id, (owner) => {
     const to = index + delta;
-    if (to < 0 || to >= layer.modifiers.length) return layer;
-    const modifiers = [...layer.modifiers];
+    if (to < 0 || to >= owner.modifiers.length) return owner;
+    const modifiers = [...owner.modifiers];
     [modifiers[index], modifiers[to]] = [modifiers[to], modifiers[index]];
-    return remapBindings({ ...layer, modifiers }, (rank) =>
+    return remapBindings({ ...owner, modifiers }, (rank) =>
       rank === index ? to : rank === to ? index : rank,
     );
   });
 
 export const updateModifier = (scene, id, index, patch) =>
-  mapLayer(scene, id, (layer) => ({
-    ...layer,
-    modifiers: layer.modifiers.map((current, i) => {
+  mapOwner(scene, id, (owner) => ({
+    ...owner,
+    modifiers: owner.modifiers.map((current, i) => {
       if (i !== index) return current;
       /* `center: null` rend l'étage au pivot du calque : la clé disparaît.
          Changer de type rend l'axe par défaut du nouveau miroir. */
@@ -1021,29 +1080,29 @@ export const updateModifier = (scene, id, index, patch) =>
 
 /* ---- Pile d'interpolations ---- */
 
-const mapInterpolation = (scene, layerId, id, fn) =>
-  mapLayer(scene, layerId, (layer) => ({
-    ...layer,
-    interpolations: layer.interpolations.map((interpolation) =>
+const mapInterpolation = (scene, ownerId, id, fn) =>
+  mapOwner(scene, ownerId, (owner) => ({
+    ...owner,
+    interpolations: owner.interpolations.map((interpolation) =>
       interpolation.id === id ? fn(interpolation) : interpolation,
     ),
   }));
 
-export const addInterpolation = (scene, layerId) =>
-  mapLayer(scene, layerId, (layer) => ({
-    ...layer,
-    interpolations: [...layer.interpolations, createInterpolation()],
+export const addInterpolation = (scene, ownerId) =>
+  mapOwner(scene, ownerId, (owner) => ({
+    ...owner,
+    interpolations: [...owner.interpolations, createInterpolation()],
   }));
 
-export const removeInterpolation = (scene, layerId, id) =>
-  mapLayer(scene, layerId, (layer) => ({
-    ...layer,
-    interpolations: layer.interpolations.filter((interpolation) => interpolation.id !== id),
+export const removeInterpolation = (scene, ownerId, id) =>
+  mapOwner(scene, ownerId, (owner) => ({
+    ...owner,
+    interpolations: owner.interpolations.filter((interpolation) => interpolation.id !== id),
   }));
 
-/** Vide la pile : le calque rend à nouveau toutes ses copies pareilles. */
-export const clearInterpolations = (scene, layerId) =>
-  mapLayer(scene, layerId, (layer) => ({ ...layer, interpolations: [] }));
+/** Vide la pile : le calque ou la forme rend à nouveau toutes ses copies pareilles. */
+export const clearInterpolations = (scene, ownerId) =>
+  mapOwner(scene, ownerId, (owner) => ({ ...owner, interpolations: [] }));
 
 /**
  * `patch` porte les champs à changer : `property`, `binding`, `curve` ou `range`.
@@ -1052,16 +1111,16 @@ export const clearInterpolations = (scene, layerId) =>
  * défaut de la nouvelle plutôt que d'être rabotée à une valeur qui ne veut plus
  * rien dire — une échelle de 3 ramenée à une opacité de 1.
  */
-export const updateInterpolation = (scene, layerId, id, patch) =>
-  mapInterpolation(scene, layerId, id, (interpolation) => {
+export const updateInterpolation = (scene, ownerId, id, patch) =>
+  mapInterpolation(scene, ownerId, id, (interpolation) => {
     const next = { ...interpolation, ...patch };
     if (next.property === interpolation.property) return next;
     return { ...next, range: [...RANGE_BOUNDS[next.property].defaultRange] };
   });
 
 /** `index` = 0 pour la borne de début, 1 pour celle de fin. */
-export const updateInterpolationRange = (scene, layerId, id, index, value) =>
-  mapInterpolation(scene, layerId, id, (interpolation) => {
+export const updateInterpolationRange = (scene, ownerId, id, index, value) =>
+  mapInterpolation(scene, ownerId, id, (interpolation) => {
     const range = [...interpolation.range];
     range[index] = value;
     return { ...interpolation, range };

@@ -282,12 +282,17 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   const startPivot = (event, grip) => {
     const layer = getActiveLayer(store.get());
     const index = Number(grip.dataset.pivot);
-    const modifier = layer?.modifiers[index];
+    /* Étage de la pile d'une forme (`data-pivot-owner`), sinon du calque. */
+    const owner = grip.dataset.pivotOwner
+      ? layer?.elements.find((element) => element.id === grip.dataset.pivotOwner)
+      : layer;
+    const modifier = owner?.modifiers[index];
     if (!modifier) return false;
-    const origin = pivotOf(layer, index);
+    const origin = pivotOf(layer, index, owner);
     const point = planePoint(event);
     pivotDrag = {
       layerId: layer.id,
+      ownerId: owner.id,
       index,
       own: Boolean(modifier.center),
       normal: axisNormal(modifier),
@@ -302,12 +307,12 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   /* Sans pivot propre, l'étage montre celui du calque : c'est lui qui bouge,
      avec tous les étages qui le partagent. */
   const movePivot = (event) => {
-    const { layerId, index, own, normal, origin, offset } = pivotDrag;
+    const { layerId, ownerId, index, own, normal, origin, offset } = pivotDrag;
     const point = planePoint(event);
     const free = snap({ x: point.x + offset.x, y: point.y + offset.y });
     const along = normal && (free.x - origin.x) * normal.x + (free.y - origin.y) * normal.y;
     const target = normal ? { x: origin.x + along * normal.x, y: origin.y + along * normal.y } : { ...free };
-    if (own) store.apply(updateModifier, layerId, index, { center: target });
+    if (own) store.apply(updateModifier, ownerId, index, { center: target });
     else store.apply(setLayerCenter, layerId, target);
   };
 

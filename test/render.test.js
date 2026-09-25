@@ -6,6 +6,7 @@ import { createStore } from '../src/store.js';
 import { mountToolbar } from '../src/ui/toolbar.js';
 import { gridImage } from '../src/ui/settings.js';
 import { planeMatrix } from '../src/plane.js';
+import { createModifier } from '../src/modifiers.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -1145,6 +1146,49 @@ describe('accessibilité au clavier', () => {
     expect(store.get().layers[0].elements[0]).toMatchObject({ x: 210, y: 340 });
   });
 
+  it('la forme porte sa propre pile, et un point ne se relie que par elle', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const { createElement, createLayer, updateModifier } = await import('../src/scene.js');
+    const point = createElement('point', 0, 0);
+    const layer = createLayer({ elements: [point], modifiers: [createModifier({ linear: true })] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: point.id });
+    const { shapeDetail } = mountPropertyPanel({ store });
+    /* Relié, le point prend le style de trait d'une ligne. */
+    const strokeHidden = () =>
+      [...shapeDetail.querySelectorAll('.switch-field')].find((node) => node.textContent === 'Contour double')
+        .parentElement.hidden;
+
+    /* Plus de case sur le point : c'est l'étage qui relie. */
+    expect([...shapeDetail.querySelectorAll('.switch-field')].some((node) => node.textContent === 'Répétition linéaire')).toBe(false);
+    /* La pile du calque ne relie pas. */
+    expect(strokeHidden()).toBe(true);
+    shapeDetail.querySelector('[data-focus-key="add-modifier-element"]').click();
+    const [element] = store.get().layers[0].elements;
+    expect(element.modifiers).toHaveLength(1);
+    expect(store.get().layers[0].modifiers).toHaveLength(1);
+    expect(strokeHidden()).toBe(true);
+
+    const stageLink = [...shapeDetail.querySelectorAll('.modifier-block .switch-field')].find(
+      (node) => node.textContent === 'Activer les répétitions linéaires',
+    );
+    expect(stageLink.hidden).toBe(false);
+    stageLink.querySelector('input').checked = true;
+    stageLink.querySelector('input').dispatchEvent(new Event('change'));
+    expect(store.get().layers[0].elements[0].modifiers[0].linear).toBe(true);
+    expect(strokeHidden()).toBe(false);
+
+    /* Un point tourné reste identique : pas d'« Orienter les copies ». */
+    store.apply(updateModifier, point.id, 0, { type: 'axial' });
+    const orientSwitch = [...shapeDetail.querySelectorAll('.modifier-block .switch-field')].find(
+      (node) => node.textContent === 'Orienter les copies',
+    );
+    expect(orientSwitch.hidden).toBe(true);
+
+    shapeDetail.querySelector('[data-focus-key="add-interpolation-element"]').click();
+    expect(store.get().layers[0].elements[0].interpolations).toHaveLength(1);
+    expect(store.get().layers[0].interpolations).toHaveLength(0);
+  });
+
   it('le panneau suit le calque choisi dans l’arbre, sans reconstruire ses champs', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
@@ -2176,5 +2220,30 @@ describe('gridImage en plan 3D', () => {
     /* cos 60° = ½ : le plan couvre deux fois la hauteur de l'écran, 19 traits horizontaux au lieu de 9. */
     expect(svg.match(/H/g)).toHaveLength(19);
     expect(svg.match(/V/g)).toHaveLength(9);
+  });
+});
+
+describe('booléens sous répétition de forme', () => {
+  const toolCenters = (tool, formeModifiers) => {
+    const forme = createElement('rect', 0, 0, {
+      modifiers: formeModifiers,
+      booleans: [{ with: tool.id, op: 'subtract' }],
+    });
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    render({ layers: [createLayer({ elements: [tool, forme] })], activeLayerId: null, activeElementId: null }, svg);
+    return [...svg.querySelectorAll(`g[data-element-id="${forme.id}"] > mask ellipse`)].map((node) =>
+      node.getAttribute('cx'),
+    );
+  };
+  const step = () => [createModifier({ n: 2, stepX: 100 })];
+
+  it('chaque copie propre de la forme prend la copie propre de même rang de l’outil', () => {
+    const tool = createElement('ellipse', 0, 0, { rx: 40, ry: 40, modifiers: step() });
+    expect(toolCenters(tool, step())).toEqual(['0', '100']);
+  });
+
+  it('un outil non répété sert à toutes les copies propres de la forme', () => {
+    const tool = createElement('ellipse', 0, 0, { rx: 40, ry: 40 });
+    expect(toolCenters(tool, step())).toEqual(['0', '0']);
   });
 });

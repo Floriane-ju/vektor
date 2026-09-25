@@ -1,7 +1,6 @@
 import {
   addInterpolation,
   clearInterpolations,
-  getActiveLayer,
   RANGE_BOUNDS,
   RANGE_LABELS,
   removeInterpolation,
@@ -16,7 +15,7 @@ const PERCENT = 100;
 import { iconButton, rebuildWithFocus } from './list.js';
 
 /**
- * Section « Faire varier les itérations » du calque : un bloc par interpolation,
+ * Section « Faire varier les itérations » du calque ou de la forme : un bloc par interpolation,
  * ajoutée, réglée et supprimée comme un modificateur.
  *
  * Elle vit à côté de la pile de modificateurs parce qu'elle appartient au même
@@ -31,14 +30,16 @@ import { iconButton, rebuildWithFocus } from './list.js';
  * valeur de curseur : sans cela le slider disparaîtrait sous la souris au
  * premier pixel de glissement.
  */
-export const interpolationSection = ({ store }) => {
+/* `ownerOf(scene)` = le calque ou la forme dont la pile s'édite, ou `null` ;
+   `key` distingue les clés de focus des deux sections montées. */
+export const interpolationSection = ({ store, ownerOf, key = '' }) => {
   let uid = 0;
   /* Contrôles rafraîchis sans reconstruction : les bornes et leurs lectures. */
   let bounds = [];
 
   const apply = (transition, ...args) => {
-    const layer = getActiveLayer(store.get());
-    if (layer) store.apply(transition, layer.id, ...args);
+    const owner = ownerOf(store.get());
+    if (owner) store.apply(transition, owner.id, ...args);
   };
 
   const option = (value, label) => {
@@ -187,7 +188,7 @@ export const interpolationSection = ({ store }) => {
       iconButton({
         label: `Supprimer l'interpolation ${RANGE_LABELS[interpolation.property]}`,
         text: '×',
-        focusKey: `delete-interpolation${interpolation.id}`,
+        focusKey: `delete-interpolation${key}${interpolation.id}`,
         danger: true,
         onClick: () => apply(removeInterpolation, interpolation.id),
       }),
@@ -217,7 +218,7 @@ export const interpolationSection = ({ store }) => {
   addButton.textContent = '+ Ajouter';
   addButton.title = 'Ajouter une interpolation';
   addButton.setAttribute('aria-label', 'Ajouter une interpolation');
-  addButton.dataset.focusKey = 'add-interpolation';
+  addButton.dataset.focusKey = `add-interpolation${key}`;
   addButton.addEventListener('click', () => apply(addInterpolation));
   head.append(title, addButton);
 
@@ -225,7 +226,7 @@ export const interpolationSection = ({ store }) => {
   clearButton.type = 'button';
   clearButton.className = 'text-btn is-dim';
   clearButton.textContent = 'Tout retirer';
-  clearButton.dataset.focusKey = 'clear-interpolations';
+  clearButton.dataset.focusKey = `clear-interpolations${key}`;
   clearButton.addEventListener('click', () => apply(clearInterpolations));
 
   set.append(head, host, clearButton);

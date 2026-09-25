@@ -1,6 +1,5 @@
 import {
   activePlane,
-  addModifier,
   ARC_CLOSURES,
   clampAngle,
   clampDash,
@@ -12,36 +11,22 @@ import {
   clampSides,
   getActiveElement,
   getActiveLayer,
-  moveModifier,
-  pivotOf,
-  removeModifier,
   DASH_PRESETS,
   DEFAULT_PLANE,
   LINECAPS,
   MAX_TILT,
   PLANE_SIDES,
-  setLayerCenter,
   setLayerEvenOdd,
   setLayerPlane,
   SHAPES,
   updateElement,
-  updateModifier,
 } from '../scene.js';
-import { iconButton, rebuildWithFocus, shapeName } from './list.js';
+import { shapeName } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
+import { modifierSection } from './modifier-section.js';
 import { booleanSection } from './boolean-section.js';
 import { insideField } from './inside-field.js';
-import {
-  axisAngle,
-  copyCount,
-  FIXED_COPIES,
-  MAX_COPIES,
-  MIRROR_AXIS,
-  MODIFIER_LABELS,
-  ORIENTING,
-  orients,
-  PIVOTING,
-} from '../modifiers.js';
+import { el, field, input, nextId, row, select, separator, slider as sliderOf, switchField } from './fields.js';
 
 /**
  * Panneau de droite : les réglages du calque actif, ou ceux de la forme
@@ -55,80 +40,7 @@ import {
 
 /* Bornes des curseurs. Le champ numérique voisin accepte au-delà : le curseur
    couvre l'usage courant sans plafonner le modèle. */
-const COUNT_SLIDER = { min: '1', max: '64', step: '1' };
 const DASH_SLIDER = { min: '0.5', max: '16', step: '0.5' };
-
-let uid = 0;
-const nextId = () => `prop-${++uid}`;
-
-const el = (tag, className, text) => {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text != null) node.textContent = text;
-  return node;
-};
-
-const field = (labelText, control) => {
-  const wrap = el('div', 'field');
-  const label = el('label', null, labelText);
-  label.htmlFor = control.id;
-  wrap.append(label, control);
-  return wrap;
-};
-
-const row = (...children) => {
-  const node = el('div', 'field-row');
-  node.append(...children);
-  return node;
-};
-
-const separator = () => el('hr', 'separator');
-
-const option = (value, label) => {
-  const node = el('option', null, label);
-  node.value = value;
-  return node;
-};
-
-const input = (type, attrs = {}) => {
-  const node = document.createElement('input');
-  node.type = type;
-  node.id = nextId();
-  Object.assign(node, attrs);
-  return node;
-};
-
-const select = (entries) => {
-  const node = document.createElement('select');
-  node.id = nextId();
-  for (const [value, label] of entries) node.append(option(value, label));
-  return node;
-};
-
-/* Case à cocher habillée en interrupteur ; la case reste native. */
-const switchField = (labelText, checkbox) => {
-  checkbox.classList.add('switch');
-  const label = el('label', 'switch-field');
-  label.append(el('span', null, labelText), checkbox);
-  return label;
-};
-
-/* Entête d'une section : titre, et son bouton d'ajout à droite. */
-const sectionHead = (title, addButton) => {
-  const head = el('div', 'section-head');
-  head.append(el('h3', null, title), addButton);
-  return head;
-};
-
-const addButtonFor = (label, focusKey, onClick) => {
-  const node = el('button', 'text-btn', '+ Ajouter');
-  node.type = 'button';
-  node.setAttribute('aria-label', label);
-  node.title = label;
-  node.dataset.focusKey = focusKey;
-  node.addEventListener('click', onClick);
-  return node;
-};
 
 /* Entête du panneau : ce qu'on règle (« Calque », « Forme ») et son nom. */
 const inspectorHead = (kind) => {
@@ -147,7 +59,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
    * Relie un `input` à une transition de scène.
    *
    * `subject` dit ce que le contrôle édite : la forme active pour les champs de
-   * forme, le calque actif pour les modificateurs. Le contrôle
+   * forme, le calque actif pour les siens. Le contrôle
    * ne s'écrit pas quand son sujet est absent.
    */
   const bind = (
@@ -165,26 +77,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     return node;
   };
 
-  /**
-   * Curseur doublé d'un champ numérique : le curseur pour le geste, le champ
-   * pour une valeur précise ou hors des bornes du curseur.
-   */
-  const slider = (labelText, attrs, read, write, options = {}) => {
-    const range = bind(input('range', attrs), read, write, options);
-    const number = bind(input('number', { step: attrs.step, min: attrs.min }), read, write, {
-      ...options,
-      event: 'change',
-    });
-    number.className = 'range-value';
-    number.setAttribute('aria-label', labelText);
-    const wrap = el('div', 'field slider-field');
-    const head = el('div', 'slider-head');
-    const label = el('label', null, labelText);
-    label.htmlFor = range.id;
-    head.append(label, number);
-    wrap.append(head, range);
-    return wrap;
-  };
+  const slider = (...args) => sliderOf(bind, ...args);
 
   /**
    * Choix exclusif en segments : des radios natifs, donc flèches et annonce du
@@ -215,6 +108,29 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     });
     return root;
   };
+
+  /* ---- Répétitions et itérations ---- */
+
+  /* Piles du calque actif, ou de la forme active : même section, deux
+     propriétaires. La forme applique la sienne avant celle du calque. */
+  const layerOwner = (scene) => {
+    const layer = getActiveLayer(scene);
+    return layer && { layer, owner: layer };
+  };
+  const elementOwner = (scene) => {
+    const owner = getActiveElement(scene);
+    const layer = owner && scene.layers.find((candidate) => candidate.elements.includes(owner));
+    return layer ? { layer, owner } : null;
+  };
+  const modifierSet = modifierSection({ store, ownerOf: layerOwner });
+  const elementModifierSet = modifierSection({ store, ownerOf: elementOwner, forElement: true });
+  /* La rampe d'une interpolation se lie à un étage de la pile voisine. */
+  const interpolations = interpolationSection({ store, ownerOf: (scene) => getActiveLayer(scene) });
+  const elementInterpolations = interpolationSection({
+    store,
+    ownerOf: (scene) => elementOwner(scene)?.owner ?? null,
+    key: '-element',
+  });
 
   /* ---- Forme ---- */
 
@@ -333,15 +249,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   const arcRow = row(field('Début (°)', arcStart), field('Fin (°)', arcEnd), field('Fermeture', closure));
   const closedField = switchField('Fermé', closed);
   const filledField = switchField('Remplir', filled);
-  /* Point seulement : relie chaque copie à sa voisine, le long des étages qui
-     l'autorisent (« Activer les répétitions linéaires »). */
-  const linear = bind(
-    input('checkbox'),
-    (element) => element.linear === true,
-    (element, value) => store.apply(updateElement, element.id, { linear: value }),
-    { event: 'change', parse: () => linear.checked },
-  );
-  const linearField = switchField('Répétition linéaire', linear);
+
 
   /* Trait : le type de motif se lit sur le tableau de tirets — vide, plein ;
      un premier tiret nul, des points ; sinon des tirets, réglés par tiret et espace.
@@ -422,8 +330,11 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     closedField,
     strokeSeparator,
     filledField,
-    linearField,
     strokeGroup,
+    separator(),
+    elementModifierSet.root,
+    separator(),
+    elementInterpolations.root,
     separator(),
     booleans.root,
     inside.root,
@@ -480,204 +391,6 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   const planeSet = el('section', 'group');
   planeSet.append(switchField('Plan 3D', planeOn), planeSettings);
 
-  /* ---- Modificateurs ---- */
-
-  /**
-   * Un calque porte une pile : chaque bloc est un modificateur, appliqué dans
-   * l'ordre affiché, et les copies se multiplient d'un étage à l'autre.
-   *
-   * Seule section reconstruite du panneau, et seulement quand la longueur de la
-   * pile change : reconstruire à chaque notification arracherait le curseur des
-   * champs, comme ailleurs dans ce panneau.
-   */
-  const modifierSet = el('section', 'group');
-  const modifierHost = el('div', 'stack');
-  const addModifierButton = addButtonFor('Ajouter un modificateur', 'add-modifier', () => {
-    const layer = getActiveLayer(store.get());
-    if (layer) store.apply(addModifier, layer.id);
-  });
-  /* Pivot du calque : celui de tout étage qui n'a pas le sien. Se déplace
-     aussi à la souris, par la croix ou l'axe des repères. */
-  const pivotInput = (axis) =>
-    bind(
-      input('number', { step: '1' }),
-      (layer) => Math.round(layer.center[axis]),
-      (layer, value) => store.apply(setLayerCenter, layer.id, { ...layer.center, [axis]: value }),
-      { subject: 'layer' },
-    );
-  const layerPivot = row(field('Pivot X', pivotInput('x')), field('Pivot Y', pivotInput('y')));
-  /* Total de la pile, qui multiplie : au-delà du plafond, le calque ne se rend plus. */
-  const copyTotal = el('p', 'copy-count');
-  copyTotal.setAttribute('aria-live', 'polite');
-  modifierSet.append(sectionHead('Répéter', addModifierButton), copyTotal, layerPivot, modifierHost);
-
-  let blocks = [];
-
-  const modifierBlock = (index, stackSize) => {
-    const blockControls = [];
-    /* Tout contrôle du bloc écrit le même modificateur : son rang dans la pile. */
-    const modifierOptions = (options = {}) => ({ subject: 'layer', into: blockControls, ...options });
-    const write = (toPatch) => (layer, value) =>
-      store.apply(updateModifier, layer.id, index, toPatch(value));
-    const bindModifier = (node, read, toPatch, options = {}) =>
-      bind(node, read, write(toPatch), modifierOptions(options));
-
-    const rank = index + 1;
-    const type = select(Object.entries(MODIFIER_LABELS));
-    type.setAttribute('aria-label', `Type du modificateur ${rank}`);
-    bindModifier(type, (layer) => layer.modifiers[index].type, (value) => ({ type: value }), {
-      event: 'change',
-      parse: String,
-    });
-
-    const countField = slider(
-      'Copies',
-      COUNT_SLIDER,
-      (layer) => layer.modifiers[index].n,
-      write((value) => ({ n: value })),
-      modifierOptions(),
-    );
-    const stepX = bindModifier(
-      input('number', { step: '1' }),
-      (layer) => layer.modifiers[index].stepX,
-      (value) => ({ stepX: value }),
-    );
-    const stepY = bindModifier(
-      input('number', { step: '1' }),
-      (layer) => layer.modifiers[index].stepY,
-      (value) => ({ stepY: value }),
-    );
-    const angleStep = bindModifier(
-      input('number', { step: '0.001' }),
-      (layer) => layer.modifiers[index].angleStep,
-      (value) => ({ angleStep: value }),
-    );
-    const radiusStep = bindModifier(
-      input('number', { step: '0.1' }),
-      (layer) => layer.modifiers[index].radiusStep,
-      (value) => ({ radiusStep: value }),
-    );
-    /* Angle de l'axe d'un miroir : 90° vertical, 0° horizontal, entre les deux
-       les symétries diagonales. */
-    const axis = bindModifier(
-      input('number', { step: '1' }),
-      (layer) => axisAngle(layer.modifiers[index]),
-      (value) => ({ axis: value }),
-    );
-    /* Décochée, la copie ne fait que se déplacer : des carrés droits posés en
-       cercle sont un motif aussi légitime que des rayons. */
-    const orient = bindModifier(
-      input('checkbox'),
-      (layer) => orients(layer.modifiers[index]),
-      (value) => ({ orient: value }),
-      { event: 'change', parse: () => orient.checked },
-    );
-
-    /* Cochée, l'étage part du pivot du calque et le garde ensuite pour lui ;
-       décochée, il le reprend. */
-    const writeCenter = (toCenter) => (layer, value) =>
-      store.apply(updateModifier, layer.id, index, { center: toCenter(pivotOf(layer, index), value) });
-    const ownPivot = bind(
-      input('checkbox'),
-      (layer) => Boolean(layer.modifiers[index].center),
-      writeCenter((pivot, own) => (own ? pivot : null)),
-      modifierOptions({ event: 'change', parse: () => ownPivot.checked }),
-    );
-    const pivotInput = (axis) =>
-      bind(
-        input('number', { step: '1' }),
-        (layer) => Math.round(pivotOf(layer, index)[axis]),
-        writeCenter((pivot, value) => ({ ...pivot, [axis]: value })),
-        modifierOptions(),
-      );
-
-    const apply = (transition, ...args) => {
-      const layer = getActiveLayer(store.get());
-      if (layer) store.apply(transition, layer.id, ...args);
-    };
-
-    const head = el('div', 'modifier-head');
-    head.append(
-      type,
-      /* L'ordre de la pile change le dessin : un pas puis un miroir donne deux
-         rangées face à face, l'inverse une seule rangée doublée. */
-      iconButton({
-        label: `Monter le modificateur ${rank}`,
-        text: '↑',
-        focusKey: `up-modifier${index}`,
-        disabled: index === 0,
-        onClick: () => apply(moveModifier, index, -1),
-      }),
-      iconButton({
-        label: `Descendre le modificateur ${rank}`,
-        text: '↓',
-        focusKey: `down-modifier${index}`,
-        disabled: index === stackSize - 1,
-        onClick: () => apply(moveModifier, index, 1),
-      }),
-      iconButton({
-        label: `Supprimer le modificateur ${rank}`,
-        text: '×',
-        focusKey: `delete-modifier${index}`,
-        danger: true,
-        onClick: () => apply(removeModifier, index),
-      }),
-    );
-
-    const stepRow = row(field('Pas X (px)', stepX), field('Pas Y (px)', stepY));
-    const spiralRow = row(field('Pas angulaire (rad)', angleStep), field('Croissance (%)', radiusStep));
-    const axisField = field("Angle de l'axe (°)", axis);
-    const orientField = switchField('Orienter les copies', orient);
-    /* Décochée, l'étage ignore la répétition linéaire des points. */
-    const linear = bindModifier(
-      input('checkbox'),
-      (layer) => layer.modifiers[index].linear === true,
-      (value) => ({ linear: value }),
-      { event: 'change', parse: () => linear.checked },
-    );
-    const linearField = switchField('Activer les répétitions linéaires', linear);
-    const ownPivotField = switchField('Pivot personnalisé', ownPivot);
-    const pivotRow = row(field('Pivot X', pivotInput('x')), field('Pivot Y', pivotInput('y')));
-
-    const root = el('div', 'modifier-block');
-    root.append(head, countField, stepRow, spiralRow, axisField, orientField, linearField, ownPivotField, pivotRow);
-
-    const sync = (layer) => {
-      const modifier = layer.modifiers[index];
-      if (!modifier) return;
-      for (const { node, read } of blockControls) {
-        if (node.type === 'checkbox') node.checked = read(layer);
-        else if (document.activeElement !== node) node.value = read(layer);
-      }
-      /* `none` et les miroirs décident eux-mêmes de leur nombre de copies : leur
-         proposer un « Copies » promettrait un réglage sans effet. */
-      countField.hidden = Object.hasOwn(FIXED_COPIES, modifier.type);
-      stepRow.hidden = modifier.type !== 'step';
-      spiralRow.hidden = modifier.type !== 'spiral';
-      axisField.hidden = !Object.hasOwn(MIRROR_AXIS, modifier.type);
-      /* Un pas ne tourne rien : rien à orienter. */
-      orientField.hidden = !ORIENTING.has(modifier.type);
-      linearField.hidden = modifier.type === 'none';
-      ownPivotField.hidden = !PIVOTING.has(modifier.type);
-      pivotRow.hidden = ownPivotField.hidden || !modifier.center;
-    };
-
-    return { root, sync };
-  };
-
-  const rebuildModifiers = (stack) =>
-    rebuildWithFocus(modifierHost, () => {
-      blocks = stack.map((_, index) => modifierBlock(index, stack.length));
-      modifierHost.append(...blocks.map((block) => block.root));
-      return addModifierButton;
-    });
-
-  /* ---- Interpolations ---- */
-
-  /* Même calque, même panneau : la rampe d'une interpolation se lie à un étage
-     de la pile voisine. */
-  const interpolations = interpolationSection({ store });
-
   /* Un `fieldset` pour tout désactiver d'un coup quand il n'y a plus de calque. */
   const layerDetail = el('fieldset', 'inspector-body');
   layerDetail.dataset.kind = 'layer';
@@ -687,7 +400,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     separator(),
     evenOddField,
     separator(),
-    modifierSet,
+    modifierSet.root,
     separator(),
     interpolations.root,
     separator(),
@@ -736,9 +449,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       widthField.hidden = uniform || trace;
       heightField.hidden = uniform || trace;
       filledField.hidden = dot;
-      linearField.hidden = !dot;
       /* Relié, le point devient des lignes : il en prend le style de trait. */
-      strokeGroup.hidden = dot && !element.linear;
+      strokeGroup.hidden = dot && !element.modifiers.some((modifier) => modifier.linear && modifier.type !== 'none');
       strokeSeparator.hidden = strokeGroup.hidden;
       dashLength.hidden = dashKind(element.dash) !== 'dashed';
       dashPairRow.hidden = dashLength.hidden;
@@ -757,22 +469,11 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       heightField.querySelector('label').textContent = heightLabel;
     }
 
-    /* Seule la longueur de la pile impose une reconstruction : un changement de
-       type ne fait que masquer ou montrer des champs du bloc concerné. */
-    const stack = layer?.modifiers ?? [];
-    if (stack.length !== blocks.length) rebuildModifiers(stack);
-    addModifierButton.disabled = !layer;
+    modifierSet.sync(scene);
+    elementModifierSet.sync(scene);
     planeSettings.hidden = !activePlane(layer);
-    layerPivot.hidden = !stack.some((modifier) => PIVOTING.has(modifier.type));
-    const total = copyCount(stack);
-    const over = total > MAX_COPIES;
-    copyTotal.hidden = stack.length === 0;
-    copyTotal.dataset.tone = over ? 'error' : 'info';
-    copyTotal.textContent = over
-      ? `${total.toLocaleString('fr-FR')} copies — rendu suspendu au-delà de ${MAX_COPIES.toLocaleString('fr-FR')}`
-      : `${total} copie${total > 1 ? 's' : ''}`;
-    if (layer) for (const block of blocks) block.sync(layer);
     interpolations.sync(layer);
+    if (element) elementInterpolations.sync(element);
   };
 
   store.subscribe(sync);
