@@ -228,12 +228,23 @@ export const untangle = (edge, path, distance) => {
   }
   /* Aux bouts, la boucle reste ouverte : le bout ne suit que la normale de sa
      propre arête. Tout jusqu'au dernier segment rebroussé près du bout se
-     ramène au sommet qui le suit. */
+     ramène au point où le bord repasse la coupe du bout (droite par le bout
+     du tracé, en travers) : la coupe reste droite, comme le bout net d'un
+     trait SVG. Sans passage, le bout garde sa place sur la coupe et le reste
+     se ramène au sommet qui suit ce segment. */
   const window = 4 * Math.abs(distance);
   let [first, last] = [0, n - 2];
   for (let k = 0; k < n - 1 && along[k] <= window; k++) if (reversed(k)) first = k + 1;
   for (let k = n - 2; k >= first && along[n - 1] - along[k + 1] <= window; k--) if (reversed(k)) last = k - 1;
-  return out.map((p, k) => (k < first ? out[first] : k > last + 1 ? out[last + 1] : p));
+  const cut = (end) => [edge[end], { x: 2 * path[end].x - edge[end].x, y: 2 * path[end].y - edge[end].y }];
+  let [head, tail] = [null, null];
+  for (let k = 1; k < first; k++) head = crossing(...cut(0), edge[k], edge[k + 1]) ?? head;
+  for (let k = n - 2; k > last + 1; k--) tail = crossing(...cut(n - 1), edge[k - 1], edge[k]) ?? tail;
+  return out.map((p, k) => {
+    if (k < first) return head ?? (k === 0 ? p : out[first]);
+    if (k > last + 1) return tail ?? (k === n - 1 ? p : out[last + 1]);
+    return p;
+  });
 };
 
 /* Croisement strict des segments a→b et c→d, ou `null`. */

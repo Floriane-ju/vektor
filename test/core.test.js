@@ -2214,6 +2214,19 @@ describe('untangle', () => {
     expect(backwards(clean, path)).toEqual([]);
   });
 
+  it('un bout pris dans un virage serré garde sa coupe droite, en travers du tracé', () => {
+    /* Le tracé démarre et finit dans des virages de rayon 5, bord décalé de 8 vers le centre. */
+    const path = [...arc(5, -Math.PI / 2, Math.PI / 2, 12), { x: -20, y: 5 }, ...arc(5, Math.PI / 2, (3 * Math.PI) / 2, 12).map((p) => ({ x: p.x - 25, y: p.y + 10 }))];
+    const sign = offsetPolygon(path, 1, false)[1].x > path[1].x ? -1 : 1;
+    const clean = untangle(offsetPolygon(path, 8 * sign, false), path, 8 * sign);
+    const across = (end, next) => {
+      const tangent = { x: path[next].x - path[end].x, y: path[next].y - path[end].y };
+      return (clean[end].x - path[end].x) * tangent.x + (clean[end].y - path[end].y) * tangent.y;
+    };
+    expect(across(0, 1)).toBeCloseTo(0);
+    expect(across(path.length - 1, path.length - 2)).toBeCloseTo(0);
+  });
+
   it('deux spires qui se chevauchent restent', () => {
     /* Grande boucle ouverte qui repasse sur son début : le croisement est loin sur le tracé. */
     const path = arc(50, 0, 2.2 * Math.PI, 80);

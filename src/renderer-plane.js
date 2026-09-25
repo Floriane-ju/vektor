@@ -465,6 +465,9 @@ const createExtrusion = (child, v, others = []) => {
      a pas de bord, et le volume paraîtrait ouvert au-dessus seulement. */
   const face = band ? stroked(screenPath(moved(base, frontShift), true), true) : createNode(front);
   delete face.dataset.elementId;
+  /* Coins des bouts souvent aigus à l'écran : en onglet, une pointe dépasse
+     l'arête de flanc ; ronds, ils s'y raccordent comme son bout rond. */
+  if (band) face.setAttribute('stroke-linejoin', 'round');
   group.append(volume, face);
   return group;
 };

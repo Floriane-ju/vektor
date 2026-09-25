@@ -2203,7 +2203,10 @@ describe('plan 3D : contour double', () => {
     const [left, right] = [...flat.querySelectorAll('path')].map(coords);
     /* ± 12 dans le plan, en travers de la ligne : moitié à l'écran (cos 60°). */
     expect(Math.abs(left[0].y - right[0].y)).toBeCloseTo(12, 0);
-    const face = coords(draw({ height: 30 }).lastElementChild);
+    const top = draw({ height: 30 }).lastElementChild;
+    /* Coins des bouts ronds, raccord avec les arêtes de flanc (pas de pointe en onglet). */
+    expect(top.getAttribute('stroke-linejoin')).toBe('round');
+    const face = coords(top);
     expect(Math.max(...face.map((p) => p.y)) - Math.min(...face.map((p) => p.y))).toBeCloseTo(12, 0);
   });
 });
