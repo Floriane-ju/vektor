@@ -2,7 +2,7 @@
 {
   "id": "T-0112",
   "titre": "Export PNG à taille fixe et copie PNG",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "export"

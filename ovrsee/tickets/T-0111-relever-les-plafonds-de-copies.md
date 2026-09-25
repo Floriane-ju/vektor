@@ -2,7 +2,7 @@
 {
   "id": "T-0111",
   "titre": "Relever les plafonds de copies",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "modificateurs"
