@@ -2,9 +2,11 @@
 {
   "id": "T-0109",
   "titre": "Spirale : copies équidistantes le long de la courbe",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["modificateurs"],
+  "tags": [
+    "modificateurs"
+  ],
   "cree": "2026-09-25",
   "maj": "2026-09-25",
   "plan": null

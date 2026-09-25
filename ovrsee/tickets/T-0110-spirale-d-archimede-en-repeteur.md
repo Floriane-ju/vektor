@@ -2,7 +2,7 @@
 {
   "id": "T-0110",
   "titre": "Spirale d'Archimède en répéteur",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "modificateurs"

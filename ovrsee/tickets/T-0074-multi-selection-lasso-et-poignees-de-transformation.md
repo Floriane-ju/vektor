@@ -2,7 +2,7 @@
 {
   "id": "T-0074",
   "titre": "Multi-sélection et lasso",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "l",
   "tags": [
