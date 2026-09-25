@@ -10,6 +10,8 @@ import {
   renameLayer,
   setActiveElement,
   setActiveLayer,
+  activePlane,
+  togglePlane,
   toggleVisibility,
 } from '../scene.js';
 
@@ -32,7 +34,7 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
       scene.activeLayerId,
       scene.activeElementId !== null,
       collapsedId,
-      scene.layers.map((layer) => [layer.id, layer.name, layer.visible]),
+      scene.layers.map((layer) => [layer.id, layer.name, layer.visible, activePlane(layer) !== null]),
     ]);
 
   const rebuild = whenChanged(signature, (scene) =>
@@ -86,6 +88,7 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
     if (isActive) card.dataset.selected = scene.activeElementId === null ? 'layer' : 'parent';
     card.dataset.layerId = layer.id;
     card.dataset.visible = String(layer.visible);
+    card.dataset.plane = String(activePlane(layer) !== null);
     const row = document.createElement('div');
     row.className = 'layer-row';
     card.append(row);
@@ -126,6 +129,7 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
     const actions = document.createElement('span');
     actions.className = 'row-actions';
     actions.append(
+      planeButton(layer),
       visibilityButton(layer),
       iconButton({
         label: `Dupliquer ${layer.name}`,
@@ -177,6 +181,20 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
       onClick: () => store.apply(toggleVisibility, layer.id),
     });
     button.append(icon(layer.visible ? 'eye' : 'eyeOff', 14));
+    return button;
+  };
+
+  /* Plan 3D : allumé, le cube ; éteint, il garde ses réglages pour le retour. */
+  const planeButton = (layer) => {
+    const on = activePlane(layer) !== null;
+    const button = iconButton({
+      label: on ? `Mettre ${layer.name} à plat` : `Passer ${layer.name} en 3D`,
+      text: '',
+      focusKey: `plane-${layer.id}`,
+      pressed: on,
+      onClick: () => store.apply(togglePlane, layer.id),
+    });
+    button.append(icon(on ? 'cube' : 'cubeOff', 14));
     return button;
   };
 

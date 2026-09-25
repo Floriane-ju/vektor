@@ -1,4 +1,5 @@
 import {
+  activePlane,
   addModifier,
   ARC_CLOSURES,
   clampAngle,
@@ -6,6 +7,7 @@ import {
   clampLinecap,
   clampExtent,
   clampGap,
+  clampHeight,
   clampInner,
   clampSides,
   getActiveElement,
@@ -14,9 +16,13 @@ import {
   pivotOf,
   removeModifier,
   DASH_PRESETS,
+  DEFAULT_PLANE,
   LINECAPS,
+  MAX_TILT,
+  PLANE_SIDES,
   setLayerCenter,
   setLayerEvenOdd,
+  setLayerPlane,
   SHAPES,
   updateElement,
   updateModifier,
@@ -297,6 +303,15 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     { event: 'change', parse: () => closed.checked },
   );
 
+  /* Hauteur d'extrusion le long de la normale du plan 3D du calque. */
+  const depth = bind(
+    input('number', { min: '0', step: '1' }),
+    (element) => element.height ?? 0,
+    (element, value) => store.apply(updateElement, element.id, { height: clampHeight(value) }),
+  );
+  const depthField = field('Profondeur', depth);
+  depthField.title = 'Épaisseur extrudée le long du plan 3D du calque, centrée sur le plan';
+
   const booleans = booleanSection({ store });
 
   const radiusField = field('Rayon', radius);
@@ -390,6 +405,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     separator(),
     geometryRow,
     rotationField,
+    depthField,
     polygonRow,
     arcRow,
     closedField,
@@ -413,6 +429,43 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   );
   const evenOddField = switchField('Recoupements creux', evenOdd);
   evenOddField.title = 'Là où deux formes remplies se recouvrent, le remplissage se creuse';
+
+  /* ---- Plan 3D ---- */
+
+  /* Le motif, composé à plat, est posé sur un plan incliné ; chaque forme
+     s'extrude de sa hauteur Z. Éteint, le calque reste à plat. */
+  const planeOn = bind(
+    input('checkbox'),
+    (layer) => activePlane(layer) !== null,
+    (layer) => store.apply(setLayerPlane, layer.id, planeOn.checked ? {} : null),
+    { subject: 'layer', event: 'change' },
+  );
+  const planeOf = (layer) => layer.plane ?? DEFAULT_PLANE;
+  const tilt = slider(
+    'Inclinaison (°)',
+    { min: '0', max: String(MAX_TILT), step: '1' },
+    (layer) => planeOf(layer).tilt,
+    (layer, value) => store.apply(setLayerPlane, layer.id, { tilt: value }),
+    { subject: 'layer' },
+  );
+  const heading = slider(
+    'Orientation (°)',
+    { min: '0', max: '359', step: '1' },
+    (layer) => planeOf(layer).heading,
+    (layer, value) => store.apply(setLayerPlane, layer.id, { heading: value }),
+    { subject: 'layer' },
+  );
+  const planeSides = select(Object.entries(PLANE_SIDES));
+  bind(
+    planeSides,
+    (layer) => planeOf(layer).sides,
+    (layer, value) => store.apply(setLayerPlane, layer.id, { sides: value }),
+    { subject: 'layer', event: 'change', parse: String },
+  );
+  const planeSettings = el('div', 'group');
+  planeSettings.append(tilt, heading, field('Flancs', planeSides));
+  const planeSet = el('section', 'group');
+  planeSet.append(switchField('Plan 3D', planeOn), planeSettings);
 
   /* ---- Modificateurs ---- */
 
@@ -615,6 +668,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     modifierSet,
     separator(),
     interpolations.root,
+    separator(),
+    planeSet,
   );
 
   container?.append(layerDetail, shapeDetail);
@@ -669,6 +724,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       polygonRow.hidden = geometry !== 'polygon';
       arcRow.hidden = geometry !== 'arc';
       closedField.hidden = !trace;
+      /* ponytail: une forme à booléens ne s'extrude pas (voir `createExtrusion`). */
+      depthField.hidden = !activePlane(owner) || element.booleans.length > 0;
       booleans.sync(owner, element);
       const [widthLabel, heightLabel] = spanLabels[signed ? 'signed' : 'default'];
       widthField.querySelector('label').textContent = widthLabel;
@@ -680,6 +737,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     const stack = layer?.modifiers ?? [];
     if (stack.length !== blocks.length) rebuildModifiers(stack);
     addModifierButton.disabled = !layer;
+    planeSettings.hidden = !activePlane(layer);
     layerPivot.hidden = !stack.some((modifier) => PIVOTING.has(modifier.type));
     const total = copyCount(stack);
     const over = total > MAX_COPIES;

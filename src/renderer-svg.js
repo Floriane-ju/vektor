@@ -1,5 +1,6 @@
 import {
   absolutePoints,
+  activePlane,
   clampExtent,
   getActiveElement,
   getActiveLayer,
@@ -9,6 +10,19 @@ import {
   STAGE,
 } from './scene.js';
 import { axisDirection } from './modifiers.js';
+import {
+  extrusion,
+  facingAway,
+  flushCorner,
+  nearRuns,
+  offsetPolygon,
+  outlinePath,
+  planeMatrix,
+  polygonVertices,
+  project,
+  shifted,
+  silhouette,
+} from './plane.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -27,7 +41,7 @@ export const render = (scene, svgRoot) => {
 
   for (const layer of scene.layers) {
     if (!layer.visible) continue;
-    const children = getRenderedChildren(layer);
+    const children = layerChildren(layer);
     if (children.length === 0) continue;
 
     const group = document.createElementNS(SVG_NS, 'g');
@@ -51,12 +65,12 @@ export const render = (scene, svgRoot) => {
       }
       const area = layer.evenOdd && child.fill !== 'none' ? areaPath(child) : null;
       if (!area) {
-        group.append(createNode(child));
+        group.append(createShape(child));
         continue;
       }
       holes.push(area);
       holeFill ??= child.fill;
-      const outline = createNode({ ...child, fill: 'none' });
+      const outline = createShape({ ...child, fill: 'none' });
       /* L'intérieur reste cliquable au curseur, même creusé. */
       outline.setAttribute('pointer-events', 'visible');
       group.append(outline);
@@ -71,6 +85,26 @@ export const render = (scene, svgRoot) => {
   if (guides) svgRoot.append(guides);
   const handles = createHandles(scene);
   if (handles) svgRoot.append(handles);
+};
+
+/**
+ * Copies rendues d'un calque, chacune munie de la matrice de son plan 3D
+ * (`matrix`) et du plan lui-même : `createNode` projette alors la géométrie.
+ */
+const layerChildren = (layer) => {
+  const children = getRenderedChildren(layer);
+  const plane = activePlane(layer);
+  if (!plane) return children;
+  const matrix = planeMatrix(plane);
+  return children.map((child) => ({ ...child, matrix, plane }));
+};
+
+/* SVG `matrix()` d'un plan, pour les repères posés à plat dessus. */
+const planeTransform = (layer) => {
+  const plane = activePlane(layer);
+  if (!plane) return '';
+  const { a, b, c, d, e, f } = planeMatrix(plane);
+  return `matrix(${[a, b, c, d, e, f].map(round).join(' ')})`;
 };
 
 /* Rayon d'une poignée de sommet, en unités du dessin. */
@@ -92,7 +126,10 @@ const createHandles = (scene) => {
   group.setAttribute('stroke', '#ee4722');
   group.setAttribute('stroke-width', '2');
   group.setAttribute('vector-effect', 'non-scaling-stroke');
-  if (element.rotation) group.setAttribute('transform', rotateAbout(element.rotation, element));
+  const transform = [planeTransform(layer), element.rotation ? rotateAbout(element.rotation, element) : '']
+    .filter(Boolean)
+    .join(' ');
+  if (transform) group.setAttribute('transform', transform);
   absolutePoints(element).forEach((point, index) => {
     const handle = guideNode('circle', { cx: point.x, cy: point.y, r: HANDLE_RADIUS });
     handle.dataset.vertex = String(index);
@@ -203,6 +240,7 @@ const createGuides = (layer) => {
   group.setAttribute('vector-effect', 'non-scaling-stroke');
   /* Seules les zones de saisie des pivots captent le pointeur. */
   group.setAttribute('pointer-events', 'none');
+  if (activePlane(layer)) group.setAttribute('transform', planeTransform(layer));
   group.append(
     ...marked.map(({ modifier, index }) => {
       const pivot = document.createElementNS(SVG_NS, 'g');
@@ -212,22 +250,6 @@ const createGuides = (layer) => {
     }),
   );
   return group;
-};
-
-/**
- * Sommets d'un polygone régulier, le premier en haut. Sous 100 % de `inner`,
- * un sommet creux s'intercale entre deux sommets : l'étoile. À 100 % il
- * tomberait sur le côté, donc il est omis — même dessin, moitié moins de points.
- */
-const polygonVertices = (cx, cy, radius, sides, inner) => {
-  const star = inner < 100;
-  const count = star ? sides * 2 : sides;
-  const hollow = radius * Math.cos(Math.PI / sides) * (inner / 100);
-  return Array.from({ length: count }, (_, i) => {
-    const r = star && i % 2 === 1 ? hollow : radius;
-    const angle = -Math.PI / 2 + (i * Math.PI * 2) / count;
-    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
-  });
 };
 
 export const polygonPoints = (cx, cy, radius, sides, inner) =>
@@ -273,6 +295,13 @@ export const arcPath = (cx, cy, radius, start, end, closure, place = (p) => p, m
  * Une ligne et un point n'ont pas d'aire : `null`.
  */
 export const areaPath = (child) => {
+  if (child.matrix) {
+    const { points, closed } = outlinePath(child);
+    /* L'aplat suit la face avant : celle du haut, à une demi-profondeur du plan. */
+    const v = child.height ? extrusion(child.plane, child.height * (child.scale ?? 1)) : null;
+    const matrix = v ? shifted(child.matrix, { x: v.x / 2, y: v.y / 2 }) : child.matrix;
+    return closed && points.length > 2 ? projectedPath(matrix, points, true) : null;
+  }
   const scale = child.scale ?? 1;
   const rx = clampExtent(child.type, child.rx * scale);
   const ry = clampExtent(child.type, child.ry * scale);
@@ -336,12 +365,22 @@ const createNode = (child) => {
   const ry = clampExtent(child.type, child.ry * scale);
   const geometry = SHAPES[child.type].geometry;
 
-  const tag =
-    { dot: 'line', arc: 'path', polyline: child.closed ? 'polygon' : 'polyline' }[geometry] ?? geometry;
+  /* Sur un plan 3D, toute forme devient un `<path>` projeté : la matrice passe
+     dans les coordonnées, pas en `transform`, qui écraserait aussi le trait. */
+  const tag = child.matrix
+    ? 'path'
+    : ({ dot: 'line', arc: 'path', polyline: child.closed ? 'polygon' : 'polyline' }[geometry] ?? geometry);
   const node = document.createElementNS(SVG_NS, tag);
   node.dataset.elementId = child.id;
   let strokeWidth = child.strokeWidth;
-  if (geometry === 'dot') {
+  if (child.matrix) {
+    const { points, closed } = outlinePath(child);
+    node.setAttribute('d', projectedPath(child.matrix, points, closed));
+    if (geometry === 'dot') {
+      node.setAttribute('stroke-linecap', 'round');
+      strokeWidth *= scale;
+    }
+  } else if (geometry === 'dot') {
     /* Trait de longueur nulle : seul le bout rond est peint, d'un diamètre égal
        à l'épaisseur. L'échelle agit donc sur l'épaisseur, faute d'étendue. */
     for (const axis of ['x1', 'x2']) node.setAttribute(axis, round(child.x));
@@ -383,10 +422,9 @@ const createNode = (child) => {
   /* Orientation de la copie et rotation propre, autour du centre de la forme
      après le déplacement des modificateurs : la géométrie émise reste celle de
      la forme droite. Le reflet passe avant l'angle. */
-  const transform = [
-    child.rotation ? rotateAbout(child.rotation, child) : '',
-    child.flip ? flipAbout(child) : '',
-  ].filter(Boolean);
+  const transform = child.matrix
+    ? []
+    : [child.rotation ? rotateAbout(child.rotation, child) : '', child.flip ? flipAbout(child) : ''].filter(Boolean);
   if (transform.length > 0) node.setAttribute('transform', transform.join(' '));
   node.setAttribute('fill', child.fill);
   node.setAttribute('stroke', child.stroke);
@@ -406,6 +444,186 @@ const createNode = (child) => {
   const gap = (child.gap ?? 0) * scale;
   const hollow = child.outlined && geometry !== 'dot' && child.stroke !== 'none' && strokeWidth > 0 && gap > 0;
   return hollow ? hollowStroke(node, `outline-${child.id}-${outlineSerial++}`, strokeWidth, gap) : node;
+};
+
+/* Données `d` d'un contour projeté. Un point seul se trace en segment nul :
+   le bout rond le peint. */
+const projectedPath = (matrix, points, closed) => {
+  const xy = points.map((p) => {
+    const q = project(matrix, p);
+    return `${round(q.x)},${round(q.y)}`;
+  });
+  return `M${(xy.length === 1 ? [xy[0], xy[0]] : xy).join(' L')}${closed ? ' Z' : ''}`;
+};
+
+/**
+ * Forme dessinée : extrudée si son calque a un plan 3D et qu'elle a une
+ * hauteur, sinon le nœud simple.
+ */
+const createShape = (child) => {
+  const v = child.plane && child.height ? extrusion(child.plane, child.height * (child.scale ?? 1)) : null;
+  if (!v || Math.hypot(v.x, v.y) <= 1e-6) return createNode(child);
+  /* Centrée sur le plan : une profondeur de 10 va de -5 à 5. */
+  return createExtrusion({ ...child, matrix: shifted(child.matrix, { x: -v.x / 2, y: -v.y / 2 }) }, v);
+};
+
+/* Contour déjà à l'écran en données `d`. */
+const screenPath = (points, closed) =>
+  `M${points.map((p) => `${round(p.x)},${round(p.y)}`).join(' L')}${closed ? ' Z' : ''}`;
+
+const moved = (points, by) => points.map((p) => ({ x: p.x + by.x, y: p.y + by.y }));
+
+/* Masque d'extrusion : `keep` = 'out' cache l'aire donnée, 'in' ne garde qu'elle. */
+const areaMask = (child, d, keep) => {
+  const mask = svgNode('mask', { id: `extrude-${child.id}-${outlineSerial++}`, maskUnits: 'userSpaceOnUse', ...MASK_REGION });
+  const [outside, inside] = keep === 'out' ? ['#fff', '#000'] : ['#000', '#fff'];
+  mask.append(svgNode('rect', { ...MASK_REGION, fill: outside }), svgNode('path', { d, fill: inside, stroke: 'none' }));
+  return mask;
+};
+
+/**
+ * Volume d'une forme extrudée de `v` à l'écran : face arrière, arêtes de flanc
+ * (silhouette et sommets anguleux) et, en flancs colorés, l'aplat du volume —
+ * le tout masqué par l'aire de la face avant, dessinée par-dessus. La face
+ * avant est celle du haut : décalée de `v` pour une hauteur positive, la
+ * base pour une hauteur négative. `createShape` a déjà descendu la base d'une
+ * demi-profondeur : le volume est centré sur le plan.
+ *
+ * Un contour double fermé est un anneau : son bord extérieur se comporte comme
+ * un prisme plein, son bord intérieur comme un trou — sa face arrière et ses
+ * flancs ne se voient qu'à travers l'ouverture de la face avant. Les deux
+ * bords sont décalés à l'écran, là où `hollowStroke` pose les deux traits.
+ *
+ * ponytail: une forme simple est un prisme plein — un trou (pair-impair,
+ * découpe) cache comme du plein — et il n'y a pas d'occlusion entre formes
+ * (ordre de dessin). Arêtes cachées d'un anneau en trait plein, sans tirets.
+ * Un masque par copie ; mutualiser si des centaines de copies pèsent.
+ */
+const createExtrusion = (child, v) => {
+  const up = child.height > 0;
+  const lifted = { ...child, matrix: shifted(child.matrix, v) };
+  const [front, back] = up ? [lifted, child] : [child, lifted];
+  const [frontShift, backShift] = up ? [v, { x: 0, y: 0 }] : [{ x: 0, y: 0 }, v];
+  const { points, closed, corners } = outlinePath(child);
+  const base = points.map((p) => project(child.matrix, p));
+  const geometry = SHAPES[child.type].geometry;
+  const dot = geometry === 'dot';
+  const width = child.strokeWidth * (dot ? (child.scale ?? 1) : 1);
+  const gap = (child.gap ?? 0) * (child.scale ?? 1);
+  const ring = closed && child.outlined && gap > 0 && width > 0 && child.stroke !== 'none';
+  const offset = (width + gap) / 2;
+  const outer = ring ? offsetPolygon(base, offset) : base;
+  /* Sens de la face arrière vers la face avant. */
+  const toward = { x: frontShift.x - backShift.x, y: frontShift.y - backShift.y };
+  /* Fond d'un contour fermé : la moitié que la paroi ne cache pas — côté
+     proche pour un volume plein (`sign` = 1), côté loin pour un trou (-1), vu
+     par l'ouverture. Chaque morceau finit sur la silhouette et s'y prolonge
+     d'un seul tracé : arête de flanc jusqu'à la face avant, puis un bout du
+     bord voisin de cette face, pour que les deux coins se joignent en onglet.
+     L'arête affleure le bord du trait côté volume (`flushCorner`). */
+  const chain = (contour, sign) => {
+    const n = contour.length;
+    const rim = offsetPolygon(contour, (sign * width) / 2);
+    const flush = (i, j) => flushCorner(contour[i], contour[j], rim[i], v, width);
+    const lead = (i, j) => ({ x: (contour[i].x + contour[j].x) / 2, y: (contour[i].y + contour[j].y) / 2 });
+    const at = (p, by) => ({ x: p.x + by.x, y: p.y + by.y });
+    const direction = sign > 0 ? toward : { x: -toward.x, y: -toward.y };
+    return nearRuns(contour, direction)
+      .map((run) => {
+        if (run[0] === run.at(-1)) return screenPath(moved(run.map((i) => contour[i]), backShift), false);
+        const [first, last] = [run[0], run.at(-1)];
+        const [before, after] = [(first - 1 + n) % n, (last + 1) % n];
+        const middle = run.slice(1, -1).map((i) => at(contour[i], backShift));
+        return screenPath(
+          [
+            at(lead(first, before), frontShift),
+            at(flush(first, before), frontShift),
+            at(flush(first, run[1]), backShift),
+            ...middle,
+            at(flush(last, run.at(-2)), backShift),
+            at(flush(last, after), frontShift),
+            at(lead(last, after), frontShift),
+          ],
+          false,
+        );
+      })
+      .join(' ');
+  };
+
+  /* `linecap` : les arêtes de flanc finissent dans un coin ; rond, le bout
+     se loge dans l'onglet du coin au lieu d'y laisser une encoche. */
+  const stroked = (d, dashed = false, linecap = child.linecap ?? 'butt') => {
+    if (!d.trim()) return null;
+    const node = svgNode('path', {
+      d,
+      fill: 'none',
+      stroke: child.stroke,
+      'stroke-width': round(width),
+      'stroke-opacity': round(child.opacity ?? 1),
+      'stroke-linecap': dot ? 'round' : linecap,
+    });
+    /* Tirets comme `createNode` : multiples de l'épaisseur, suivis de l'échelle. */
+    if (dashed && child.dash?.length) {
+      node.setAttribute('stroke-dasharray', child.dash.map((value) => round(value * width * (child.scale ?? 1))).join(' '));
+    }
+    return node;
+  };
+  /* Arêtes de flanc d'un contour, d'une face à l'autre. Fermé (`sign`), la
+     silhouette part déjà avec le fond (`chain`) : ne restent que les coins de
+     la paroi visible, dont les deux arêtes sont du côté vu. Ouvert : silhouette
+     et coins. */
+  const sides = (contour, sign = 0) => {
+    const seen = sign ? facingAway(contour, sign > 0 ? toward : { x: -toward.x, y: -toward.y }) : null;
+    const edges = sign
+      ? corners.filter((i) => seen[i] && seen[(i - 1 + contour.length) % contour.length])
+      : [...new Set([...silhouette(contour, closed, v), ...corners])];
+    return edges
+      .map((i) => screenPath([contour[i], { x: contour[i].x + v.x, y: contour[i].y + v.y }], false))
+      .join(' ');
+  };
+
+  const group = svgNode('g');
+  group.dataset.elementId = child.id;
+  const volume = svgNode('g');
+  if (child.plane.sides === 'filled') {
+    const quads = outer.slice(0, closed ? outer.length : -1).map((p, i) => {
+      const q = outer[(i + 1) % outer.length];
+      return screenPath([p, q, { x: q.x + v.x, y: q.y + v.y }, { x: p.x + v.x, y: p.y + v.y }], true);
+    });
+    const faces = closed ? [screenPath(outer, true), screenPath(moved(outer, v), true)] : [];
+    /* Opacité sur le groupe : les quads qui se recouvrent ne se foncent pas.
+       Un nœud par morceau : réunis, leurs sens de parcours s'annuleraient. */
+    const tint = svgNode('g', { opacity: round(child.opacity ?? 1), fill: child.stroke, stroke: 'none' });
+    tint.append(...[...faces, ...quads].map((d) => svgNode('path', { d })));
+    volume.append(tint);
+  }
+  if (ring) {
+    volume.append(...[stroked(chain(outer, 1)), stroked(sides(outer, 1), false, 'round')].filter(Boolean));
+    /* Le trou : face arrière et flancs intérieurs, vus par l'ouverture seule. */
+    const inner = offsetPolygon(base, -offset);
+    const hole = svgNode('g');
+    hole.append(...[stroked(chain(inner, -1)), stroked(sides(inner, -1), false, 'round')].filter(Boolean));
+    const opening = areaMask(child, screenPath(moved(inner, frontShift), true), 'in');
+    hole.setAttribute('mask', `url(#${opening.id})`);
+    /* Hors du volume : le masque de la face avant cacherait l'ouverture. */
+    group.append(opening, hole);
+  } else if (closed) {
+    volume.append(...[stroked(chain(base, 1), true), stroked(sides(base, 1), false, 'round')].filter(Boolean));
+  } else {
+    const hidden = createNode(back);
+    delete hidden.dataset.elementId;
+    volume.append(...[hidden, stroked(sides(base), false, 'round')].filter(Boolean));
+  }
+  /* Un contour ouvert (ligne, arc, point) n'a pas d'aire : rien ne se cache. */
+  if (closed) {
+    const mask = areaMask(child, screenPath(moved(outer, frontShift), true), 'out');
+    volume.setAttribute('mask', `url(#${mask.id})`);
+    group.append(mask);
+  }
+  const face = createNode(front);
+  delete face.dataset.elementId;
+  group.append(volume, face);
+  return group;
 };
 
 /* Numéro des masques de contour double, remis à zéro à chaque rendu : un id
@@ -628,11 +846,16 @@ const outlinePoints = (child) => {
 export const childBounds = (child) => {
   const rotation = degrees(child.rotation ?? 0);
   const [cos, sin] = [Math.cos(rotation), Math.sin(rotation)];
-  const placed = outlinePoints(child).map((p) => {
+  let placed = outlinePoints(child).map((p) => {
     const dx = child.flip ? child.x - p.x : p.x - child.x;
     const dy = p.y - child.y;
     return { x: child.x + dx * cos - dy * sin, y: child.y + dx * sin + dy * cos };
   });
+  if (child.matrix) {
+    placed = placed.map((p) => project(child.matrix, p));
+    const v = child.height ? extrusion(child.plane, child.height * (child.scale ?? 1)) : null;
+    if (v) placed = [-0.5, 0.5].flatMap((k) => placed.map((p) => ({ x: p.x + v.x * k, y: p.y + v.y * k })));
+  }
   const dot = SHAPES[child.type].geometry === 'dot';
   const width = child.strokeWidth * (dot ? (child.scale ?? 1) : 1);
   const half = child.outlined && !dot ? width + ((child.gap ?? 0) * (child.scale ?? 1)) / 2 : width / 2;
@@ -687,7 +910,7 @@ const createSelection = (scene, svgRoot) => {
   /* Calque sans forme sélectionnée : le cadre entoure toutes ses copies. */
   const layer = getActiveLayer(scene);
   if (!layer?.visible) return null;
-  const children = getRenderedChildren(layer);
+  const children = layerChildren(layer);
   return children.length > 0 ? frame(union(children.map(childBounds)), 'layer') : null;
 };
 

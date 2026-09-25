@@ -167,6 +167,26 @@ export const ARC_CLOSURES = { open: 'Ouvert', chord: 'Corde', sector: 'Secteur' 
 export const clampAngle = (value, fallback = 0) =>
   Math.min(360, Math.max(-360, Number.isFinite(value) ? value : fallback));
 
+/* Plan 3D d'un calque. Défaut : inclinaison et orientation à 45°. `sides` =
+   flancs de l'extrusion : traits seuls, ou peints de la couleur pleine de la forme. */
+export const PLANE_SIDES = { transparent: 'Transparents', filled: 'Colorés' };
+export const DEFAULT_PLANE = { enabled: true, tilt: 45, heading: 45, sides: 'transparent' };
+
+/** Plan 3D effectif d'un calque : `null` s'il n'en a pas ou qu'il est éteint (`enabled` absent = allumé). */
+export const activePlane = (layer) => (layer?.plane && layer.plane.enabled !== false ? layer.plane : null);
+/* Profondeur donnée aux formes à plat d'un calque qui passe en 3D, et aux
+   formes qu'on y ajoute : sans elle, activer le plan ne montrerait aucun volume. */
+export const DEFAULT_DEPTH = 150;
+/* 90° verrait le plan par la tranche : la projection ne s'inverserait plus. */
+export const MAX_TILT = 89;
+export const clampTilt = (value) =>
+  Math.min(MAX_TILT, Math.max(0, Number.isFinite(value) ? value : DEFAULT_PLANE.tilt));
+export const clampHeading = (value) => (((Number.isFinite(value) ? value : 0) % 360) + 360) % 360;
+export const clampPlaneSides = (value) => (Object.hasOwn(PLANE_SIDES, value) ? value : DEFAULT_PLANE.sides);
+export const MAX_HEIGHT = 1000;
+/* Centrée, une profondeur négative dessinerait la même chose : sa valeur absolue. */
+export const clampHeight = (value) => Math.min(MAX_HEIGHT, Math.abs(Number.isFinite(value) ? value : 0));
+
 /* Borne d'import : un tracé collé au-delà est plus probablement une erreur de
    copie qu'un dessin. */
 export const MAX_POINTS = 5000;
@@ -276,6 +296,9 @@ export const createElement = (type, x, y, overrides = {}) => ({
   outlined: false,
   gap: DEFAULT_OUTLINE_GAP,
   booleans: [],
+  /* Profondeur d'extrusion le long de la normale du plan 3D du calque, centrée
+     sur le plan (10 : de -5 à 5). Sans plan, sans effet. */
+  height: 0,
   ...SHAPES[type].defaults,
   type,
   x,
@@ -336,6 +359,9 @@ export const createLayer = (overrides = {}) => ({
   /* « Recoupements creux » : les formes remplies du calque, copies comprises,
      se peignent en un seul tracé pair-impair — leurs recoupements se creusent. */
   evenOdd: false,
+  /* Plan 3D (`plane.js`) : `null` = jamais activé, sinon `{ enabled, tilt,
+     heading, sides }` — éteint, le calque est à plat mais garde ses réglages. */
+  plane: null,
   ...overrides,
 });
 
@@ -542,6 +568,38 @@ export const pivotOf = (layer, index) => layer.modifiers[index]?.center ?? layer
 export const setLayerEvenOdd = (scene, id, evenOdd) =>
   mapLayer(scene, id, (layer) => ({ ...layer, evenOdd: Boolean(evenOdd) }));
 
+/**
+ * Allume et règle le plan 3D du calque, ou l'éteint (`null`) en gardant ses
+ * réglages pour le rallumer tel quel. Un réglage partiel complète le plan
+ * courant, ou le plan par défaut s'il n'y en a jamais eu.
+ */
+export const setLayerPlane = (scene, id, patch) =>
+  mapLayer(scene, id, (layer) => {
+    if (patch === null) return activePlane(layer) ? { ...layer, plane: { ...layer.plane, enabled: false } } : layer;
+    const next = { ...DEFAULT_PLANE, ...layer.plane, ...patch };
+    /* Première activation seulement : les formes sans profondeur prennent
+       celle par défaut. Ensuite chacune garde la sienne, zéro compris. */
+    const elements = layer.plane
+      ? layer.elements
+      : layer.elements.map((element) => (element.height ? element : { ...element, height: DEFAULT_DEPTH }));
+    return {
+      ...layer,
+      elements,
+      plane: {
+        enabled: true,
+        tilt: clampTilt(next.tilt),
+        heading: clampHeading(next.heading),
+        sides: clampPlaneSides(next.sides),
+      },
+    };
+  });
+
+/** Bouton 3D de l'arbre : allume le plan éteint (ou le pose), éteint l'allumé. */
+export const togglePlane = (scene, id) => {
+  const layer = scene.layers.find((candidate) => candidate.id === id);
+  return layer ? setLayerPlane(scene, id, activePlane(layer) ? null : {}) : scene;
+};
+
 /** `delta` = -1 vers l'arrière-plan, +1 vers le premier plan. */
 export const moveLayer = (scene, id, delta) => {
   const from = scene.layers.findIndex((layer) => layer.id === id);
@@ -586,7 +644,9 @@ export const addElement = (scene, layerId, type, x, y, overrides = {}) => {
     ...(previous && { filled: previous.filled, stroke: previous.stroke, strokeWidth: previous.strokeWidth }),
     ...(!active && scene.style),
   };
-  const element = createElement(type, x, y, { ...style, ...overrides });
+  /* Un calque passé en 3D, même éteint, donne sa profondeur aux nouvelles formes. */
+  const planar = scene.layers.find((layer) => layer.id === layerId)?.plane;
+  const element = createElement(type, x, y, { ...style, ...(planar && { height: DEFAULT_DEPTH }), ...overrides });
   return {
     ...mapLayer(scene, layerId, (layer) => ({ ...layer, elements: [...layer.elements, element] })),
     activeElementId: element.id,

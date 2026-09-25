@@ -1837,3 +1837,146 @@ describe('shapePreview', () => {
     expect(shapePreview(createElement('point', 0, 0), 18)).toBeNull();
   });
 });
+
+describe('plan 3D', () => {
+  const plane = { tilt: 60, heading: 0, sides: 'transparent' };
+  const draw = (layer) => {
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: layer.id, activeElementId: null }, svg);
+    return svg;
+  };
+
+  it('projette la forme en <path>, sans transform qui écraserait le trait', () => {
+    const svg = draw(createLayer({ plane, elements: [createElement('ellipse', 450, 450, { rotation: 20 })] }));
+    const node = svg.querySelector('[data-layer-id] [data-element-id]');
+    expect(node.tagName).toBe('path');
+    expect(node.getAttribute('transform')).toBeNull();
+    expect(svg.querySelector('[data-layer-id] ellipse')).toBeNull();
+  });
+
+  it('extrude : masque de la face avant, arêtes de flanc, face arrière', () => {
+    const element = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 20 });
+    const svg = draw(createLayer({ plane, elements: [element] }));
+    const group = svg.querySelector(`[data-layer-id] > [data-element-id="${element.id}"]`);
+    expect(group.tagName).toBe('g');
+    expect(group.querySelector('mask')).not.toBeNull();
+    const volume = group.querySelector('g[mask]');
+    const paths = volume.querySelectorAll('path');
+    /* Un seul tracé : l'arête de silhouette, la moitié proche du fond, l'autre arête. */
+    expect(paths).toHaveLength(1);
+    const d = paths[0].getAttribute('d');
+    expect(d.match(/M/g)).toHaveLength(1);
+    expect(d).not.toMatch(/Z/);
+    expect(group.querySelectorAll('[data-element-id]')).toHaveLength(0);
+  });
+
+  it('un point extrudé se dessine en segment à bout rond, sans masque', () => {
+    const element = createElement('point', 450, 450, { height: 100 });
+    const svg = draw(createLayer({ plane, elements: [element] }));
+    const group = svg.querySelector(`[data-element-id="${element.id}"]`);
+    expect(group.querySelector('mask')).toBeNull();
+    const sides = group.querySelectorAll('path')[1];
+    expect(sides.getAttribute('stroke-linecap')).toBe('round');
+    /* Centré sur le plan : ±100·sin 60° / 2. */
+    expect(sides.getAttribute('d')).toBe('M450,493.301 L450,406.699');
+  });
+
+  it('flancs colorés : aplat teinté de la couleur de la forme', () => {
+    const element = createElement('rect', 450, 450, { height: 20, stroke: '#ff0000' });
+    const svg = draw(createLayer({ plane: { ...plane, sides: 'filled' }, elements: [element] }));
+    const tint = svg.querySelector('g[mask] > g[opacity]');
+    expect(tint.getAttribute('opacity')).toBe('1');
+    expect(tint.getAttribute('fill')).toBe('#ff0000');
+  });
+
+  it('le cadre de sélection englobe le volume extrudé', () => {
+    const element = createElement('ellipse', 450, 450, { rx: 50, ry: 50, strokeWidth: 0, height: 100 });
+    const layer = createLayer({ plane, elements: [element] });
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: layer.id, activeElementId: element.id }, svg);
+    const box = svg.querySelector('[data-selection]');
+    /* Faces à ±100·sin 60° / 2 du plan, rayon 25 à l'écran. */
+    expect(Number(box.getAttribute('y'))).toBeCloseTo(450 - 25 - 43.301 - 8, 1);
+    expect(Number(box.getAttribute('height'))).toBeCloseTo(50 + 86.603 + 16, 1);
+  });
+
+  it('pose les repères du calque sur le plan, et l’export les retire', () => {
+    const layer = createLayer({
+      plane,
+      elements: [createElement('ellipse', 450, 450, { height: 10 })],
+      modifiers: [{ type: 'axial', n: 3 }],
+    });
+    const svg = draw(layer);
+    expect(svg.querySelector('[data-guides]').getAttribute('transform')).toMatch(/^matrix\(/);
+    expect(toSvgDocument(svg)).not.toContain('data-guides');
+  });
+});
+
+describe('plan 3D et recoupements creux', () => {
+  it('l’aplat commun suit la face avant extrudée', () => {
+    const element = createElement('ellipse', 450, 450, { rx: 30, ry: 30, height: 100, filled: true });
+    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, evenOdd: true, elements: [element] });
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const ys = [...svg.querySelector('[data-even-odd]').getAttribute('d').matchAll(/,(-?[\d.]+)/g)].map((m) => Number(m[1]));
+    /* Face du haut : centre remonté d'une demi-profondeur, 100·sin 60° / 2. */
+    expect(Math.max(...ys)).toBeCloseTo(450 - 43.301 + 15, 0);
+  });
+});
+
+describe('plan 3D et contour double', () => {
+  it('extrude un anneau : bord extérieur plein, fond du trou vu par l’ouverture seule', () => {
+    const element = createElement('ellipse', 450, 450, { rx: 100, ry: 100, strokeWidth: 4, gap: 10, outlined: true, height: 30 });
+    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [element] });
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const group = svg.querySelector(`[data-element-id="${element.id}"]`);
+    const [opening, cover] = [...group.querySelectorAll(':scope > mask')];
+    /* Ouverture : ne garde que l'intérieur de la face avant. */
+    expect(opening.querySelector('rect').getAttribute('fill')).toBe('#000');
+    expect(cover.querySelector('rect').getAttribute('fill')).toBe('#fff');
+    const hole = group.querySelector(`:scope > g[mask="url(#${opening.id})"]`);
+    const volume = group.querySelector(`:scope > g[mask="url(#${cover.id})"]`);
+    expect(hole).not.toBeNull();
+    /* Le fond de l'anneau n'est pas un second contour double. */
+    expect(volume.querySelector('mask')).toBeNull();
+    expect(volume.querySelectorAll('path')).toHaveLength(1);
+  });
+});
+
+describe('plan 3D : paroi', () => {
+  it('une extrusion haute ne trace que la moitié proche du fond, et pas les coins arrière', () => {
+    const plane = { tilt: 55, heading: 30, sides: 'transparent' };
+    const disk = createElement('ellipse', 450, 450, { rx: 100, ry: 100, height: 300 });
+    const box = createElement('rect', 450, 450, { rx: 50, ry: 50, height: 300 });
+    const svg = stage();
+    render({ layers: [createLayer({ plane, elements: [disk, box] })], activeLayerId: null, activeElementId: null }, svg);
+    const [back] = svg.querySelectorAll(`[data-element-id="${disk.id}"] g[mask] > path`);
+    expect(back.getAttribute('d')).not.toMatch(/Z/);
+    expect(back.getAttribute('d').match(/M/g)).toHaveLength(1);
+    const [, sides] = svg.querySelectorAll(`[data-element-id="${box.id}"] g[mask] > path`);
+    /* Pente en biais : les deux coins de silhouette partent avec le fond ; seul
+       le coin proche garde son arête, le quatrième passe derrière. */
+    expect(sides.getAttribute('d').match(/M/g)).toHaveLength(1);
+  });
+});
+
+describe('arbre : bouton 3D', () => {
+  it('passe le calque en 3D puis à plat, à gauche de l’œil', async () => {
+    const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
+    const layer = createLayer({ elements: [createElement('rect', 0, 0)] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const panel = document.createElement('div');
+    document.body.append(panel);
+    mountLayerPanel({ store, container: panel, status: { show: () => {} } });
+    const buttons = () => [...panel.querySelectorAll('.row-actions button')];
+    expect(buttons()[0].getAttribute('aria-label')).toBe(`Passer ${layer.name} en 3D`);
+    expect(buttons()[1].getAttribute('aria-label')).toMatch(/^Masquer/);
+    buttons()[0].click();
+    expect(store.get().layers[0].plane.enabled).toBe(true);
+    expect(panel.querySelector('.layer-card').dataset.plane).toBe('true');
+    buttons()[0].click();
+    expect(store.get().layers[0].plane.enabled).toBe(false);
+    panel.remove();
+  });
+});

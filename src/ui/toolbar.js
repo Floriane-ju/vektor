@@ -1,5 +1,6 @@
 import {
   absolutePoints,
+  activePlane,
   addElement,
   addLayer,
   addTraces,
@@ -23,6 +24,7 @@ import { axisDirection, MIRROR_AXIS } from '../modifiers.js';
 import { clearHover, toPng, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
 import { parseTrace } from '../path.js';
+import { planeMatrix, unproject } from '../plane.js';
 import { icon } from './icons.js';
 import { TOOL_KEYS } from './shortcuts.js';
 
@@ -116,7 +118,16 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   /* Le dessin lit le pointeur aimanté par la grille. Les déplacements lisent
      le pointeur brut et aimantent la position d'arrivée : sur une grille ronde,
      un écart entre deux croisements ne mène pas d'un croisement à un autre. */
-  const stagePoint = (event) => snap(toStagePoint(svgRoot, event));
+  /* Sur un calque en plan 3D, le pointeur est ramené dans le repère du plan :
+     dessin, déplacement, sommets et pivots y vivent.
+     ponytail: l'aimantation s'applique dans ce repère, la grille affichée
+     reste à plat. */
+  const planePoint = (event) => {
+    const point = toStagePoint(svgRoot, event);
+    const plane = activePlane(getActiveLayer(store.get()));
+    return plane ? unproject(planeMatrix(plane), point) : point;
+  };
+  const stagePoint = (event) => snap(planePoint(event));
 
   /* `tool` reste la dernière forme choisie même sous le curseur : « + Ajouter
      une forme » en a toujours besoin. */
@@ -275,7 +286,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     const modifier = layer?.modifiers[index];
     if (!modifier) return false;
     const origin = pivotOf(layer, index);
-    const point = toStagePoint(svgRoot, event);
+    const point = planePoint(event);
     pivotDrag = {
       layerId: layer.id,
       index,
@@ -293,7 +304,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
      avec tous les étages qui le partagent. */
   const movePivot = (event) => {
     const { layerId, index, own, normal, origin, offset } = pivotDrag;
-    const point = toStagePoint(svgRoot, event);
+    const point = planePoint(event);
     const free = snap({ x: point.x + offset.x, y: point.y + offset.y });
     const along = normal && (free.x - origin.x) * normal.x + (free.y - origin.y) * normal.y;
     const target = normal ? { x: origin.x + along * normal.x, y: origin.y + along * normal.y } : { ...free };
@@ -308,7 +319,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     const selected = getActiveElement(store.get());
     if (handle && selected?.points) {
       vertexDrag = {
-        point: toStagePoint(svgRoot, event),
+        point: planePoint(event),
         element: selected,
         index: Number(handle.dataset.vertex),
       };
@@ -319,14 +330,14 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     if (node) select(node);
     const element = getActiveElement(store.get());
     if (!element) return;
-    const point = toStagePoint(svgRoot, event);
+    const point = planePoint(event);
     drag = { point, origin: element, onEmpty: !node, moved: false };
     svgRoot.toggleAttribute('data-dragging', true);
     svgRoot.setPointerCapture?.(event.pointerId);
   };
 
   const moveDrag = (event) => {
-    const { x, y } = toStagePoint(svgRoot, event);
+    const { x, y } = planePoint(event);
     const dx = x - drag.point.x;
     const dy = y - drag.point.y;
     /* Sans seuil, le tremblement d'un clic décalerait la forme d'un pixel. */
@@ -344,7 +355,7 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   };
 
   const moveVertex = (event) => {
-    const { x, y } = toStagePoint(svgRoot, event);
+    const { x, y } = planePoint(event);
     const { element, index, point } = vertexDrag;
     /* Le geste est lu à l'écran, le sommet vit dans le repère de la forme :
        on aimante sa position à l'écran, puis on la ramène dans ce repère. */

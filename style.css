@@ -379,6 +379,8 @@ input[type="range"] {
 .layer-row:focus-within .row-actions,
 .layer-card[data-active="true"] > .layer-row .row-actions { opacity: 1; }
 .layer-card[data-visible="false"] > .layer-row .row-actions { opacity: 1; }
+/* Un calque en 3D le montre sans survol, comme un calque masqué. */
+.layer-card[data-plane="true"] > .layer-row .row-actions { opacity: 1; }
 
 .icon-btn {
   min-width: 24px;

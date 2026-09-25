@@ -1381,7 +1381,7 @@ describe('rotation et épaisseur interpolées', () => {
       layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
     });
     const again = deserialize(serialize(deserialize(old)));
-    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@22');
+    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@23');
     expect(orients(again.layers[0].modifiers[0])).toBe(true);
   });
 
@@ -1706,5 +1706,156 @@ describe('interpolation de couleur', () => {
     raw.layers[0].interpolations[0].range = ['rouge', 42];
     const [fallback] = deserialize(JSON.stringify(raw)).layers[0].interpolations;
     expect(fallback.range).toEqual(RANGE_BOUNDS.color.defaultRange);
+  });
+});
+
+describe('plan 3D', async () => {
+  const { extrusion, outlinePath, planeMatrix, project, silhouette, unproject } = await import('../src/plane.js');
+  const { setLayerPlane, DEFAULT_PLANE, MAX_TILT, STAGE: stage } = await import('../src/scene.js');
+  const close = (p, q) => {
+    expect(p.x).toBeCloseTo(q.x, 6);
+    expect(p.y).toBeCloseTo(q.y, 6);
+  };
+
+  it('à plat (inclinaison 0), la projection est l’identité', () => {
+    close(project(planeMatrix({ tilt: 0, heading: 37 }), { x: 12, y: -40 }), { x: 12, y: -40 });
+  });
+
+  it('écrase la direction de la pente autour du centre de la scène', () => {
+    const matrix = planeMatrix({ tilt: 60, heading: 0 });
+    const center = { x: stage.width / 2, y: stage.height / 2 };
+    close(project(matrix, center), center);
+    close(project(matrix, { x: center.x + 100, y: center.y + 100 }), { x: center.x + 100, y: center.y + 50 });
+  });
+
+  it('se laisse inverser pour lire le pointeur dans le repère du plan', () => {
+    const matrix = planeMatrix({ tilt: 70, heading: 123 });
+    const point = { x: 314, y: -27 };
+    close(unproject(matrix, project(matrix, point)), point);
+  });
+
+  it('extrude vers le haut de l’écran, de la hauteur × sinus de l’inclinaison', () => {
+    close(extrusion({ tilt: 30, heading: 0 }, 10), { x: 0, y: -5 });
+    close(extrusion({ tilt: 90, heading: 90 }, 10), { x: 10, y: 0 });
+    close(extrusion({ tilt: 0, heading: 0 }, 10), { x: 0, y: 0 });
+  });
+
+  it('une ellipse extrudée n’a que deux arêtes de silhouette', () => {
+    const { points, closed, corners } = outlinePath(createElement('ellipse', 0, 0, { rx: 80, ry: 40 }));
+    expect(corners).toEqual([]);
+    expect(silhouette(points, closed, { x: 0, y: -10 })).toHaveLength(2);
+  });
+
+  it('un contour ouvert garde ses deux bouts, un point son unique sommet', () => {
+    const line = outlinePath(createElement('line', 0, 0, { rx: 30, ry: 0 }));
+    expect(silhouette(line.points, line.closed, { x: 0, y: -10 })).toEqual([0, 1]);
+    const dot = outlinePath(createElement('point', 5, 5));
+    expect(silhouette(dot.points, dot.closed, { x: 0, y: -10 })).toEqual([0]);
+  });
+
+  it('un rectangle extrudé dans l’axe d’un côté a ses coins pour silhouette', () => {
+    const { points, closed, corners } = outlinePath(createElement('rect', 0, 0, { rx: 20, ry: 10 }));
+    expect(corners).toEqual([0, 1, 2, 3]);
+    expect(silhouette(points, closed, { x: 0, y: -10 })).toEqual([0, 1, 2, 3]);
+  });
+
+  it('décale un contour fermé vers l’extérieur, ou l’intérieur, quel que soit son sens', async () => {
+    const { offsetPolygon } = await import('../src/plane.js');
+    const square = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }];
+    const out = offsetPolygon(square, 2);
+    close(out[0], { x: -2, y: -2 });
+    close(out[2], { x: 12, y: 12 });
+    close(offsetPolygon([...square].reverse(), -2)[0], { x: 2, y: 8 });
+  });
+
+  it('ne garde du fond que la moitié proche, celle que la paroi ne cache pas', async () => {
+    const { nearEdges } = await import('../src/plane.js');
+    const square = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }];
+    /* Face avant vers le haut : seul le bord du bas reste visible. */
+    expect(nearEdges(square, { x: 0, y: -5 })).toEqual([[{ x: 10, y: 10 }, { x: 0, y: 10 }]]);
+    /* En biais : deux bords, en une seule chaîne, même à cheval sur le premier sommet. */
+    expect(nearEdges(square, { x: 5, y: 5 })).toEqual([[{ x: 0, y: 10 }, { x: 0, y: 0 }, { x: 10, y: 0 }]]);
+  });
+
+  it('fait affleurer l’arête de silhouette au bord extérieur du trait', async () => {
+    const { flushCorner } = await import('../src/plane.js');
+    const v = { x: 0, y: -40 };
+    /* Sur une courbe, la pointe est dans l'axe : le coin reste en place. */
+    close(flushCorner({ x: 0, y: 0 }, { x: 1, y: 5 }, { x: -3, y: 0 }, v, 6), { x: 0, y: 0 });
+    /* Coin aigu : la pointe dépasse de 5 ; l'axe de l'arête passe à 3 en deçà,
+       sur le prolongement du bord. */
+    const joined = flushCorner({ x: 0, y: 0 }, { x: 10, y: 10 }, { x: -5, y: 0 }, v, 6);
+    close(joined, { x: -2, y: -2 });
+  });
+
+  it('passer un calque en 3D donne la profondeur par défaut à ses formes à plat, et aux nouvelles', async () => {
+    const { DEFAULT_DEPTH } = await import('../src/scene.js');
+    const layer = createLayer({ elements: [createElement('rect', 0, 0), createElement('ellipse', 0, 0, { height: 40 })] });
+    const scene = setLayerPlane({ layers: [layer], activeLayerId: layer.id, activeElementId: null }, layer.id, {});
+    expect(scene.layers[0].plane).toMatchObject({ tilt: 45, heading: 45 });
+    expect(scene.layers[0].elements.map((element) => element.height)).toEqual([DEFAULT_DEPTH, 40]);
+    /* Un réglage du plan déjà actif ne touche pas aux formes. */
+    const flat = updateElement(scene, scene.layers[0].elements[0].id, { height: 0 });
+    expect(setLayerPlane(flat, layer.id, { tilt: 30 }).layers[0].elements[0].height).toBe(0);
+    const added = addElement(scene, layer.id, 'point', 0, 0);
+    expect(added.layers[0].elements.at(-1).height).toBe(DEFAULT_DEPTH);
+    expect(addElement({ layers: [layer], activeLayerId: layer.id, activeElementId: null }, layer.id, 'point', 0, 0).layers[0].elements.at(-1).height).toBe(0);
+  });
+
+  it('setLayerPlane pose le plan par défaut, le règle borné, le retire', () => {
+    const layer = createLayer();
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    expect(layer.plane).toBeNull();
+    const on = setLayerPlane(scene, layer.id, {});
+    expect(on.layers[0].plane).toEqual(DEFAULT_PLANE);
+    expect(scene.layers[0].plane).toBeNull();
+    const tuned = setLayerPlane(on, layer.id, { tilt: 200, heading: -90, sides: 'plein' });
+    expect(tuned.layers[0].plane).toEqual({ enabled: true, tilt: MAX_TILT, heading: 270, sides: 'transparent' });
+    expect(setLayerPlane(tuned, layer.id, null).layers[0].plane).toEqual({ ...tuned.layers[0].plane, enabled: false });
+  });
+
+  it('éteint puis rallumé, le plan garde ses angles et chaque forme sa profondeur', async () => {
+    const { activePlane, togglePlane } = await import('../src/scene.js');
+    const layer = createLayer({ elements: [createElement('rect', 0, 0), createElement('ellipse', 0, 0)] });
+    let scene = togglePlane({ layers: [layer], activeLayerId: layer.id, activeElementId: null }, layer.id);
+    scene = setLayerPlane(scene, layer.id, { tilt: 30, heading: 120 });
+    const [rect, disk] = scene.layers[0].elements;
+    scene = updateElement(updateElement(scene, rect.id, { height: 0 }), disk.id, { height: 42 });
+    scene = togglePlane(scene, layer.id);
+    expect(activePlane(scene.layers[0])).toBeNull();
+    scene = togglePlane(scene, layer.id);
+    expect(scene.layers[0].plane).toMatchObject({ enabled: true, tilt: 30, heading: 120 });
+    expect(scene.layers[0].elements.map((element) => element.height)).toEqual([0, 42]);
+  });
+
+  it('se sauvegarde, et un fichier @22 se relit à plat', () => {
+    const layer = createLayer({
+      plane: { tilt: 40, heading: 15, sides: 'filled' },
+      elements: [createElement('ellipse', 0, 0, { height: -25 })],
+    });
+    const again = deserialize(serialize({ layers: [layer], activeLayerId: layer.id, activeElementId: null }));
+    expect(again.layers[0].plane).toEqual({ enabled: true, tilt: 40, heading: 15, sides: 'filled' });
+    const off = createLayer({ plane: { enabled: false, tilt: 20, heading: 10, sides: 'transparent' } });
+    expect(deserialize(serialize({ layers: [off], activeLayerId: off.id, activeElementId: null })).layers[0].plane.enabled).toBe(false);
+    /* Centrée, une profondeur négative dessinerait pareil : relue en absolu. */
+    expect(again.layers[0].elements[0].height).toBe(25);
+
+    const old = JSON.stringify({
+      format: 'vektor/scene@22',
+      layers: [{ id: 'L1', elements: [{ id: 'E1', type: 'rect' }] }],
+    });
+    expect(deserialize(old).layers[0].plane).toBeNull();
+    expect(deserialize(old).layers[0].elements[0].height).toBe(0);
+
+    const wild = JSON.stringify({
+      format: 'vektor/scene@23',
+      layers: [{ id: 'L1', plane: { tilt: 'x', heading: 1e9, sides: 1 }, elements: [{ id: 'E1', type: 'rect', height: 1e9 }] }],
+    });
+    const read = deserialize(wild).layers[0];
+    expect(read.plane.tilt).toBe(DEFAULT_PLANE.tilt);
+    expect(read.plane.heading).toBeGreaterThanOrEqual(0);
+    expect(read.plane.heading).toBeLessThan(360);
+    expect(read.plane.sides).toBe('transparent');
+    expect(read.elements[0].height).toBe(1000);
   });
 });
