@@ -21,6 +21,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  */
 export const render = (scene, svgRoot) => {
   svgRoot.replaceChildren();
+  outlineSerial = 0;
   const bounds = new Map();
   sourceBounds.set(svgRoot, bounds);
 
@@ -401,27 +402,68 @@ const createNode = (child) => {
   }
   node.setAttribute('fill-opacity', round(child.opacity ?? 1));
   node.setAttribute('stroke-opacity', round(child.opacity ?? 1));
-  return node;
+  /* L'écart suit l'échelle de la copie, l'épaisseur non. */
+  const gap = (child.gap ?? 0) * scale;
+  const hollow = child.outlined && geometry !== 'dot' && child.stroke !== 'none' && strokeWidth > 0 && gap > 0;
+  return hollow ? hollowStroke(node, `outline-${child.id}-${outlineSerial++}`, strokeWidth, gap) : node;
 };
 
-/* Marge autour de l'aperçu, en fraction de son côté : le trait déborde du contour. */
-const PREVIEW_PADDING = 0.08;
+/* Numéro des masques de contour double, remis à zéro à chaque rendu : un id
+   par nœud, même quand une copie est dessinée plusieurs fois (booléens). */
+let outlineSerial = 0;
+
+/**
+ * Contour double : un trait large de deux épaisseurs plus l'écart, évidé en
+ * son milieu par un masque — le même nœud, tracé de la largeur de l'écart.
+ * Le vide traverse aussi l'aplat. Le masque garde tirets, bouts, transform et
+ * `vector-effect` du nœud, puisqu'il en est la copie. L'enveloppe reprend
+ * l'identifiant.
+ */
+const hollowStroke = (node, id, strokeWidth, gap) => {
+  node.setAttribute('stroke-width', round(strokeWidth * 2 + gap));
+  const hollow = node.cloneNode(false);
+  delete hollow.dataset.elementId;
+  for (const [name, value] of Object.entries({ fill: 'none', stroke: '#000', 'stroke-width': round(gap), 'stroke-opacity': 1 })) {
+    hollow.setAttribute(name, value);
+  }
+  const mask = svgNode('mask', { id, maskUnits: 'userSpaceOnUse', ...MASK_REGION });
+  mask.append(svgNode('rect', { ...MASK_REGION, fill: '#fff' }), hollow);
+  const group = svgNode('g', { mask: `url(#${mask.id})` });
+  if (node.dataset.elementId) group.dataset.elementId = node.dataset.elementId;
+  delete node.dataset.elementId;
+  group.append(mask, node);
+  return group;
+};
+
+/* Marge autour de l'aperçu, en fraction de son côté : le trait déborde du
+   contour, davantage quand il est double. */
+const PREVIEW_PADDING = { single: 0.08, double: 0.12 };
+/* Trait de l'aperçu, en pixels à l'écran ; doublé, deux traits plus fins et
+   un écart du même ordre, pour que le double se lise sans suivre le dessin. */
+const PREVIEW_STROKE = 1.8;
+const PREVIEW_DOUBLE = { stroke: 1.2, gap: 1.2 };
+/* Les aperçus vivent tous dans le même document : ids de masque uniques. */
+let previewSerial = 0;
 
 /**
  * Aperçu d'une forme pour l'arbre : sa géométrie telle que dessinée (ratio,
  * rotation), cadrée sur sa boîte dans un carré de `size` pixels, en
- * `currentColor` et d'un trait fixe à l'écran. `null` pour le point, qui n'a
- * pas d'étendue à montrer.
+ * `currentColor` et d'un trait fixe à l'écran — double si la forme l'est,
+ * sans l'écart réel. `null` pour le point, qui n'a pas d'étendue à montrer.
  */
 export const shapePreview = (element, size) => {
   if (SHAPES[element.type].geometry === 'dot') return null;
-  const child = { ...element, flip: false, strokeWidth: 0, dash: [], opacity: 1 };
-  const node = createNode({ ...child, fill: element.filled ? 'currentColor' : 'none', stroke: 'currentColor' });
+  const child = { ...element, flip: false, strokeWidth: 0, dash: [], opacity: 1, outlined: false };
+  let node = createNode({ ...child, fill: element.filled ? 'currentColor' : 'none', stroke: 'currentColor' });
   delete node.dataset.elementId;
-  node.setAttribute('stroke-width', '1.8');
+  node.setAttribute('stroke-width', PREVIEW_STROKE);
   node.setAttribute('vector-effect', 'non-scaling-stroke');
+  if (element.outlined) {
+    node = hollowStroke(node, `preview-outline-${previewSerial++}`, PREVIEW_DOUBLE.stroke, PREVIEW_DOUBLE.gap);
+  }
   const box = childBounds(child);
-  const side = Math.max(box.maxX - box.minX, box.maxY - box.minY) * (1 + PREVIEW_PADDING * 2) || 1;
+  const padding = PREVIEW_PADDING[element.outlined ? 'double' : 'single'];
+  const side = Math.max(box.maxX - box.minX, box.maxY - box.minY) * (1 + padding * 2) || 1;
   const left = (box.minX + box.maxX - side) / 2;
   const top = (box.minY + box.maxY - side) / 2;
   const svg = svgNode('svg', { width: size, height: size, viewBox: [left, top, side, side].map(round).join(' ') });
@@ -481,7 +523,7 @@ const createBoolean = (child, steps) => {
   let serial = 0;
 
   const solid = (shape, color) => {
-    const node = createNode({ ...shape, opacity: 1 });
+    const node = createNode({ ...shape, opacity: 1, outlined: false });
     delete node.dataset.elementId;
     node.setAttribute('fill', color);
     node.setAttribute('stroke', 'none');
@@ -496,9 +538,8 @@ const createBoolean = (child, steps) => {
     return `url(#${mask.id})`;
   };
   const edge = (shape) => {
-    const node = createNode({ ...shape, opacity: 1 });
+    const node = createNode({ ...shape, fill: 'none', opacity: 1 });
     delete node.dataset.elementId;
-    node.setAttribute('fill', 'none');
     return node;
   };
 
@@ -509,7 +550,7 @@ const createBoolean = (child, steps) => {
     const tool = (fg) => [solid(shape, fg)];
     const within = maskOf(tool, EDGE_KEEP[op]);
     edges = edges.map((node) => wrap([node], within));
-    edges.push(wrap([edge({ ...shape, dash: child.dash, linecap: child.linecap })], maskOf(previous, TOOL_EDGE_KEEP[op])));
+    edges.push(wrap([edge({ ...shape, dash: child.dash, linecap: child.linecap, outlined: child.outlined, gap: child.gap })], maskOf(previous, TOOL_EDGE_KEEP[op])));
     region = {
       union: (fg, bg) => [...previous(fg, bg), ...tool(fg)],
       subtract: (fg, bg) => [...previous(fg, bg), ...tool(bg)],
@@ -593,7 +634,8 @@ export const childBounds = (child) => {
     return { x: child.x + dx * cos - dy * sin, y: child.y + dx * sin + dy * cos };
   });
   const dot = SHAPES[child.type].geometry === 'dot';
-  const half = (child.strokeWidth * (dot ? (child.scale ?? 1) : 1)) / 2;
+  const width = child.strokeWidth * (dot ? (child.scale ?? 1) : 1);
+  const half = child.outlined && !dot ? width + ((child.gap ?? 0) * (child.scale ?? 1)) / 2 : width / 2;
   const xs = placed.map((p) => p.x);
   const ys = placed.map((p) => p.y);
   return {

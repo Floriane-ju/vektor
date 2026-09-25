@@ -1447,6 +1447,52 @@ describe('style de trait', () => {
     expect(toSvgDocument(svg)).toContain('stroke-dasharray="0 4"');
   });
 
+  it('le contour double élargit le trait et l’évide de l’écart, centré sur la forme', () => {
+    const svg = stage();
+    const element = createElement('rect', 0, 0, { rx: 50, ry: 50, strokeWidth: 4, gap: 6, outlined: true, filled: true });
+    render({ layers: [createLayer({ elements: [element] })] }, svg);
+    const group = svg.querySelector(`g[data-element-id="${element.id}"]`);
+    expect(group.querySelector(':scope > rect').getAttribute('stroke-width')).toBe('14');
+    const hollow = svg.querySelector(`${group.getAttribute('mask').slice(4, -1)} rect[stroke="#000"]`);
+    expect(hollow.getAttribute('stroke-width')).toBe('6');
+    expect(hollow.getAttribute('stroke')).toBe('#000');
+    expect(hollow.getAttribute('fill')).toBe('none');
+    expect(childBounds({ ...element, fill: 'none' }).maxX).toBe(50 + 4 + 3);
+    expect(toSvgDocument(svg)).toContain('<mask');
+  });
+
+  it('l’écart du contour double suit l’échelle de la copie, pas l’épaisseur', () => {
+    const svg = stage();
+    const layer = createLayer({
+      elements: [createElement('ellipse', 0, 0, { strokeWidth: 2, gap: 8, outlined: true })],
+      modifiers: [{ type: 'step', n: 2, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
+      interpolations: [ramp('scale', [1, 0.5])],
+    });
+    render({ layers: [layer] }, svg);
+    const widths = [...svg.querySelectorAll('g[data-element-id] > ellipse')].map((node) => node.getAttribute('stroke-width'));
+    const gaps = [...svg.querySelectorAll('mask ellipse')].map((node) => node.getAttribute('stroke-width'));
+    expect(widths).toEqual(['12', '8']);
+    expect(gaps).toEqual(['8', '4']);
+  });
+
+  it('la vignette d’une forme en contour double montre deux traits fixes à l’écran', () => {
+    const single = shapePreview(createElement('rect', 0, 0), 18);
+    expect(single.querySelector('mask')).toBeNull();
+    const double = shapePreview(createElement('rect', 0, 0, { outlined: true, gap: 40 }), 18);
+    const hollow = double.querySelector('mask rect[stroke="#000"]');
+    expect(hollow.getAttribute('stroke-width')).toBe('1.2');
+    expect(hollow.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+    expect(double.querySelector('g > rect').getAttribute('stroke-width')).toBe('3.6');
+    const other = shapePreview(createElement('rect', 0, 0, { outlined: true }), 18);
+    expect(other.querySelector('mask').id).not.toBe(double.querySelector('mask').id);
+  });
+
+  it('le point ignore le contour double', () => {
+    const svg = stage();
+    render({ layers: [createLayer({ elements: [createElement('point', 0, 0, { outlined: true })] })] }, svg);
+    expect(svg.querySelector('mask')).toBeNull();
+  });
+
   it('un trait plein à bout net n’ajoute rien', () => {
     const svg = stage();
     render({ layers: [createLayer({ elements: [createElement('ellipse', 0, 0)] })] }, svg);

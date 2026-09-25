@@ -1381,8 +1381,21 @@ describe('rotation et épaisseur interpolées', () => {
       layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
     });
     const again = deserialize(serialize(deserialize(old)));
-    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@21');
+    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@22');
     expect(orients(again.layers[0].modifiers[0])).toBe(true);
+  });
+
+  it('le contour double se sauvegarde, borné ; une scène `@21` se relit sans', () => {
+    const scene = { layers: [createLayer({ elements: [createElement('rect', 0, 0, { outlined: true, gap: 6 })] })] };
+    const [element] = deserialize(serialize(scene)).layers[0].elements;
+    expect(element).toMatchObject({ outlined: true, gap: 6 });
+    const wild = JSON.stringify({
+      format: 'vektor/scene@22',
+      layers: [{ id: 'L1', elements: [{ id: 'E1', type: 'rect', outlined: 'oui', gap: 1e9 }] }],
+    });
+    expect(deserialize(wild).layers[0].elements[0]).toMatchObject({ outlined: false, gap: 100 });
+    const old = JSON.stringify({ format: 'vektor/scene@21', layers: [{ id: 'L1', elements: [{ id: 'E1', type: 'rect' }] }] });
+    expect(deserialize(old).layers[0].elements[0].outlined).toBe(false);
   });
 
   it('une scène `@19` recopie couleur et épaisseur du calque sur ses formes', () => {

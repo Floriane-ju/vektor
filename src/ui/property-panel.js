@@ -5,6 +5,7 @@ import {
   clampDash,
   clampLinecap,
   clampExtent,
+  clampGap,
   clampInner,
   clampSides,
   getActiveElement,
@@ -361,8 +362,24 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     (element) => element.linecap,
     (element, value) => store.apply(updateElement, element.id, { linecap: clampLinecap(value) }),
   );
+  const outlined = bind(
+    input('checkbox'),
+    (element) => element.outlined,
+    (element, value) => store.apply(updateElement, element.id, { outlined: value }),
+    { event: 'change', parse: () => outlined.checked },
+  );
+  const outlinedField = switchField('Contour double', outlined);
+  /* Écart vide entre les deux traits, en unités du dessin comme l'épaisseur. */
+  const gapField = field(
+    'Séparateur',
+    bind(
+      input('number', { min: '0', max: '100', step: '0.5' }),
+      (element) => element.gap,
+      (element, value) => store.apply(updateElement, element.id, { gap: clampGap(value) }),
+    ),
+  );
   const strokeGroup = el('div', 'group');
-  strokeGroup.append(dashSegments, dashLength, dashPairRow, linecapSegments);
+  strokeGroup.append(dashSegments, dashLength, dashPairRow, linecapSegments, outlinedField, gapField);
 
   const shapeDetail = el('div', 'inspector-body');
   shapeDetail.dataset.kind = 'shape';
@@ -646,6 +663,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       strokeSeparator.hidden = dot;
       dashLength.hidden = dashKind(element.dash) !== 'dashed';
       dashPairRow.hidden = dashLength.hidden;
+      gapField.hidden = !element.outlined;
       /* Un point tourné reste identique : rien à régler. */
       rotationField.hidden = dot;
       polygonRow.hidden = geometry !== 'polygon';

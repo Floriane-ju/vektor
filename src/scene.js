@@ -251,6 +251,13 @@ export const clampBooleanOp = (value) => (Object.hasOwn(BOOLEAN_OPS, value) ? va
 
 export const clampLinecap = (value) => (Object.hasOwn(LINECAPS, value) ? value : DEFAULT_LINECAP);
 
+/* Contour double : deux traits de l'épaisseur de la forme, séparés par un vide
+   de `gap`, l'ensemble centré sur la géométrie. Ni l'un ni l'autre ne suit
+   l'échelle de la copie, comme l'épaisseur. */
+export const DEFAULT_OUTLINE_GAP = 1.5;
+const MAX_OUTLINE_GAP = 100;
+export const clampGap = (value) => Math.min(MAX_OUTLINE_GAP, Math.max(0, Number.isFinite(value) ? value : DEFAULT_OUTLINE_GAP));
+
 const counters = { L: 0, E: 0, I: 0 };
 const nextId = (prefix) => `${prefix}${++counters[prefix]}`;
 
@@ -266,6 +273,8 @@ export const createElement = (type, x, y, overrides = {}) => ({
   stroke: DEFAULT_STROKE,
   dash: [],
   linecap: DEFAULT_LINECAP,
+  outlined: false,
+  gap: DEFAULT_OUTLINE_GAP,
   booleans: [],
   ...SHAPES[type].defaults,
   type,
