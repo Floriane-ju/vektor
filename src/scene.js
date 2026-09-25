@@ -176,7 +176,7 @@ export const DEFAULT_PLANE = { enabled: true, tilt: 45, heading: 45, sides: 'tra
 export const activePlane = (layer) => (layer?.plane && layer.plane.enabled !== false ? layer.plane : null);
 /* Profondeur donnée aux formes à plat d'un calque qui passe en 3D, et aux
    formes qu'on y ajoute : sans elle, activer le plan ne montrerait aucun volume. */
-export const DEFAULT_DEPTH = 150;
+export const DEFAULT_DEPTH = 80;
 /* 90° verrait le plan par la tranche : la projection ne s'inverserait plus. */
 export const MAX_TILT = 89;
 export const clampTilt = (value) =>
@@ -299,6 +299,9 @@ export const createElement = (type, x, y, overrides = {}) => ({
   /* Profondeur d'extrusion le long de la normale du plan 3D du calque, centrée
      sur le plan (10 : de -5 à 5). Sans plan, sans effet. */
   height: 0,
+  /* Forme hôte du même calque dans laquelle celle-ci est logée (`setInside`) :
+     en 3D, le volume de l'hôte la cache, sauf à travers son trou. */
+  inside: null,
   ...SHAPES[type].defaults,
   type,
   x,
@@ -537,6 +540,7 @@ export const duplicateLayer = (scene, id) => {
       ...element,
       id: ids.get(element.id),
       booleans: element.booleans.map((step) => ({ ...step, with: ids.get(step.with) ?? step.with })),
+      inside: element.inside && (ids.get(element.inside) ?? null),
     })),
     interpolations: source.interpolations.map((interpolation) => ({ ...interpolation, id: nextId('I') })),
   };
@@ -721,13 +725,15 @@ export const updateElement = (scene, elementId, patch) =>
     elements.map((element) => (element.id === elementId ? { ...element, ...patch } : element)),
   );
 
-/* Les formes qui employaient `toolId` comme outil booléen le perdent. */
+/* Les formes qui employaient `toolId` comme outil booléen, ou comme hôte, le perdent. */
 const withoutTool = (elements, toolId) =>
-  elements.map((element) =>
-    element.booleans.some((step) => step.with === toolId)
-      ? { ...element, booleans: element.booleans.filter((step) => step.with !== toolId) }
-      : element,
-  );
+  elements.map((element) => {
+    const booleans = element.booleans.some((step) => step.with === toolId)
+      ? element.booleans.filter((step) => step.with !== toolId)
+      : element.booleans;
+    const inside = element.inside === toolId ? null : element.inside;
+    return booleans === element.booleans && inside === element.inside ? element : { ...element, booleans, inside };
+  });
 
 export const removeElement = (scene, elementId) => {
   /* Un outil supprimé libère les formes qu'il travaillait. */
@@ -793,6 +799,53 @@ export const updateBoolean = (scene, elementId, index, patch) => {
 export const removeBoolean = (scene, elementId, index) =>
   mapBooleans(scene, elementId, (steps) => steps.filter((_, i) => i !== index));
 
+/* ---- Forme logée dans une autre ---- */
+
+/**
+ * Contour fermé : ce qui peut en accueillir une autre. Ni point, ni ligne, ni
+ * tracé ou arc ouvert — sans intérieur, rien à loger.
+ */
+export const isClosedShape = (element) => {
+  switch (SHAPES[element.type]?.geometry) {
+    case 'ellipse':
+    case 'rect':
+    case 'polygon':
+      return true;
+    case 'polyline':
+      return Boolean(element.closed);
+    case 'arc':
+      return element.closure !== 'open' || Math.abs(element.end - element.start) >= 360;
+    default:
+      return false;
+  }
+};
+
+/** `hostId` comme hôte de `elementId` fermerait-il une boucle d'hôtes ? */
+export const insideLoop = (layer, elementId, hostId) => {
+  const byId = new Map(layer.elements.map((el) => [el.id, el]));
+  const seen = new Set();
+  for (let id = hostId; id; id = byId.get(id)?.inside ?? null) {
+    if (id === elementId) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+  }
+  return false;
+};
+
+/** Hôtes possibles d'une forme : les formes fermées du calque, hors elle-même et les boucles. */
+export const insideHosts = (layer, elementId) =>
+  layer.elements.filter(
+    (host) => host.id !== elementId && isClosedShape(host) && !insideLoop(layer, elementId, host.id),
+  );
+
+/** Loge `elementId` dans `hostId` (même calque, forme fermée), ou l'en sort (`null`). */
+export const setInside = (scene, elementId, hostId) => {
+  const layer = layerOfElement(scene, elementId);
+  if (!layer) return scene;
+  if (hostId !== null && !insideHosts(layer, elementId).some((host) => host.id === hostId)) return scene;
+  return updateElement(scene, elementId, { inside: hostId });
+};
+
 /** Copie posée juste devant l'originale, décalée de `offset` pour qu'on la voie. */
 export const duplicateElement = (scene, elementId, offset) => {
   const source = scene.layers.flatMap((layer) => layer.elements).find((el) => el.id === elementId);
@@ -836,7 +889,7 @@ export const placeElement = (scene, elementId, layerId, index) => {
     const elements = placeAt(source.elements, element, index);
     return elements === source.elements ? scene : mapLayer(scene, layerId, (layer) => ({ ...layer, elements }));
   }
-  const moved = element.booleans.length > 0 ? { ...element, booleans: [] } : element;
+  const moved = element.booleans.length > 0 || element.inside ? { ...element, booleans: [], inside: null } : element;
   const layers = scene.layers.map((layer) => {
     if (layer === source) {
       return { ...layer, elements: withoutTool(layer.elements.filter((candidate) => candidate !== element), elementId) };

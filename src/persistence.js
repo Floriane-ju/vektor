@@ -23,6 +23,7 @@ import {
   clampPlaneSides,
   clampTilt,
   DEFAULT_PLANE,
+  insideHosts,
   isHexColor,
   RANGE_BOUNDS,
   reserveIds,
@@ -261,6 +262,8 @@ const readElement = (input, style) => {
     gap: clampGap(num(raw.gap, DEFAULT_OUTLINE_GAP)),
     booleans: readBooleans(raw.booleans),
     height: clampHeight(num(raw.height, 0)),
+    /* Vérifié à l'échelle du calque (`readInside`), une fois toutes ses formes lues. */
+    inside: typeof raw.inside === 'string' ? raw.inside : null,
     ...(raw.type === 'polygon'
       ? { sides: clampSides(num(raw.sides, defaults.sides)), inner: clampInner(num(raw.inner, defaults.inner)) }
       : {}),
@@ -371,6 +374,18 @@ const readPlane = (raw) =>
       }
     : null;
 
+/**
+ * Hôtes des formes logées : un hôte absent du calque, ouvert, ou qui fermerait
+ * une boucle est oublié, la forme ressort. Pris dans l'ordre, chaque lien se
+ * juge contre ceux déjà gardés.
+ */
+const readInside = (elements) =>
+  elements.reduce((kept, element, index) => {
+    const layer = { elements: kept.concat(elements.slice(index).map((rest) => ({ ...rest, inside: null }))) };
+    const valid = element.inside !== null && insideHosts(layer, element.id).some((host) => host.id === element.inside);
+    return [...kept, valid || element.inside === null ? element : { ...element, inside: null }];
+  }, []);
+
 const readLayer = (raw, index, legacy) => {
   if (raw == null || typeof raw !== 'object') fail(`Calque ${index} : objet attendu.`);
   if (typeof raw.id !== 'string' || raw.id === '') fail(`Calque ${index} : \`id\` manquant.`);
@@ -383,7 +398,7 @@ const readLayer = (raw, index, legacy) => {
       x: num(raw.center?.x, STAGE.width / 2),
       y: num(raw.center?.y, STAGE.height / 2),
     },
-    elements: readElements(raw),
+    elements: readInside(readElements(raw)),
     modifiers,
     interpolations: readInterpolations(raw, modifiers.length),
     evenOdd: raw.evenOdd === true,

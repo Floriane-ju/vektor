@@ -1859,3 +1859,62 @@ describe('plan 3D', async () => {
     expect(read.elements[0].height).toBe(1000);
   });
 });
+
+describe('forme logée dans une autre', async () => {
+  const { isClosedShape, setInside, placeElement } = await import('../src/scene.js');
+  const make = () => {
+    const disk = createElement('ellipse', 0, 0);
+    const box = createElement('rect', 0, 0);
+    const axis = createElement('point', 0, 0);
+    const bow = createElement('arc', 0, 0, { closure: 'open' });
+    const layer = createLayer({ elements: [disk, box, axis, bow] });
+    return { disk, box, axis, bow, scene: { layers: [layer, createLayer()], activeLayerId: layer.id, activeElementId: null } };
+  };
+
+  it('seule une forme fermée accueille', () => {
+    expect(isClosedShape(createElement('ellipse', 0, 0))).toBe(true);
+    expect(isClosedShape(createElement('point', 0, 0))).toBe(false);
+    expect(isClosedShape(createElement('line', 0, 0))).toBe(false);
+    expect(isClosedShape(createElement('arc', 0, 0, { closure: 'open' }))).toBe(false);
+    expect(isClosedShape(createElement('arc', 0, 0, { closure: 'chord' }))).toBe(true);
+    expect(isClosedShape(createElement('polyline', 0, 0, { closed: false }))).toBe(false);
+  });
+
+  it('loge, refuse un hôte ouvert, soi-même ou une boucle, et ressort', () => {
+    const { disk, box, axis, bow, scene } = make();
+    const inDisk = setInside(scene, axis.id, disk.id);
+    expect(inDisk.layers[0].elements[2].inside).toBe(disk.id);
+    expect(setInside(scene, axis.id, bow.id)).toBe(scene);
+    expect(setInside(scene, disk.id, disk.id)).toBe(scene);
+    const chained = setInside(setInside(scene, box.id, disk.id), disk.id, box.id);
+    expect(chained.layers[0].elements[0].inside).toBeNull();
+    expect(setInside(inDisk, axis.id, null).layers[0].elements[2].inside).toBeNull();
+  });
+
+  it('supprimer ou déplacer l’hôte rompt le lien ; dupliquer le calque le suit', () => {
+    const { disk, axis, scene } = make();
+    const linked = setInside(scene, axis.id, disk.id);
+    expect(removeElement(linked, disk.id).layers[0].elements.find((el) => el.id === axis.id).inside).toBeNull();
+    const moved = placeElement(linked, disk.id, linked.layers[1].id, 0);
+    expect(moved.layers[0].elements.find((el) => el.id === axis.id).inside).toBeNull();
+    const copy = duplicateLayer(linked, linked.layers[0].id).layers[1];
+    expect(copy.elements[2].inside).toBe(copy.elements[0].id);
+  });
+
+  it('à l’import, un lien vers un hôte absent, ouvert ou en boucle est oublié', () => {
+    const raw = JSON.stringify({
+      format: 'vektor/scene@23',
+      layers: [{
+        id: 'L1',
+        elements: [
+          { id: 'E1', type: 'ellipse', inside: 'E2' },
+          { id: 'E2', type: 'rect', inside: 'E1' },
+          { id: 'E3', type: 'point', inside: 'E9' },
+          { id: 'E4', type: 'point', inside: 'E5' },
+          { id: 'E5', type: 'line' },
+        ],
+      }],
+    });
+    expect(deserialize(raw).layers[0].elements.map((el) => el.inside)).toEqual(['E2', null, null, null, null]);
+  });
+});

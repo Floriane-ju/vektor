@@ -254,3 +254,44 @@ export const flushCorner = (corner, next, tip, v, width) => {
   const t = (-width / 2 - ((corner.x - tip.x) * n.x + (corner.y - tip.y) * n.y)) / across;
   return { x: corner.x + e.x * t, y: corner.y + e.y * t };
 };
+
+/**
+ * Contour double fermé sur un plan 3D : ses deux traits sont décalés dans le
+ * repère du plan, puis projetés — deux formes concentriques, dont l'écart
+ * s'écrase avec la perspective. `null` hors de ce cas.
+ */
+export const planeDouble = (child) => {
+  const scale = child.scale ?? 1;
+  const gap = (child.gap ?? 0) * scale;
+  const { points, closed } = outlinePath(child);
+  const double = child.outlined && closed && points.length > 2 && child.stroke !== 'none' && child.strokeWidth > 0 && gap > 0;
+  if (!double) return null;
+  const offset = (child.strokeWidth + gap) / 2;
+  return [offset, -offset].map((distance) => offsetPolygon(points, distance));
+};
+
+/**
+ * Silhouette opaque d'un volume extrudé de `v` à l'écran, depuis sa face
+ * `child.matrix` : ce qu'il cache des formes dessinées avant lui. `solids` =
+ * morceaux à peindre (deux faces et une paroi par arête), élargis d'une
+ * demi-épaisseur pour couvrir le trait ; `opening` = les deux faces du trou
+ * d'un anneau, dont l'intersection laisse voir derrière. `null` pour un
+ * contour ouvert, qui n'a pas d'intérieur.
+ */
+export const occluder = (child, v) => {
+  const { points, closed } = outlinePath(child);
+  if (!closed || points.length < 3) return null;
+  const double = planeDouble(child);
+  const screen = (edge) => edge.map((p) => project(child.matrix, p));
+  const lift = (edge) => edge.map((p) => ({ x: p.x + v.x, y: p.y + v.y }));
+  const half = child.strokeWidth / 2;
+  const shell = offsetPolygon(screen(double ? double[0] : points), half);
+  const walls = shell.map((p, i) => {
+    const q = shell[(i + 1) % shell.length];
+    return [p, q, ...lift([q, p])];
+  });
+  const solids = [shell, lift(shell), ...walls];
+  if (!double) return { solids, opening: null };
+  const hole = offsetPolygon(screen(double[1]), -half);
+  return { solids, opening: [hole, lift(hole)] };
+};

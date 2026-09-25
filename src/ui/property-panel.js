@@ -30,6 +30,7 @@ import {
 import { iconButton, rebuildWithFocus, shapeName } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
 import { booleanSection } from './boolean-section.js';
+import { insideField } from './inside-field.js';
 import {
   axisAngle,
   copyCount,
@@ -313,6 +314,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   depthField.title = 'Épaisseur extrudée le long du plan 3D du calque, centrée sur le plan';
 
   const booleans = booleanSection({ store });
+  const inside = insideField({ store });
 
   const radiusField = field('Rayon', radius);
   const widthField = field('Largeur', width);
@@ -414,6 +416,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     strokeGroup,
     separator(),
     booleans.root,
+    inside.root,
   );
 
   /* ---- Calque ---- */
@@ -727,6 +730,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       /* ponytail: une forme à booléens ne s'extrude pas (voir `createExtrusion`). */
       depthField.hidden = !activePlane(owner) || element.booleans.length > 0;
       booleans.sync(owner, element);
+      inside.sync(owner, element);
       const [widthLabel, heightLabel] = spanLabels[signed ? 'signed' : 'default'];
       widthField.querySelector('label').textContent = widthLabel;
       heightField.querySelector('label').textContent = heightLabel;

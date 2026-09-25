@@ -41,6 +41,23 @@ const booleanParents = (displayed) => {
 };
 
 /**
+ * Hôte sous lequel chaque forme logée (`inside`) se range. Un seul niveau,
+ * comme les outils : ni un outil booléen, ni une forme dont l'hôte est déjà
+ * rangé, ni l'hôte d'une autre ne se range.
+ */
+const insideParents = (displayed, tools) => {
+  const ids = new Set(displayed.map((element) => element.id));
+  const parents = new Map();
+  for (const element of displayed) {
+    const host = element.inside;
+    if (!host || !ids.has(host) || tools.has(element.id) || tools.has(host) || parents.has(host)) continue;
+    if ([...parents.values()].includes(element.id)) continue;
+    parents.set(element.id, host);
+  }
+  return parents;
+};
+
+/**
  * Liste des formes du calque actif, logée par l'arbre sous sa ligne.
  *
  * Un calque porte plusieurs formes et le modificateur s'applique au groupe : il
@@ -79,7 +96,7 @@ export const mountShapeList = ({
     return JSON.stringify([
       layer?.id ?? null,
       scene.activeElementId,
-      layer?.elements.map((element) => [element.id, element.type, element.booleans.map((step) => step.with)]) ?? [],
+      layer?.elements.map((element) => [element.id, element.type, element.booleans.map((step) => step.with), element.inside]) ?? [],
     ]);
   };
 
@@ -113,8 +130,11 @@ export const mountShapeList = ({
          liste se lit à l'envers du tableau, et « ↑ » veut dire « devant ». */
       const displayed = [...layer.elements].reverse();
       const parents = booleanParents(displayed);
+      const hosts = insideParents(displayed, parents);
       for (const element of displayed) {
-        if (!parents.has(element.id)) list.append(shapeRow(layer, element, scene.activeElementId, displayed, parents));
+        if (!parents.has(element.id) && !hosts.has(element.id)) {
+          list.append(shapeRow(layer, element, scene.activeElementId, displayed, parents, hosts));
+        }
       }
 
       container.append(list, add);
@@ -138,7 +158,7 @@ export const mountShapeList = ({
     }
   };
 
-  const shapeRow = (layer, element, activeElementId, displayed, parents) => {
+  const shapeRow = (layer, element, activeElementId, displayed, parents, hosts) => {
     const isActive = element.id === activeElementId;
 
     const card = document.createElement('li');
@@ -211,9 +231,25 @@ export const mountShapeList = ({
       branch.className = 'layer-list boolean-branch';
       branch.setAttribute('aria-label', `Booléen de ${name.textContent}`);
       for (const template of templates) {
-        const child = shapeRow(layer, template, activeElementId, displayed, parents);
+        const child = shapeRow(layer, template, activeElementId, displayed, parents, hosts);
         child.dataset.template = 'true';
         child.title = 'Outil booléen : ne se dessine pas';
+        branch.append(child);
+      }
+      card.append(branch);
+    }
+
+    /* Formes logées dans celle-ci : filet pointillé, pour ne pas les confondre
+       avec des outils — elles se dessinent, cachées par son volume en 3D. */
+    const guests = displayed.filter((candidate) => hosts.get(candidate.id) === element.id);
+    if (guests.length > 0) {
+      const branch = document.createElement('ul');
+      branch.className = 'layer-list inside-branch';
+      branch.setAttribute('aria-label', `Dans ${name.textContent}`);
+      for (const guest of guests) {
+        const child = shapeRow(layer, guest, activeElementId, displayed, parents, hosts);
+        child.dataset.inside = 'true';
+        child.title = `À l'intérieur de ${name.textContent}`;
         branch.append(child);
       }
       card.append(branch);

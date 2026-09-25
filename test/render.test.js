@@ -1980,3 +1980,136 @@ describe('arbre : bouton 3D', () => {
     panel.remove();
   });
 });
+
+describe('plan 3D : contour double', () => {
+  it('décale ses deux traits dans le plan : le séparateur s’écrase avec la perspective', () => {
+    const element = createElement('ellipse', 450, 450, { rx: 100, ry: 100, strokeWidth: 4, gap: 20, outlined: true });
+    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [element] });
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const group = svg.querySelector(`[data-layer-id] > [data-element-id="${element.id}"]`);
+    expect(group.querySelector('mask')).toBeNull();
+    const [outer, inner] = [...group.querySelectorAll('path')].map((node) =>
+      [...node.getAttribute('d').matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) })),
+    );
+    const extent = (points, axis) => Math.max(...points.map((p) => p[axis])) - Math.min(...points.map((p) => p[axis]));
+    /* Rayon ± 12 dans le plan : 24 d'écart en largeur, moitié en hauteur (cos 60°). */
+    expect(extent(outer, 'x') - extent(inner, 'x')).toBeCloseTo(48, 0);
+    expect(extent(outer, 'y') - extent(inner, 'y')).toBeCloseTo(24, 0);
+  });
+});
+
+describe('plan 3D : occlusion', () => {
+  const plane = { tilt: 45, heading: 45, sides: 'transparent' };
+  const draw = (elements) => {
+    const svg = stage();
+    render({ layers: [createLayer({ plane, elements })], activeLayerId: null, activeElementId: null }, svg);
+    return svg;
+  };
+
+  it('un volume cache ce qui est dessiné avant lui, pas ce qui le suit', () => {
+    const axis = createElement('point', 450, 450, { height: 300 });
+    const disk = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40 });
+    const behind = draw([axis, disk]);
+    const hidden = behind.querySelector(`[data-element-id="${axis.id}"]`).parentElement;
+    expect(hidden.getAttribute('mask')).toMatch(/^url\(#occlude-/);
+    expect(behind.querySelector(`defs > mask[id="${hidden.getAttribute('mask').slice(5, -1)}"]`)).not.toBeNull();
+    const front = draw([disk, axis]);
+    expect(front.querySelector(`[data-element-id="${axis.id}"]`).parentElement.dataset.layerId).toBeDefined();
+    expect(front.querySelector(`[data-element-id="${disk.id}"]`).parentElement.getAttribute('mask')).toBeNull();
+  });
+
+  it('un anneau laisse voir par son trou', () => {
+    const axis = createElement('point', 450, 450, { height: 300 });
+    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
+    const svg = draw([axis, ring]);
+    const mask = svg.querySelector('defs > mask');
+    expect(mask.querySelector('clipPath')).not.toBeNull();
+    expect(mask.querySelector('path[clip-path]').getAttribute('fill')).toBe('#fff');
+  });
+
+  it('sans volume, aucun masque d’occlusion', () => {
+    expect(draw([createElement('ellipse', 450, 450), createElement('rect', 450, 450)]).querySelector('defs')).toBeNull();
+  });
+});
+
+describe('forme logée : rendu, panneau, arbre', () => {
+  const plane = { tilt: 45, heading: 45, sides: 'transparent' };
+
+  const drawn = (elements) => {
+    const svg = stage();
+    render({ layers: [createLayer({ plane, elements })], activeLayerId: null, activeElementId: null }, svg);
+    return svg;
+  };
+  const slices = (svg, element) =>
+    Object.fromEntries(
+      [...svg.querySelectorAll(`[data-element-id="${element.id}"] > [data-slice]`)].map((node) => [
+        node.dataset.slice,
+        node.getAttribute('mask') ?? 'aucun',
+      ]),
+    );
+
+  it('traverse un anneau : devant au-dessus, par l’ouverture dedans, derrière en dessous', () => {
+    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
+    const axis = createElement('point', 450, 450, { height: 300, inside: ring.id });
+    expect(slices(drawn([axis, ring]), axis)).toEqual({
+      below: expect.stringMatching(/^url\(#occlude-/),
+      middle: expect.stringMatching(/^url\(#inside-/),
+      above: 'aucun',
+    });
+  });
+
+  it('dans un volume plein, la tranche du milieu disparaît ; logée, elle suit son hôte et ne le cache pas', () => {
+    const disk = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40 });
+    const axis = createElement('point', 450, 450, { height: 300, inside: disk.id });
+    const svg = drawn([axis, disk]);
+    expect(Object.keys(slices(svg, axis))).toEqual(['below', 'above']);
+    const [first, second] = svg.querySelector('[data-layer-id]').children;
+    expect(first.dataset.elementId).toBe(disk.id);
+    expect(second.dataset.elementId).toBe(axis.id);
+    expect(svg.querySelector(`[data-element-id="${disk.id}"]`).parentElement.getAttribute('mask')).toBeNull();
+  });
+
+  it('le sélecteur n’apparaît qu’en 3D, ou si le calque porte déjà un lien', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const disk = createElement('ellipse', 0, 0);
+    const axis = createElement('point', 0, 0);
+    const layer = createLayer({ elements: [disk, axis] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: axis.id });
+    const inspector = document.createElement('div');
+    document.body.append(inspector);
+    const { shapeDetail } = mountPropertyPanel({ store, container: inspector });
+    const field = shapeDetail.querySelector('#inside-host').closest('section');
+    expect(field.hidden).toBe(true);
+    const { setLayerPlane, setInside } = await import('../src/scene.js');
+    store.apply(setLayerPlane, layer.id, {});
+    expect(field.hidden).toBe(false);
+    const select = shapeDetail.querySelector('#inside-host');
+    /* Aucune + l'ellipse ; ni le point lui-même, ni rien d'ouvert. */
+    expect([...select.options].map((option) => option.value)).toEqual(['', disk.id]);
+    select.value = disk.id;
+    select.dispatchEvent(new Event('change'));
+    expect(store.get().layers[0].elements[1].inside).toBe(disk.id);
+    store.apply(setLayerPlane, layer.id, null);
+    expect(field.hidden).toBe(false);
+    store.apply(setInside, axis.id, null);
+    expect(field.hidden).toBe(true);
+    inspector.remove();
+  });
+
+  it('l’arbre range la forme logée sous son hôte, dans une branche à part', async () => {
+    const { mountShapeList } = await import('../src/ui/shape-list.js');
+    const disk = createElement('ellipse', 0, 0);
+    const axis = createElement('point', 0, 0, { inside: disk.id });
+    const layer = createLayer({ elements: [disk, axis] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const container = document.createElement('div');
+    document.body.append(container);
+    mountShapeList({ store, container, status: { show: () => {} } });
+    const guest = container.querySelector(`.inside-branch > [data-element-id="${axis.id}"]`);
+    expect(guest).not.toBeNull();
+    expect(guest.closest(`[data-element-id="${disk.id}"]`)).not.toBeNull();
+    expect(container.querySelector('.boolean-branch')).toBeNull();
+    container.remove();
+  });
+});
