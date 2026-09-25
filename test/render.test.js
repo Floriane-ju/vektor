@@ -2227,6 +2227,29 @@ describe('forme logée : rendu, panneau, arbre', () => {
     expect(svg.querySelector(`[data-element-id="${disk.id}"]`).parentElement.getAttribute('mask')).toBeNull();
   });
 
+  it('traverse une spirale de points reliés : seules les parois devant la cachent', () => {
+    const spiral = createModifier({ type: 'spiral', n: 12, angleStep: 0.6, radiusStep: 12, linear: true });
+    const ribbon = createElement('point', 500, 450, { height: 40, modifiers: [spiral] });
+    const axis = createElement('point', 450, 450, { height: 300, inside: ribbon.id });
+    const svg = drawn([axis, ribbon]);
+    const masks = slices(svg, axis);
+    expect(masks).toEqual({
+      below: expect.stringMatching(/^url\(#occlude-/),
+      middle: expect.stringMatching(/^url\(#occlude-/),
+      above: 'aucun',
+    });
+    const walls = svg.querySelector(masks.middle.slice(4, -1)).querySelectorAll('g[fill="#000"] > path');
+    expect(walls.length).toBeGreaterThan(0);
+    expect(walls.length).toBeLessThan(11);
+  });
+
+  it('un anneau de points reliés (axial) accueille une forme comme un cercle', () => {
+    const axial = createModifier({ type: 'axial', n: 5, linear: true });
+    const ring = createElement('point', 530, 450, { height: 40, modifiers: [axial] });
+    const axis = createElement('point', 450, 450, { height: 300, inside: ring.id });
+    expect(Object.keys(slices(drawn([axis, ring]), axis))).toEqual(['below', 'above']);
+  });
+
   it('le sélecteur n’apparaît qu’en 3D, ou si le calque porte déjà un lien', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const disk = createElement('ellipse', 0, 0);

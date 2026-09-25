@@ -9,6 +9,7 @@ import {
   outlinePath,
   planeDouble,
   project,
+  sheet,
   shifted,
   silhouette,
 } from './plane.js';
@@ -414,11 +415,16 @@ const createExtrusion = (child, v) => {
 };
 
 
-/** Silhouette opaque d'une forme extrudée (`occluder`), ou `null`. */
-export const shapeOccluder = (child) => {
+/**
+ * Silhouette opaque d'une forme extrudée (`occluder`), ou `null`. Hôte d'une
+ * forme logée `guest`, un contour ouvert a aussi la sienne : ses parois devant
+ * la forme (`sheet`).
+ */
+export const shapeOccluder = (child, guest = null) => {
   const v = child.plane && child.height ? extrusion(child.plane, child.height * (child.scale ?? 1)) : null;
   if (!v || Math.hypot(v.x, v.y) <= 1e-6) return null;
-  return occluder({ ...child, matrix: shifted(child.matrix, { x: -v.x / 2, y: -v.y / 2 }) }, v);
+  const base = { ...child, matrix: shifted(child.matrix, { x: -v.x / 2, y: -v.y / 2 }) };
+  return occluder(base, v) ?? (guest ? sheet(base, v, project(base.matrix, guest)) : null);
 };
 
 /**
@@ -427,10 +433,13 @@ export const shapeOccluder = (child) => {
  * volumes dessinés après lui, qu'il compose (produit) : une forme ne porte que
  * le masque du premier volume qui la suit.
  */
-const createOcclusion = ({ solids, opening }, next) => {
+const createOcclusion = ({ solids, opening, width }, next) => {
   const mask = svgNode('mask', { id: maskId('occlude'), maskUnits: 'userSpaceOnUse', ...MASK_REGION });
   const content = svgNode('g', next ? { mask: `url(#${next})` } : {});
-  const shadow = svgNode('g', { fill: '#000', stroke: 'none' });
+  /* Paroi d'un volume ouvert (`width`) : son trait couvre l'épaisseur de la bande. */
+  const shadow = svgNode('g', width
+    ? { fill: '#000', stroke: '#000', 'stroke-width': round(width), 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }
+    : { fill: '#000', stroke: 'none' });
   /* Un nœud par morceau : réunis, leurs sens de parcours s'annuleraient. */
   shadow.append(...solids.map((points) => svgNode('path', { d: screenPath(points, true) })));
   content.append(svgNode('rect', { ...MASK_REGION, fill: '#fff' }), shadow);
@@ -500,14 +509,19 @@ export const createInside = (child, host, hostShape, defs) => {
   const group = svgNode('g');
   group.dataset.elementId = child.id;
   for (const [where, from, to] of slices) {
-    if (where === 'middle' && !hostShape.opening) continue;
+    /* Ruban ouvert (`width`) : pas d'intérieur, ses parois de devant cachent. */
+    if (where === 'middle' && !hostShape.opening && !hostShape.width) continue;
     const part = createShape({
       ...child,
       height: (to - from) / scale,
       matrix: shifted(child.matrix, extrusion(child.plane, (from + to) / 2)),
     });
     delete part.dataset.elementId;
-    const mask = where === 'above' ? null : where === 'below' ? createOcclusion(hostShape, null) : createOpening(hostShape.opening);
+    const mask = where === 'above'
+      ? null
+      : where === 'below' || hostShape.width
+        ? createOcclusion(hostShape, null)
+        : createOpening(hostShape.opening);
     /* Enveloppe à part : un contour double porte déjà son propre masque. */
     const slice = svgNode('g', mask ? { mask: `url(#${mask.id})` } : {});
     slice.dataset.slice = where;

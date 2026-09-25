@@ -1879,6 +1879,9 @@ describe('forme logée dans une autre', async () => {
     expect(isClosedShape(createElement('arc', 0, 0, { closure: 'open' }))).toBe(false);
     expect(isClosedShape(createElement('arc', 0, 0, { closure: 'chord' }))).toBe(true);
     expect(isClosedShape(createElement('polyline', 0, 0, { closed: false }))).toBe(false);
+    const spiral = (linear) => createModifier({ type: 'spiral', n: 6, linear });
+    expect(isClosedShape(createElement('point', 0, 0, { modifiers: [spiral(true)] }))).toBe(true);
+    expect(isClosedShape(createElement('point', 0, 0, { modifiers: [spiral(false)] }))).toBe(false);
   });
 
   it('loge, refuse un hôte ouvert, soi-même ou une boucle, et ressort', () => {

@@ -353,3 +353,27 @@ export const occluder = (child, v) => {
   const hole = offsetPolygon(screen(double[1]), -half);
   return { solids, opening: [hole, lift(hole)] };
 };
+
+/**
+ * Silhouette d'un volume ouvert (ruban, bande) vue depuis la forme logée dont
+ * le pied tombe en `from` à l'écran : une paroi par arête, peinte avec un trait
+ * de `width` — l'épaisseur de la bande. Seules les parois devant `from` (côté
+ * spectateur, à l'opposé de `v` à l'écran) la cachent : celles de derrière ne
+ * passent jamais devant elle. `null` sans arête.
+ *
+ * ponytail: une arête est devant ou derrière d'un bloc, selon son milieu —
+ * découper celle qui passe au pied si des tracés très grossiers le montrent.
+ */
+export const sheet = (child, v, from) => {
+  const { points } = outlinePath(child);
+  if (points.length < 2) return null;
+  const screen = points.map((p) => project(child.matrix, p));
+  const toward = { x: -v.x, y: -v.y };
+  const solids = screen.slice(1).flatMap((q, i) => {
+    const p = screen[i];
+    const ahead = ((p.x + q.x) / 2 - from.x) * toward.x + ((p.y + q.y) / 2 - from.y) * toward.y;
+    return ahead > 0 ? [[p, q, { x: q.x + v.x, y: q.y + v.y }, { x: p.x + v.x, y: p.y + v.y }]] : [];
+  });
+  const gap = child.outlined ? child.strokeWidth + (child.gap ?? 0) * (child.scale ?? 1) : 0;
+  return { solids, opening: null, width: child.strokeWidth + gap };
+};

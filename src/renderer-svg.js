@@ -40,7 +40,7 @@ export const render = (scene, svgRoot) => {
      ponytail: une forme logée ne cache pas les autres volumes. */
   const nodeOf = new Map();
   const shape = (child, host) => {
-    const hostShape = host && shapeOccluder(host);
+    const hostShape = host && shapeOccluder(host, child);
     const node = hostShape ? createInside(child, host, hostShape, defs) : createShape(child);
     nodeOf.set(copyKey(child.id, child), { node, host: hostShape ? copyKey(host.id, host) : null });
     const silhouette = hostShape ? null : shapeOccluder(child);

@@ -918,9 +918,12 @@ export const removeBoolean = (scene, elementId, index) =>
 
 /**
  * Contour fermé : ce qui peut en accueillir une autre. Ni point, ni ligne, ni
- * tracé ou arc ouvert — sans intérieur, rien à loger.
+ * tracé ou arc ouvert — sans intérieur, rien à loger. Exception : le point
+ * répété linéairement, devenu tracé — anneau (axial) ou ruban (spirale), que
+ * la forme logée traverse.
  */
 export const isClosedShape = (element) => {
+  if (element.type === 'point') return linearStages(element.modifiers ?? []).length > 0;
   switch (SHAPES[element.type]?.geometry) {
     case 'ellipse':
     case 'rect':
