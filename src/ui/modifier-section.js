@@ -2,6 +2,7 @@ import { addModifier, copyTotal, isSuspended, moveModifier, pivotOf, removeModif
 import {
   axisAngle,
   copyCount,
+  effectiveCount,
   FIXED_COPIES,
   MAX_COPIES,
   MIRROR_AXIS,
@@ -109,6 +110,11 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
       event: 'change',
       parse: () => linear.checked,
     });
+    /* Le tracé relié passe en courbe par les copies au lieu de les joindre en ligne brisée. */
+    const smooth = bindStage(input('checkbox'), (modifier) => modifier.smooth === true, (value) => ({ smooth: value }), {
+      event: 'change',
+      parse: () => smooth.checked,
+    });
 
     /* Cochée, l'étage part du pivot du calque et le garde ensuite pour lui ;
        décochée, il le reprend. */
@@ -166,11 +172,12 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
     const axisField = field("Angle de l'axe (°)", axis);
     const orientField = switchField('Orienter les copies', orient);
     const linearField = switchField('Activer les répétitions linéaires', linear);
+    const smoothField = switchField('Lisser', smooth);
     const ownPivotField = switchField('Pivot personnalisé', ownPivot);
     const pivotRow = row(field('Pivot X', pivotInput('x')), field('Pivot Y', pivotInput('y')));
 
     const node = el('div', 'modifier-block');
-    node.append(head, countField, stepRow, spiralRow, axisField, orientField, linearField, ownPivotField, pivotRow);
+    node.append(head, countField, stepRow, spiralRow, axisField, orientField, linearField, smoothField, ownPivotField, pivotRow);
 
     const sync = (target) => {
       const modifier = stage(target);
@@ -189,6 +196,8 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
       orientField.hidden = !ORIENTING.has(modifier.type) || target.owner.type === 'point';
       /* Seule la pile d'un point relie ses copies ; celle du calque jamais. */
       linearField.hidden = !forElement || target.owner.type !== 'point' || modifier.type === 'none';
+      /* Deux copies (miroir) ne font qu'un segment : rien à courber. */
+      smoothField.hidden = linearField.hidden || !modifier.linear || effectiveCount(modifier) < 3;
       ownPivotField.hidden = !PIVOTING.has(modifier.type);
       pivotRow.hidden = ownPivotField.hidden || !modifier.center;
     };

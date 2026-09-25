@@ -36,7 +36,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@25';
+export const FORMAT = 'vektor/scene@26';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -77,7 +77,8 @@ export const FORMAT = 'vektor/scene@25';
      même dessin ;
    - `@1` à `@24` n'avaient de piles que sur le calque : formes sans pile
      propre, même dessin. Un point de `@24` relié le long des étages du calque
-     redevient une suite de points — le lien suit désormais la pile du point. */
+     redevient une suite de points — le lien suit désormais la pile du point ;
+   - `@1` à `@25` ne lissaient pas les tracés reliés : lignes brisées, même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -104,6 +105,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@22',
   'vektor/scene@23',
   'vektor/scene@24',
+  'vektor/scene@25',
   FORMAT,
 ]);
 
@@ -310,6 +312,7 @@ const readModifier = (raw, legacy, linkable = false) =>
     ...readPivot(raw?.center),
     ...(Number.isFinite(raw?.axis) ? { axis: clampAxis(raw.axis) } : {}),
     ...(linkable && raw?.linear === true ? { linear: true } : {}),
+    ...(linkable && raw?.smooth === true ? { smooth: true } : {}),
   });
 
 /**
@@ -441,7 +444,7 @@ export const deserialize = (text) => {
   if (!Array.isArray(raw.layers)) fail('`layers` doit être un tableau.');
 
   /* Avant `@13`, pas d'orientation des copies. */
-  const legacy = !['illu/scene@13', 'illu/scene@14', 'illu/scene@15', 'illu/scene@16', 'vektor/scene@16', 'vektor/scene@17', 'vektor/scene@18', 'vektor/scene@19', 'vektor/scene@20', 'vektor/scene@21', 'vektor/scene@22', 'vektor/scene@23', FORMAT].includes(raw.format);
+  const legacy = raw.format.startsWith('illu/') && Number(raw.format.split('@')[1]) < 13;
   const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy));
   if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
     fail('Deux calques portent le même identifiant.');

@@ -1177,6 +1177,13 @@ describe('accessibilité au clavier', () => {
     expect(store.get().layers[0].elements[0].modifiers[0].linear).toBe(true);
     expect(strokeHidden()).toBe(false);
 
+    /* Relié, l'étage propose de lisser le tracé. */
+    const smoothField = [...shapeDetail.querySelectorAll('.modifier-block .switch-field')].find((node) => node.textContent === 'Lisser');
+    expect(smoothField.hidden).toBe(false);
+    smoothField.querySelector('input').checked = true;
+    smoothField.querySelector('input').dispatchEvent(new Event('change'));
+    expect(store.get().layers[0].elements[0].modifiers[0].smooth).toBe(true);
+
     /* Un point tourné reste identique : pas d'« Orienter les copies ». */
     store.apply(updateModifier, point.id, 0, { type: 'axial' });
     const orientSwitch = [...shapeDetail.querySelectorAll('.modifier-block .switch-field')].find(

@@ -115,7 +115,9 @@ export const outlinePath = (child) => {
       return polygon(polygonVertices(x, y, rx, child.sides, child.inner));
     case 'polyline': {
       const points = child.points.map((p) => place({ x: x + p.x * scale, y: y + p.y * scale }));
-      return { points, closed: Boolean(child.closed), corners: every(points) };
+      /* Chaîne lissée : une courbe, seuls ses bouts sont anguleux. */
+      const ends = child.closed ? [] : [0, points.length - 1];
+      return { points, closed: Boolean(child.closed), corners: child.smooth ? ends : every(points) };
     }
     case 'arc': {
       const span = child.end - child.start;

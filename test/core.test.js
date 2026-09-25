@@ -1381,7 +1381,7 @@ describe('rotation et épaisseur interpolées', () => {
       layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
     });
     const again = deserialize(serialize(deserialize(old)));
-    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@25');
+    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@26');
     expect(orients(again.layers[0].modifiers[0])).toBe(true);
   });
 
@@ -1999,6 +1999,54 @@ describe('répétition linéaire des points', () => {
     const [layer] = deserialize(JSON.stringify(raw)).layers;
     expect(layer.modifiers[0].linear).toBeUndefined();
     expect(getRenderedChildren(layer).map((c) => c.type)).toEqual(['point', 'point', 'point']);
+  });
+
+  it('un fichier @24 garde l’orientation des copies', () => {
+    const raw = { format: 'vektor/scene@24', layers: [{ id: 'L1', modifiers: [{ type: 'axial', n: 4 }], elements: [] }] };
+    expect(deserialize(JSON.stringify(raw)).layers[0].modifiers[0].orient).toBeUndefined();
+  });
+
+  it('lissé, le tracé passe par les copies en courbe', () => {
+    const [line] = getRenderedChildren(pointLayer([createModifier({ n: 3, stepX: 50, stepY: 20, linear: true, smooth: true })]));
+    const points = vertices(line);
+    expect(points.length).toBeGreaterThan(3);
+    for (const copy of [[10, 0], [60, 20], [110, 40]]) {
+      expect(points.some(([x, y]) => Math.hypot(x - copy[0], y - copy[1]) < 1e-9)).toBe(true);
+    }
+    expect(points.at(-1)).toEqual([110, 40]);
+  });
+
+  it('lissé, l’axial se referme en cercle', () => {
+    const [ring] = getRenderedChildren(pointLayer([createModifier({ type: 'axial', n: 6, linear: true, smooth: true })]));
+    expect(ring.closed).toBe(true);
+    const radii = vertices(ring).map(([x, y]) => Math.hypot(x, y));
+    expect(radii.length).toBeGreaterThan(6);
+    for (const r of radii) expect(Math.abs(r - 10)).toBeLessThan(0.3);
+  });
+
+  it('lissé, un arc ouvert garde sa courbure jusqu’aux extrémités', () => {
+    const [arc] = getRenderedChildren(
+      pointLayer([createModifier({ type: 'spiral', n: 6, angleStep: 0.6, radiusStep: 0, linear: true, smooth: true })]),
+    );
+    for (const [x, y] of vertices(arc)) expect(Math.abs(Math.hypot(x, y) - 10)).toBeLessThan(0.1);
+  });
+
+  it('en 3D, un tracé lissé n’a d’arêtes de coin qu’à ses bouts', async () => {
+    const { outlinePath } = await import('../src/plane.js');
+    const smoothed = (type, n) =>
+      getRenderedChildren(pointLayer([createModifier({ type, n, angleStep: 0.6, radiusStep: 0, linear: true, smooth: true })]))[0];
+    const arc = outlinePath(smoothed('spiral', 5));
+    expect(arc.corners).toEqual([0, arc.points.length - 1]);
+    expect(outlinePath(smoothed('axial', 6)).corners).toEqual([]);
+    const plain = getRenderedChildren(pointLayer([createModifier({ n: 3, linear: true })]))[0];
+    expect(outlinePath(plain).corners).toEqual([0, 1, 2]);
+  });
+
+  it('le lissage survit à la sauvegarde, seulement sur un étage de point', () => {
+    const scene = { ...createScene(), layers: [pointLayer([createModifier({ linear: true, smooth: true })], [createModifier({ smooth: true })])] };
+    const [layer] = deserialize(serialize(scene)).layers;
+    expect(layer.elements[0].modifiers[0].smooth).toBe(true);
+    expect(layer.modifiers[0].smooth).toBeUndefined();
   });
 });
 
