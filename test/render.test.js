@@ -277,9 +277,11 @@ describe('copie du SVG', () => {
     vi.unstubAllGlobals();
   });
 
-  it('propose le PNG aux trois échelles', () => {
+  it('propose le PNG borné, le PNG carré et sa copie', () => {
     const { item } = mount();
-    for (const scale of [1, 2, 4]) expect(item(`Exporter en PNG ${scale}×`)).toBeTruthy();
+    for (const label of ['Exporter en PNG', 'Exporter en PNG (1080 × 1080)', 'Copier en PNG (1080 × 1080)']) {
+      expect(item(label)).toBeTruthy();
+    }
   });
 });
 

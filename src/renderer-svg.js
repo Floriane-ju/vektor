@@ -959,24 +959,29 @@ export const toSvgDocument = (svgRoot) => {
 };
 
 /**
- * Rastérise le document SVG exporté en PNG, à `scale` fois la taille du dessin.
- * Passe par une `<img>` et un `<canvas>` : même source que l'export SVG, donc
- * même dessin, repères retirés. Sans fond dans le document, le PNG est
- * transparent.
+ * Rastérise le document SVG exporté en PNG, ajusté pour que son plus grand
+ * côté fasse `size` px quelle que soit la taille du dessin. `square` : image
+ * `size` × `size`, dessin centré dedans. Passe par une `<img>` et un
+ * `<canvas>` : même source que l'export SVG, donc même dessin, repères
+ * retirés. Sans fond dans le document, le PNG est transparent.
  *
  * @returns {Promise<Blob>}
  */
-export const toPng = (svgRoot, scale) =>
+export const toPng = (svgRoot, size, square = false) =>
   new Promise((resolve, reject) => {
     const url = URL.createObjectURL(new Blob([toSvgDocument(svgRoot)], { type: 'image/svg+xml' }));
     const image = new Image();
     image.onload = () => {
       URL.revokeObjectURL(url);
-      const canvas = document.createElement('canvas');
       const { width, height } = exportFrame(svgRoot);
-      canvas.width = width * scale;
-      canvas.height = height * scale;
-      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+      const scale = size / Math.max(width, height);
+      const drawn = { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+      const canvas = document.createElement('canvas');
+      canvas.width = square ? size : drawn.width;
+      canvas.height = square ? size : drawn.height;
+      const x = (canvas.width - drawn.width) / 2;
+      const y = (canvas.height - drawn.height) / 2;
+      canvas.getContext('2d').drawImage(image, x, y, drawn.width, drawn.height);
       canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('image trop grande pour le navigateur.'))), 'image/png');
     };
     image.onerror = () => {

@@ -4,8 +4,9 @@ import { deserialize, download, serialize } from '../persistence.js';
 import { parseTrace } from '../path.js';
 import { icon, ICON_SIZE } from './icons.js';
 
-/* Échelles de l'export PNG, en multiples de la taille du plan. */
-const PNG_SCALES = [1, 2, 4];
+/* Plus grand côté de l'export PNG libre, et côté du PNG carré. */
+const PNG_MAX_SIDE = 1920;
+const PNG_SQUARE = 1080;
 
 /* Entrée du menu Exporter : le menu se referme avant l'action, qui peut ouvrir
    un sélecteur de fichier ou un `prompt`. */
@@ -22,7 +23,7 @@ const menuItem = (label, onClick, title) => {
   return node;
 };
 
-/* Exports de l'image : SVG, presse-papier, PNG à plusieurs échelles. */
+/* Exports de l'image : SVG, PNG borné à 1920 px, PNG carré 1080, presse-papier. */
 const imageItems = (svgRoot, status) => {
   const exportSvg = menuItem('Exporter en SVG', (event) => {
     const trigger = event.currentTarget;
@@ -42,16 +43,30 @@ const imageItems = (svgRoot, status) => {
       status.show('Presse-papier refusé par le navigateur — utiliser « Exporter en SVG ».', 'error');
     }
   });
-  const pngItems = PNG_SCALES.map((scale) =>
-    menuItem(`Exporter en PNG ${scale}×`, async () => {
+  const exportPng = (label, file, size, square) =>
+    menuItem(label, async () => {
       try {
-        download(await toPng(svgRoot, scale), `vektor@${scale}x.png`, 'image/png');
-        status.show(`PNG ${scale}× exporté.`);
+        download(await toPng(svgRoot, size, square), file, 'image/png');
+        status.show('PNG exporté.');
       } catch (error) {
         status.show(`Export PNG impossible — ${error.message}`, 'error');
       }
-    }),
-  );
+    });
+  /* Le blob passe en promesse à `ClipboardItem` : Safari exige l'appel à
+     `clipboard.write` dans le geste, avant la rastérisation. */
+  const copyPng = menuItem(`Copier en PNG (${PNG_SQUARE} × ${PNG_SQUARE})`, async () => {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': toPng(svgRoot, PNG_SQUARE, true) })]);
+      status.show('PNG copié dans le presse-papier.');
+    } catch {
+      status.show('Presse-papier refusé par le navigateur — utiliser « Exporter en PNG ».', 'error');
+    }
+  });
+  const pngItems = [
+    exportPng('Exporter en PNG', 'vektor.png', PNG_MAX_SIDE, false),
+    exportPng(`Exporter en PNG (${PNG_SQUARE} × ${PNG_SQUARE})`, `vektor-${PNG_SQUARE}.png`, PNG_SQUARE, true),
+    copyPng,
+  ];
   return [exportSvg, copySvg, ...pngItems];
 };
 
