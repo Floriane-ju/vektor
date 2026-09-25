@@ -1,4 +1,4 @@
-import { icon } from './icons.js';
+import { icon, ICON_SIZE } from './icons.js';
 import { activePlane, getActiveLayer, POLAR_GRID, snapToGrid, snapToPolarGrid, STAGE } from '../scene.js';
 import { planeMatrix, unproject } from '../plane.js';
 
@@ -237,7 +237,7 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
   const toggle = document.createElement('label');
   toggle.className = 'pill-btn pill-toggle';
   toggle.title = 'Grille (aimante les points)';
-  toggle.append(gridToggle, icon('grid', 16), 'Grille');
+  toggle.append(gridToggle, icon('grid', ICON_SIZE.md), 'Grille');
 
   const open = document.createElement('button');
   open.type = 'button';

@@ -22,7 +22,11 @@ const PATHS = {
   chevronRight: '<path d="M8 5 L13 10 L8 15" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
-export const icon = (name, size = 20) => {
+/* Tailles d'icône, en pixels : chevrons des arbres et menus, boutons de ligne,
+   aperçu d'une forme dans la liste, outils de la barre. */
+export const ICON_SIZE = { xs: 12, sm: 14, md: 16, glyph: 18, lg: 20 };
+
+export const icon = (name, size = ICON_SIZE.lg) => {
   const wrap = document.createElement('span');
   wrap.className = 'icon';
   wrap.setAttribute('aria-hidden', 'true');

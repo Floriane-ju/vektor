@@ -1,7 +1,7 @@
 /* Briques DOM des panneaux de réglages : le seul module de contrôles de
    formulaire, partagé par le panneau de droite et ses sections (répéter,
    interpolations, booléens), montées pour le calque comme pour la forme. */
-import { icon } from './icons.js';
+import { icon, ICON_SIZE } from './icons.js';
 import { loadCollapsed, saveCollapsed } from './settings.js';
 
 let uid = 0;
@@ -168,7 +168,7 @@ export const collapsible = (section, head, key) => {
   const button = el('button', 'section-toggle');
   button.type = 'button';
   const summary = el('span', 'section-summary');
-  button.append(icon('chevronDown', 14), el('span', 'section-title', title.textContent), summary);
+  button.append(icon('chevronDown', ICON_SIZE.sm), el('span', 'section-title', title.textContent), summary);
   title.replaceChildren(button);
   const refresh = () => {
     const open = collapsed[key] !== true;

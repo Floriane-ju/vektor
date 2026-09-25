@@ -2,7 +2,7 @@ import { addTraces, getActiveLayer } from '../scene.js';
 import { toPng, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
 import { parseTrace } from '../path.js';
-import { icon } from './icons.js';
+import { icon, ICON_SIZE } from './icons.js';
 
 /* Échelles de l'export PNG, en multiples de la taille du plan. */
 const PNG_SCALES = [1, 2, 4];
@@ -124,7 +124,7 @@ export const mountExportMenu = ({ store, svgRoot, container, status }) => {
   trigger.className = 'pill-btn is-primary';
   trigger.setAttribute('popovertarget', menu.id);
   trigger.setAttribute('aria-haspopup', 'menu');
-  trigger.append('Exporter', icon('chevronDown', 12));
+  trigger.append('Exporter', icon('chevronDown', ICON_SIZE.xs));
 
   container.append(trigger, menu, project.fileInput);
 };

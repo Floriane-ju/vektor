@@ -22,15 +22,15 @@ import {
   sortableRow,
   whenChanged,
 } from './list.js';
-import { icon } from './icons.js';
+import { icon, ICON_SIZE } from './icons.js';
 import { DUPLICATE_OFFSET } from './shortcuts.js';
 
 /* Délai avant de rendre l'accent à la sélection quand le pointeur quitte une
    card, en millisecondes : assez pour traverser l'interstice entre deux. */
 const HOVER_LEAVE_DELAY = 120;
 
-/* Côté de l'aperçu d'une forme dans la liste, en pixels. */
-const GLYPH_SIZE = 18;
+/* Côté de l'aperçu d'une forme dans la liste. */
+const GLYPH_SIZE = ICON_SIZE.glyph;
 
 /**
  * Forme sous laquelle chaque outil booléen se range : la première, du premier plan

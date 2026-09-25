@@ -1,5 +1,5 @@
 import { dragHandle, dropIndex, iconButton, inlineRename, rebuildWithFocus, rowKeys, sortableRow, whenChanged } from './list.js';
-import { icon } from './icons.js';
+import { icon, ICON_SIZE } from './icons.js';
 import {
   addLayer,
   duplicateLayer,
@@ -27,7 +27,7 @@ const visibilityButton = (store, layer) => {
     pressed: layer.visible,
     onClick: () => store.apply(toggleVisibility, layer.id),
   });
-  button.append(icon(layer.visible ? 'eye' : 'eyeOff', 14));
+  button.append(icon(layer.visible ? 'eye' : 'eyeOff', ICON_SIZE.sm));
   return button;
 };
 
@@ -41,7 +41,7 @@ const planeButton = (store, layer) => {
     pressed: on,
     onClick: () => store.apply(togglePlane, layer.id),
   });
-  button.append(icon(on ? 'cube' : 'cubeOff', 14));
+  button.append(icon(on ? 'cube' : 'cubeOff', ICON_SIZE.sm));
   return button;
 };
 
@@ -78,7 +78,7 @@ const layerChevron = ({ store, toggle }, layer, isActive, isOpen) => {
   chevron.dataset.focusKey = `chevron-${layer.id}`;
   chevron.setAttribute('aria-label', `${isOpen ? 'Replier' : 'Déplier'} ${layer.name}`);
   chevron.setAttribute('aria-expanded', String(isOpen));
-  chevron.append(icon(isOpen ? 'chevronDown' : 'chevronRight', 12));
+  chevron.append(icon(isOpen ? 'chevronDown' : 'chevronRight', ICON_SIZE.xs));
   chevron.addEventListener('click', () => {
     if (isActive) toggle(layer.id, isOpen);
     else store.apply(setActiveLayer, layer.id);

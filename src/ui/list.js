@@ -1,4 +1,4 @@
-import { icon } from './icons.js';
+import { icon, ICON_SIZE } from './icons.js';
 import { MAX_NAME_LENGTH } from '../scene.js';
 
 /**
@@ -151,7 +151,7 @@ const clearDrop = () => {
 
 /** Poignée de glisser-déposer, posée en tête de ligne : la ligne entière se saisit. */
 export const dragHandle = () => {
-  const node = icon('grip', 14);
+  const node = icon('grip', ICON_SIZE.sm);
   node.classList.add('drag-handle');
   node.title = 'Glisser pour réordonner (Alt + ↑/↓ au clavier)';
   return node;
