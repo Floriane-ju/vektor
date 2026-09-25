@@ -2,7 +2,7 @@
 {
   "id": "T-0105",
   "titre": "Sections repliables dans le panneau de réglages",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "s",
   "tags": [

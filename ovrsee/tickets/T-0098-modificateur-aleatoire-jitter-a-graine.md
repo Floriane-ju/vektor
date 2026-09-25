@@ -2,7 +2,7 @@
 {
   "id": "T-0098",
   "titre": "Modificateur aléatoire (jitter) à graine",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "m",
   "tags": [

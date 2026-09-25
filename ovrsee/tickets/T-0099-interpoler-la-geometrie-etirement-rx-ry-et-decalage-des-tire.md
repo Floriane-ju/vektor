@@ -2,7 +2,7 @@
 {
   "id": "T-0099",
   "titre": "Interpoler la géométrie : étirement rx/ry et décalage des tirets",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "m",
   "tags": [
