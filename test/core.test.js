@@ -2179,7 +2179,7 @@ describe('répétitions et itérations de la forme', () => {
   });
 });
 
-import { offsetPolygon } from '../src/plane.js';
+import { offsetPolygon, untangle } from '../src/plane.js';
 
 describe('offsetPolygon ouvert', () => {
   it('décale chaque bout selon sa seule arête', () => {
@@ -2188,5 +2188,33 @@ describe('offsetPolygon ouvert', () => {
     expect(rail[0].x).toBeCloseTo(0);
     expect(Math.abs(rail[2].x - 10)).toBeCloseTo(2);
     expect(rail[2].y).toBeCloseTo(10);
+  });
+});
+
+describe('untangle', () => {
+  const arc = (radius, from, to, steps) =>
+    Array.from({ length: steps + 1 }, (_, i) => {
+      const angle = from + ((to - from) * i) / steps;
+      return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
+    });
+  const backwards = (edge, path) =>
+    edge.slice(1).filter((p, k) => (p.x - edge[k].x) * (path[k + 1].x - path[k].x) + (p.y - edge[k].y) * (path[k + 1].y - path[k].y) < -1e-9);
+
+  it('un bord intérieur plus décalé que le rayon ne rebrousse plus chemin', () => {
+    /* Virage de rayon 5, bord décalé de 8 vers le centre : queue d'aronde. */
+    const path = [{ x: -20, y: -5 }, ...arc(5, -Math.PI / 2, Math.PI / 2, 12), { x: -20, y: 5 }];
+    const sign = offsetPolygon(path, 1, false)[1].x > path[1].x ? -1 : 1;
+    const raw = offsetPolygon(path, 8 * sign, false);
+    expect(backwards(raw, path).length).toBeGreaterThan(0);
+    const clean = untangle(raw, path, 8 * sign);
+    expect(clean).toHaveLength(raw.length);
+    expect(backwards(clean, path)).toEqual([]);
+  });
+
+  it('deux spires qui se chevauchent restent', () => {
+    /* Grande boucle ouverte qui repasse sur son début : le croisement est loin sur le tracé. */
+    const path = arc(50, 0, 2.2 * Math.PI, 80);
+    const edge = offsetPolygon(path, 3, false);
+    expect(untangle(edge, path, 3)).toEqual(edge);
   });
 });

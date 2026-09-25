@@ -196,6 +196,58 @@ export const offsetPolygon = (points, distance, closed = true) => {
 };
 
 /**
+ * Bord `edge` d'un tracé ouvert `path` décalé de `distance`, sans ses boucles :
+ * là où le tracé tourne plus serré que le décalage, le bord intérieur
+ * rebrousse chemin et se recoupe (queue d'aronde). La boucle se ramène à son
+ * point de croisement — l'enveloppe du trait, comme le dessine un trait SVG.
+ * Même nombre de sommets (les rangs des coins tiennent). Seules les boucles
+ * courtes et rebroussées : deux spires qui se chevauchent restent.
+ */
+export const untangle = (edge, path, distance) => {
+  const n = edge.length;
+  const along = [0];
+  for (let k = 1; k < n; k++) along.push(along[k - 1] + Math.hypot(path[k].x - path[k - 1].x, path[k].y - path[k - 1].y));
+  const reversed = (k) =>
+    (edge[k + 1].x - edge[k].x) * (path[k + 1].x - path[k].x) + (edge[k + 1].y - edge[k].y) * (path[k + 1].y - path[k].y) < 0;
+  const out = [...edge];
+  let i = 0;
+  while (i < n - 3) {
+    let hit = null;
+    let back = false;
+    for (let j = i + 2; j < n - 1 && along[j] - along[i + 1] <= 4 * Math.abs(distance); j++) {
+      back ||= reversed(j - 1);
+      const cross = back && crossing(edge[i], edge[i + 1], edge[j], edge[j + 1]);
+      if (cross) hit = { j, cross };
+    }
+    if (!hit) {
+      i += 1;
+      continue;
+    }
+    for (let k = i + 1; k <= hit.j; k++) out[k] = hit.cross;
+    i = hit.j;
+  }
+  /* Aux bouts, la boucle reste ouverte : le bout ne suit que la normale de sa
+     propre arête. Tout jusqu'au dernier segment rebroussé près du bout se
+     ramène au sommet qui le suit. */
+  const window = 4 * Math.abs(distance);
+  let [first, last] = [0, n - 2];
+  for (let k = 0; k < n - 1 && along[k] <= window; k++) if (reversed(k)) first = k + 1;
+  for (let k = n - 2; k >= first && along[n - 1] - along[k + 1] <= window; k--) if (reversed(k)) last = k - 1;
+  return out.map((p, k) => (k < first ? out[first] : k > last + 1 ? out[last + 1] : p));
+};
+
+/* Croisement strict des segments a→b et c→d, ou `null`. */
+const crossing = (a, b, c, d) => {
+  const r = { x: b.x - a.x, y: b.y - a.y };
+  const s = { x: d.x - c.x, y: d.y - c.y };
+  const det = r.x * s.y - r.y * s.x;
+  if (Math.abs(det) < EPSILON) return null;
+  const t = ((c.x - a.x) * s.y - (c.y - a.y) * s.x) / det;
+  const u = ((c.x - a.x) * r.y - (c.y - a.y) * r.x) / det;
+  return t > 0 && t < 1 && u > 0 && u < 1 ? { x: a.x + r.x * t, y: a.y + r.y * t } : null;
+};
+
+/**
  * Pour chaque arête `i → i+1` d'un contour fermé : sa normale extérieure
  * tourne-t-elle le dos à `d` ?
  */

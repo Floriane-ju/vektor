@@ -5,6 +5,7 @@ import {
   nearRuns,
   occluder,
   offsetPolygon,
+  untangle,
   outlinePath,
   planeDouble,
   project,
@@ -104,7 +105,7 @@ const openBand = (child, { closed, corners }, flat, width) => {
     return null;
   }
   const reach = (width + gap) / 2;
-  const [left, right] = [offsetPolygon(flat, reach, false), offsetPolygon(flat, -reach, false)];
+  const [left, right] = [reach, -reach].map((distance) => untangle(offsetPolygon(flat, distance, false), flat, distance));
   const n = flat.length;
   return {
     base: [...left, ...right.reverse()],
@@ -113,51 +114,153 @@ const openBand = (child, { closed, corners }, flat, width) => {
   };
 };
 
+/* Marge (px) sous laquelle un point est sur le bord d'une paroi, pas dedans. */
+const WITHIN = 1e-6;
+const EPSILON = 1e-9;
+
+/* Portion [t0, t1] du segment a→b strictement à l'intérieur du
+   parallélogramme `quad` (convexe), ou `null`. Un segment qui ne fait que
+   longer un bord ou toucher un coin n'y entre pas. */
+const within = (a, b, quad) => {
+  const turn = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  const sign = Math.sign(turn(quad[0], quad[1], quad[2]) + turn(quad[0], quad[2], quad[3]));
+  if (sign === 0) return null;
+  let [t0, t1] = [0, 1];
+  for (let k = 0; k < 4; k++) {
+    const [p, q] = [quad[k], quad[(k + 1) % 4]];
+    const length = Math.hypot(q.x - p.x, q.y - p.y);
+    if (length < EPSILON) continue;
+    /* Distance signée au bord, positive dedans : f0 + f1·t. */
+    const f0 = (sign * turn(p, q, a)) / length;
+    const f1 = (sign * turn(p, q, b)) / length - f0;
+    if (Math.abs(f1) < EPSILON) {
+      if (f0 <= WITHIN) return null;
+      continue;
+    }
+    const t = (WITHIN - f0) / f1;
+    if (f1 > 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t1 - t0 <= EPSILON) return null;
+  }
+  return [t0, t1];
+};
+
 /**
  * Parois d'un volume qui peut se cacher lui-même (ruban, tracé ouvert, étoile,
- * tracé fermé creux). Peintes dans un masque de la plus loin à la plus proche :
- * chaque paroi efface (noir) ce qu'elle couvre puis trace ses arêtes (blanc) ;
- * la face avant efface en dernier, son contour se dessine par-dessus. Le
- * masque découpe un aplat de la couleur du trait. `base` = contour du bas à
- * l'écran, `edges` = sommets dont l'arête de flanc se voit.
+ * tracé fermé creux) : arêtes du fond et de flanc, découpées par la géométrie
+ * et tracées dans un masque qui découpe un aplat de la couleur du trait ; la
+ * face avant efface en dernier (bande), son contour se dessine par-dessus.
+ * `base` = contour du bas à l'écran, `edges` = sommets dont l'arête de flanc
+ * se voit, `corners` = vrais coins.
  *
- * ponytail: ordre du peintre par milieu de paroi — juste pour des parois
- * courtes (tracé échantillonné) ; une longue paroi en biais peut mal se
- * trier. Arêtes du fond en segments à bouts ronds, sans tirets.
+ * Projection parallèle : un point d'arête est caché exactement quand une
+ * paroi passe devant lui à l'écran, plus près de la face avant. Le fond, au
+ * niveau le plus loin, l'est dès qu'il tombe dans une paroi. Plus d'ordre du
+ * peintre : peint paroi par paroi, chaque aplat rognait le trait de ses
+ * voisines — dents de scie sur le fond, flancs amincis.
+ *
+ * ponytail: découpe en O(n²) arête × paroi, sans index spatial — quelques
+ * centaines de sommets.
  */
-const createWalls = (child, { base, closed, edges, v, up, width }) => {
+const createWalls = (child, { base, closed, edges, corners, v, up, width }) => {
   const n = base.length;
   const [backShift, frontShift] = up ? [{ x: 0, y: 0 }, v] : [v, { x: 0, y: 0 }];
   const top = moved(base, v);
-  /* Le plan descend vers le bas de l'écran : plus un point monte le long de
-     l'extrusion (hauteur positive), plus il est loin. */
-  const rise = up ? v : { x: -v.x, y: -v.y };
-  const far = (i, j) => ((base[i].x + base[j].x) * rise.x + (base[i].y + base[j].y) * rise.y) / 2;
-  const line = (d) => svgNode('path', { d, fill: 'none', stroke: '#fff', 'stroke-width': round(width), 'stroke-linecap': 'round' });
-  const shown = new Set(edges);
-  const walls = Array.from({ length: closed ? n : n - 1 }, (_, i) => [i, (i + 1) % n])
-    .sort(([a, b], [c, d]) => far(c, d) - far(a, b))
-    .flatMap(([i, j]) => [
-      /* Liseré noir : deux parois voisines se chevauchent, sans couture d'anticrénelage. */
-      svgNode('path', { d: screenPath([base[i], base[j], top[j], top[i]], true), fill: '#000', stroke: '#000', 'stroke-width': 1 }),
-      line(
-        [
-          screenPath(moved([base[i], base[j]], backShift), false),
-          ...[i, j].filter((k) => shown.has(k)).map((k) => screenPath([base[k], top[k]], false)),
-        ].join(' '),
-      ),
-    ]);
+  /* Bouts ronds : une coupure tombe sur un bord de paroi, tracé de la même
+     épaisseur, qui recouvre le rond ; au pli, le fond rejoint l'arête de flanc. */
+  const line = (d) => svgNode('path', { d, fill: 'none', stroke: '#fff', 'stroke-width': round(width), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+  const segments = Array.from({ length: closed ? n : n - 1 }, (_, i) => [i, (i + 1) % n]);
+  const quads = segments.map(([i, j]) => [base[i], base[j], top[j], top[i]]);
+  const back = backRuns(moved(base, backShift), segments, quads, { closed, corners: new Set(corners) });
+  const flanks = edges.flatMap((k) => flankRuns(base, k, segments, v, up));
   const mask = svgNode('mask', { id: maskId(`walls-${child.id}`), maskUnits: 'userSpaceOnUse', ...MASK_REGION });
   mask.dataset.walls = '';
   mask.append(
     svgNode('rect', { ...MASK_REGION, fill: '#000' }),
-    line(screenPath(moved(base, backShift), closed)),
-    ...walls,
+    ...[back, flanks].filter((runs) => runs.length).map((runs) => line(runs.map((run) => screenPath(run, false)).join(' '))),
     ...(closed ? [svgNode('path', { d: screenPath(moved(base, frontShift), true), fill: '#000', stroke: 'none' })] : []),
   );
   const paint = svgNode('rect', { ...MASK_REGION, fill: child.stroke, opacity: round(child.opacity ?? 1), mask: `url(#${mask.id})` });
   return [mask, paint];
 };
+
+/* Morceaux visibles de l'arête de flanc du sommet `k`, de `base[k]` à
+   `base[k] + v`. Son point de hauteur t tombe, à l'écran, sur la paroi d'un
+   segment e à la hauteur t + c (d = base[k] − départ de e = s·e + c·v) :
+   caché si ce point de paroi est plus près de la face avant (c > 0 quand elle
+   est en haut, c < 0 en bas). Les parois qui partent de `k` ne le cachent pas. */
+const flankRuns = (base, k, segments, v, up) => {
+  const cross = (p, q) => p.x * q.y - p.y * q.x;
+  const hidden = segments
+    .flatMap(([i, j]) => {
+      const e = { x: base[j].x - base[i].x, y: base[j].y - base[i].y };
+      const d = { x: base[k].x - base[i].x, y: base[k].y - base[i].y };
+      const det = cross(e, v);
+      if (Math.abs(det) < EPSILON) return [];
+      const [s, c] = [cross(d, v) / det, cross(e, d) / det];
+      if (s <= WITHIN || s >= 1 - WITHIN || (up ? c <= WITHIN : c >= -WITHIN)) return [];
+      const [t0, t1] = [Math.max(0, -c), Math.min(1, 1 - c)];
+      return t1 - t0 > EPSILON ? [[t0, t1]] : [];
+    })
+    .sort(([p], [q]) => p - q);
+  const at = (t) => ({ x: base[k].x + v.x * t, y: base[k].y + v.y * t });
+  const gap = GAP / (Math.hypot(v.x, v.y) || 1);
+  const runs = [];
+  let from = 0;
+  for (const [t0, t1] of hidden) {
+    if (t0 > from + gap) runs.push([at(from), at(t0)]);
+    from = Math.max(from, t1);
+  }
+  if (from < 1 - gap) runs.push([at(from), at(1)]);
+  return runs;
+};
+
+/* Morceaux visibles du bord du fond `edge` : chaque segment privé de ses
+   passages à l'intérieur des parois `quads`, les morceaux contigus recousus
+   en un tracé. Ni sa paroi ni ses voisines ne le cachent, sauf par un coin :
+   le long d'une courbe, la voisine, presque plate au pli, le rognait juste
+   avant l'arête de flanc. Deux parois bord à bord ne laissent pas passer de
+   miette entre elles (`GAP`). */
+const backRuns = (edge, segments, quads, { closed, corners }) => {
+  const count = segments.length;
+  const neighbour = (s, k) => {
+    const shared = k === (s + 1) % count && (closed || k > s) ? segments[s][1] : k === (s - 1 + count) % count && (closed || k < s) ? segments[s][0] : null;
+    return shared !== null && !corners.has(shared);
+  };
+  const runs = [];
+  let open = null;
+  segments.forEach(([i, j], s) => {
+    const [a, b] = [edge[i], edge[j]];
+    const at = (t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    const gap = GAP / (Math.hypot(b.x - a.x, b.y - a.y) || 1);
+    const hidden = quads
+      .flatMap((quad, k) => (k === s || neighbour(s, k) ? [] : [within(a, b, quad)]))
+      .filter(Boolean)
+      .sort(([p], [q]) => p - q);
+    /* Complément des passages cachés dans [0, 1]. */
+    const pieces = [];
+    let from = 0;
+    for (const [t0, t1] of hidden) {
+      if (t0 > from + gap) pieces.push([from, t0]);
+      from = Math.max(from, t1);
+    }
+    if (from < 1 - gap) pieces.push([from, 1]);
+    const carried = open;
+    open = null;
+    for (const [u0, u1] of pieces) {
+      const run = carried && u0 === 0 ? carried : runs[runs.push([at(u0)]) - 1];
+      run.push(at(u1));
+      if (u1 === 1) open = run;
+    }
+  });
+  /* Fermé : le dernier morceau rejoint le premier au sommet 0. */
+  if (closed && runs.length > 1 && open && open !== runs[0] && runs[0][0].x === edge[0].x && runs[0][0].y === edge[0].y) {
+    runs[0] = [...runs.pop(), ...runs[0].slice(1)];
+  }
+  return runs;
+};
+/* Interstice (px) entre deux passages cachés en dessous duquel ils se rejoignent. */
+const GAP = 0.1;
 
 /* Contour fermé sans creux : tous ses virages tournent du même côté. */
 const convex = (points) => {
@@ -286,7 +389,7 @@ const createExtrusion = (child, v) => {
     /* Ruban, tracé ouvert, étoile, tracé fermé creux : ses parois proches
        cachent les lointaines, ce que la moitié proche du fond ignore. */
     const edges = [...new Set([...silhouette(base, closed, v), ...corners])];
-    const [mask, paint] = createWalls(child, { base, closed, edges, v, up, width });
+    const [mask, paint] = createWalls(child, { base, closed, edges, corners, v, up, width });
     group.append(mask);
     volume.append(paint);
   } else if (closed) {

@@ -2023,25 +2023,52 @@ describe('plan 3D et contour double ouvert', () => {
     expect(volume.querySelector('mask')).toBeNull();
   });
 
-  it('se cache elle-même : parois peintes de la plus loin à la plus proche', () => {
-    /* Arc ouvert : ses spires avant passent devant ses spires arrière. */
-    const arc = createElement('arc', 450, 450, { rx: 100, ry: 100, start: 0, end: 300, closure: 'open', strokeWidth: 4, gap: 10, outlined: true, height: 60 });
+  it('se cache elle-même : ses arêtes sont coupées là où ses parois avant passent devant', () => {
+    /* Arc ouvert : ses parois avant passent devant son fond, côté arrière. */
+    const arc = createElement('arc', 450, 450, { rx: 100, ry: 100, start: 0, end: 300, closure: 'open', strokeWidth: 4, height: 60 });
     const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [arc] });
     const svg = stage();
     render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
     const walls = svg.querySelector(`[data-element-id="${arc.id}"] mask[data-walls]`);
     expect(walls).not.toBeNull();
-    const quads = [...walls.querySelectorAll('path[fill="#000"]')].slice(0, -1);
-    expect(quads.length).toBeGreaterThan(10);
-    /* Pente vers le bas de l'écran (cap 0) : le haut est au fond, peint d'abord. */
-    const depth = (quad) => {
-      const ys = [...quad.getAttribute('d').matchAll(/,(-?[\d.]+)/g)].map((m) => Number(m[1]));
-      return ys.reduce((sum, y) => sum + y, 0) / ys.length;
-    };
-    const depths = quads.map(depth);
-    expect(depths).toEqual([...depths].sort((a, b) => a - b));
+    /* Plus d'ordre du peintre : aucun aplat de paroi, le fond puis les flancs. */
+    expect(walls.querySelector('path[fill="#000"]')).toBeNull();
+    const [back, flanks] = [...walls.querySelectorAll('path[fill="none"]')].map((path) =>
+      path.getAttribute('d').split('M').slice(1).map((run) => [...run.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])])),
+    );
+    expect(back.length).toBeGreaterThan(1);
+    /* Les deux flancs de silhouette, de part et d'autre, se voient d'un bout à l'autre : pleine hauteur. */
+    const lengths = flanks.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]));
+    const full = Math.max(...lengths);
+    expect(lengths.filter((length) => length > full - 1e-3).length).toBeGreaterThanOrEqual(2);
     /* Le masque découpe un aplat de la couleur du trait. */
     expect(svg.querySelector(`rect[mask="url(#${walls.id})"]`).getAttribute('fill')).toBe(arc.stroke);
+  });
+
+  it('le bord du fond se découpe par la géométrie, d’un seul tracé : ni dents de scie ni miettes', () => {
+    /* Peint paroi par paroi, chaque aplat rognait le trait de ses voisines. */
+    const runs = (element) => {
+      const layer = createLayer({ center: { x: 450, y: 450 }, plane: { tilt: 55, heading: 20, sides: 'transparent' }, elements: [element] });
+      const svg = stage();
+      render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+      const walls = svg.querySelector('mask[data-walls]');
+      expect(walls.querySelector('mask')).toBeNull();
+      /* Plus de bord redessiné paroi par paroi : le fond, puis les flancs. */
+      expect(walls.querySelectorAll('path[fill="none"]').length).toBeLessThanOrEqual(2);
+      /* Le fond : premier trait du masque, avant les flancs. */
+      const back = walls.querySelector('path[fill="none"]');
+      return back.getAttribute('d').split('M').slice(1).map((run) => {
+        const points = [...run.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+        return points.slice(1).reduce((length, p, i) => length + Math.hypot(p[0] - points[i][0], p[1] - points[i][1]), 0);
+      });
+    };
+    const spiral = createModifier({ type: 'spiral', n: 24, angleStep: 0.7, radiusStep: 10, linear: true, smooth: true });
+    for (const extra of [{}, { outlined: true, gap: 16 }]) {
+      const lengths = runs(createElement('point', 480, 450, { strokeWidth: 8, height: 80, modifiers: [spiral], ...extra }));
+      /* Quelques morceaux continus, pas un par segment ni de miette entre deux parois. */
+      expect(lengths.length).toBeLessThan(12);
+      expect(Math.min(...lengths)).toBeGreaterThan(1);
+    }
   });
 
   it('une étoile ou un tracé fermé creux se cachent eux-mêmes, un rectangle garde la moitié proche du fond', () => {
