@@ -2,14 +2,14 @@
 {
   "id": "T-0076",
   "titre": "Découper property-panel.js et toolbar.js, briques de formulaire partagées",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "basse",
   "charge": "m",
   "tags": [
     "code"
   ],
   "cree": "2026-09-24",
-  "maj": "2026-09-24",
+  "maj": "2026-09-25",
   "plan": null
 }
 ---

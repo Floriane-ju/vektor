@@ -2,7 +2,7 @@
 {
   "id": "T-0066",
   "titre": "Rendu incrémental : ne reconstruire que les calques changés",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "l",
   "tags": [
@@ -10,7 +10,7 @@
     "rendu"
   ],
   "cree": "2026-09-24",
-  "maj": "2026-09-24",
+  "maj": "2026-09-25",
   "plan": null,
   "epic": "T-0026"
 }

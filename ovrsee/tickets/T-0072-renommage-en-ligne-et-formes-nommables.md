@@ -2,14 +2,14 @@
 {
   "id": "T-0072",
   "titre": "Renommage en ligne, et formes nommables",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "m",
   "tags": [
     "ui"
   ],
   "cree": "2026-09-24",
-  "maj": "2026-09-24",
+  "maj": "2026-09-25",
   "plan": null,
   "epic": "T-0032"
 }

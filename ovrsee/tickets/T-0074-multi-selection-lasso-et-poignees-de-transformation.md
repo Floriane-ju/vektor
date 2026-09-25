@@ -2,14 +2,14 @@
 {
   "id": "T-0074",
   "titre": "Multi-sélection, lasso et poignées de transformation",
-  "colonne": "a-specifier",
+  "colonne": "pret",
   "priorite": "moyenne",
   "charge": "xl",
   "tags": [
     "ui"
   ],
   "cree": "2026-09-24",
-  "maj": "2026-09-24",
+  "maj": "2026-09-25",
   "plan": null,
   "epic": "T-0032"
 }

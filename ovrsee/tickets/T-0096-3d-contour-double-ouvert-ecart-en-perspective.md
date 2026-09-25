@@ -2,9 +2,12 @@
 {
   "id": "T-0096",
   "titre": "3D : contour double ouvert — écart en perspective",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
-  "tags": ["3d", "rendu"],
+  "tags": [
+    "3d",
+    "rendu"
+  ],
   "cree": "2026-09-25",
   "maj": "2026-09-25",
   "plan": null
