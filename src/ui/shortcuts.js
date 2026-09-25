@@ -1,13 +1,14 @@
 import {
-  duplicateElement,
+  duplicateElements,
   duplicateLayer,
   getActiveElement,
   getActiveLayer,
-  removeElement,
+  removeElements,
   removeLayer,
-  setActiveElement,
+  selectedIds,
+  selectElements,
   SHAPES,
-  updateElement,
+  translateElements,
 } from '../scene.js';
 
 /* Une touche par outil. `cursor` n'est pas une forme mais partage le sélecteur. */
@@ -42,8 +43,10 @@ const toolLabel = (type) => (type === 'cursor' ? 'Curseur' : SHAPES[type].label)
 
 const LIST = [
   ...Object.entries(TOOL_KEYS).map(([key, type]) => [key.toUpperCase(), toolLabel(type)]),
-  ['Suppr', 'Supprimer la forme sélectionnée (sinon le calque)'],
-  ['⌘/Ctrl + D', 'Dupliquer la forme sélectionnée (sinon le calque)'],
+  ['Suppr', 'Supprimer les formes sélectionnées (sinon le calque)'],
+  ['⌘/Ctrl + D', 'Dupliquer les formes sélectionnées (sinon le calque)'],
+  ['Maj + clic', 'Ajouter / retirer une forme de la sélection'],
+  ['Glisser dans le vide', 'Sélectionner au lasso (Maj : ajouter)'],
   ['Échap', 'Désélectionner'],
   ['Flèches', 'Déplacer de 1 px (Maj : 10 px)'],
   ['↑ / ↓', 'Dans la liste : passer à la ligne voisine'],
@@ -106,21 +109,22 @@ export const mountShortcuts = ({ store, container, status }) => {
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
     const element = getActiveElement(store.get());
+    const ids = selectedIds(store.get());
 
     if (mod) {
       if (key !== 'd') return;
       event.preventDefault();
-      if (element) store.apply(duplicateElement, element.id, DUPLICATE_OFFSET);
+      if (element) store.apply(duplicateElements, ids, DUPLICATE_OFFSET);
       else if (store.get().activeLayerId) store.apply(duplicateLayer, store.get().activeLayerId);
       return;
     }
 
     if (event.key === '?') showHelp();
     else if (TOOL_KEYS[key] && !event.shiftKey) selectTool(TOOL_KEYS[key]);
-    else if (event.key === 'Escape') store.apply(setActiveElement, null);
+    else if (event.key === 'Escape') store.apply(selectElements, []);
     else if ((event.key === 'Delete' || event.key === 'Backspace') && element) {
-      store.apply(removeElement, element.id);
-      status.show(`${SHAPES[element.type].label} supprimé.`);
+      store.apply(removeElements, ids);
+      status.show(ids.length > 1 ? `${ids.length} formes supprimées.` : `${SHAPES[element.type].label} supprimé.`);
     } else if ((event.key === 'Delete' || event.key === 'Backspace') && getActiveLayer(store.get())) {
       const layer = getActiveLayer(store.get());
       store.apply(removeLayer, layer.id);
@@ -128,7 +132,7 @@ export const mountShortcuts = ({ store, container, status }) => {
     } else if (ARROWS[event.key] && element && !target.closest?.(ARROW_OWNER)) {
       const [dx, dy] = ARROWS[event.key];
       const step = event.shiftKey ? NUDGE_FAST : NUDGE;
-      store.apply(updateElement, element.id, { x: element.x + dx * step, y: element.y + dy * step });
+      store.apply(translateElements, ids, dx * step, dy * step);
     } else return;
     event.preventDefault();
   });

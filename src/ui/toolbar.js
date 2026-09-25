@@ -3,8 +3,6 @@ import {
   addLayer,
   DEFAULT_SHAPE,
   getActiveLayer,
-  setActiveElement,
-  setActiveLayer,
   SHAPES,
   toggleVisibility,
 } from '../scene.js';
@@ -88,15 +86,15 @@ const gestureContext = (store, svgRoot, snap) => {
     const plane = activePlane(getActiveLayer(store.get()));
     return plane ? unproject(planeMatrix(plane), point) : point;
   };
-  const select = (node) => {
-    if (!node) {
-      store.apply(setActiveElement, null);
-      return;
-    }
-    const { layerId } = node.closest('[data-layer-id]').dataset;
-    store.apply((scene) => setActiveElement(setActiveLayer(scene, layerId), node.dataset.elementId));
+  return {
+    store,
+    svgRoot,
+    snap,
+    planePoint,
+    stagePoint: (event) => snap(planePoint(event)),
+    /* Repère de l'écran, hors plan 3D : celui du lasso et des cadres. */
+    screenPoint: (event) => toStagePoint(svgRoot, event),
   };
-  return { store, svgRoot, snap, planePoint, stagePoint: (event) => snap(planePoint(event)), select };
 };
 
 /* Calque où poser un nouveau dessin. Sans calque, le premier geste en crée un :
@@ -143,7 +141,6 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
   svgRoot.addEventListener('pointermove', (event) => {
     if (tracer.active()) tracer.preview(event);
     gesture?.move(event);
-    if (selecting) svgRoot.toggleAttribute('data-has-selection', Boolean(store.get().activeElementId));
   });
 
   svgRoot.addEventListener('pointerup', (event) => {

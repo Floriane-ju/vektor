@@ -846,9 +846,17 @@ export const currentStyle = (scene) => {
  * comme une sélection.
  */
 export const setStyle = (scene, patch) => {
-  const active = getActiveElement(scene);
   const next = { ...scene, style: { ...currentStyle(scene), ...patch } };
-  return active ? updateElement(next, active.id, patch) : next;
+  /* Toute la sélection prend la valeur : plusieurs formes réaccordées d'un geste. */
+  return selectedIds(scene).reduce((current, id) => updateElement(current, id, patch), next);
+};
+
+/** Couleur / épaisseur qui diffèrent d'une forme sélectionnée à l'autre (la carte affiche « multi »). */
+export const mixedStyle = (scene) => {
+  const elements = scene.layers.flatMap((layer) => layer.elements);
+  const selected = selectedIds(scene).map((id) => elements.find((element) => element.id === id));
+  const differs = (key) => selected.some((element) => element[key] !== selected[0][key]);
+  return { stroke: differs('stroke'), strokeWidth: differs('strokeWidth') };
 };
 
 /**
@@ -875,6 +883,41 @@ export const recenterTrace = (scene, elementId) => {
 };
 
 export const setActiveElement = (scene, elementId) => ({ ...scene, activeElementId: elementId });
+
+/**
+ * Formes sélectionnées, toutes du calque de la forme active. `scene.selection`
+ * (état d'écran, non sauvegardé) ne compte que s'il contient la forme active :
+ * une transition qui active une autre forme sans le connaître ramène la
+ * sélection à elle seule, et une forme supprimée en sort d'elle-même.
+ */
+export const selectedIds = (scene) => {
+  const layer = scene.activeElementId && layerOfElement(scene, scene.activeElementId);
+  if (!layer) return [];
+  const ids = scene.selection?.includes(scene.activeElementId) ? scene.selection : [scene.activeElementId];
+  return ids.filter((id) => layer.elements.some((element) => element.id === id));
+};
+
+/** Sélectionne `ids` dans le calque de la dernière, qui devient la forme active. */
+export const selectElements = (scene, ids) => {
+  const layer = ids.length > 0 ? layerOfElement(scene, ids.at(-1)) : null;
+  if (!layer) return { ...scene, activeElementId: null, selection: [] };
+  const selection = [...new Set(ids)].filter((id) => layer.elements.some((element) => element.id === id));
+  return { ...scene, activeLayerId: layer.id, activeElementId: selection.at(-1), selection };
+};
+
+/** Maj+clic : ajoute ou retire une forme ; d'un autre calque, elle est sélectionnée seule. */
+export const toggleSelected = (scene, elementId) => {
+  const current = selectedIds(scene);
+  if (current.includes(elementId)) return selectElements(scene, current.filter((id) => id !== elementId));
+  const sameLayer = current.length > 0 && layerOfElement(scene, elementId) === layerOfElement(scene, current[0]);
+  return selectElements(scene, sameLayer ? [...current, elementId] : [elementId]);
+};
+
+export const translateElements = (scene, ids, dx, dy) =>
+  ids.reduce((current, id) => {
+    const element = current.layers.flatMap((layer) => layer.elements).find((el) => el.id === id);
+    return element ? updateElement(current, id, { x: element.x + dx, y: element.y + dy }) : current;
+  }, scene);
 
 /** Les identifiants de forme sont uniques dans la scène : le calque est retrouvé. */
 const mapElement = (scene, elementId, fn) => ({
@@ -910,6 +953,8 @@ export const removeElement = (scene, elementId) => {
   const layer = next.layers.find((candidate) => candidate.id === scene.activeLayerId);
   return { ...next, activeElementId: layer?.elements.at(-1)?.id ?? null };
 };
+
+export const removeElements = (scene, ids) => ids.reduce(removeElement, scene);
 
 /* ---- Pile booléenne d'une forme ---- */
 
@@ -1015,24 +1060,35 @@ export const setInside = (scene, elementId, hostId) => {
   return updateElement(scene, elementId, { inside: hostId });
 };
 
-/** Copie posée juste devant l'originale, décalée de `offset` pour qu'on la voie. */
-export const duplicateElement = (scene, elementId, offset) => {
-  const source = scene.layers.flatMap((layer) => layer.elements).find((el) => el.id === elementId);
-  if (!source) return scene;
-  const copy = {
-    ...source,
-    id: nextId('E'),
-    x: source.x + offset,
-    y: source.y + offset,
-    interpolations: source.interpolations.map((interpolation) => ({ ...interpolation, id: nextId('I') })),
-  };
-  return {
-    ...mapElement(scene, elementId, (elements) =>
-      elements.flatMap((element) => (element.id === elementId ? [element, copy] : [element])),
-    ),
-    activeElementId: copy.id,
-  };
+/**
+ * Chaque forme de `ids` reçoit une copie posée juste devant elle, décalée de
+ * `offset` pour qu'on la voie, et les copies deviennent la sélection. Un outil
+ * booléen ou un hôte copié avec le groupe est remplacé par sa copie, comme
+ * dans `duplicateLayer` ; hors du groupe, la copie garde celui de l'originale.
+ */
+export const duplicateElements = (scene, ids, offset) => {
+  const copies = new Map(
+    scene.layers.flatMap((layer) => layer.elements).filter((el) => ids.includes(el.id)).map((el) => [el.id, nextId('E')]),
+  );
+  if (copies.size === 0) return scene;
+  const copyOf = (element) => ({
+    ...element,
+    id: copies.get(element.id),
+    x: element.x + offset,
+    y: element.y + offset,
+    interpolations: element.interpolations.map((interpolation) => ({ ...interpolation, id: nextId('I') })),
+    booleans: element.booleans.map((step) => ({ ...step, with: copies.get(step.with) ?? step.with })),
+    inside: element.inside && (copies.get(element.inside) ?? element.inside),
+  });
+  const layers = scene.layers.map((layer) =>
+    layer.elements.some((element) => copies.has(element.id))
+      ? { ...layer, elements: layer.elements.flatMap((element) => (copies.has(element.id) ? [element, copyOf(element)] : [element])) }
+      : layer,
+  );
+  return selectElements({ ...scene, layers }, [...copies.values()]);
 };
+
+export const duplicateElement = (scene, elementId, offset) => duplicateElements(scene, [elementId], offset);
 
 /** `delta` = -1 vers l'arrière du calque, +1 vers l'avant. */
 export const moveElement = (scene, elementId, delta) => {

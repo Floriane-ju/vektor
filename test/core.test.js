@@ -6,6 +6,7 @@ import {
   updateModifier,
   closesLoop,
   currentStyle,
+  mixedStyle,
   setStyle,
   addElement,
   addInterpolation,
@@ -16,7 +17,13 @@ import {
   createLayer,
   dragPatch,
   duplicateElement,
+  duplicateElements,
   duplicateLayer,
+  removeElements,
+  selectedIds,
+  selectElements,
+  toggleSelected,
+  translateElements,
   getRenderedChildren,
   isSuspended,
   moveElement,
@@ -226,13 +233,6 @@ describe('modificateurs', () => {
     expect(shrink.every(({ x, y, angle: a }) => [x, y, a].every(Number.isFinite))).toBe(true);
   });
 
-  /* Une similitude, pas un étirement : deux formes du calque gardent leurs
-     proportions d'une copie à l'autre, l'écart suivant le même facteur. */
-  it('spiral grandit le motif sans le déformer', () => {
-    const near = { x: 20, y: 12 };
-    const far = { x: 300, y: -140 };
-    const gap = Math.hypot(far.x - near.x, far.y - near.y);
-    const options = { angleStep: 0.4, radiusStep: 12 };
   it('archimedes : rayon linéaire en angle', () => {
     const children = copies('archimedes', { x: 10, y: 0 }, 4, { angleStep: Math.PI / 2, radiusStep: 50 });
     expect(children.map(dist)).toEqual([10, 15, 20, 25].map((d) => expect.closeTo(d)));
@@ -262,6 +262,13 @@ describe('modificateurs', () => {
     }
   });
 
+  /* Une similitude, pas un étirement : deux formes du calque gardent leurs
+     proportions d'une copie à l'autre, l'écart suivant le même facteur. */
+  it('spiral grandit le motif sans le déformer', () => {
+    const near = { x: 20, y: 12 };
+    const far = { x: 300, y: -140 };
+    const gap = Math.hypot(far.x - near.x, far.y - near.y);
+    const options = { angleStep: 0.4, radiusStep: 12 };
     const a = copies('spiral', near, 5, options);
     const b = copies('spiral', far, 5, options);
     for (let i = 0; i < a.length; i += 1) {
@@ -712,6 +719,100 @@ describe('formes d’un calque', () => {
     expect(next.activeElementId).toBe(copy.id);
     expect(scene.layers[0].elements).toEqual([first, second]);
     expect(duplicateElement(scene, 'inconnu', 10)).toBe(scene);
+  });
+
+  it('la sélection vaut la forme active tant qu’aucune autre ne s’y ajoute', () => {
+    const scene = withTwo();
+    const [first, second] = scene.layers[0].elements;
+    expect(selectedIds(scene)).toEqual([second.id]);
+    expect(selectedIds(setActiveElement(scene, null))).toEqual([]);
+    const both = selectElements(scene, [first.id, second.id]);
+    expect(both.layers).toBe(scene.layers);
+    expect(selectedIds(setActiveElement(both, first.id))).toEqual([first.id, second.id]);
+    /* Une transition qui active une forme hors sélection la ramène à elle seule. */
+    expect(selectedIds(addElement(both, scene.layers[0].id, 'rect', 0, 0))).toHaveLength(1);
+  });
+
+  it('selectElements reste dans le calque de la dernière forme, qui devient active', () => {
+    let scene = withTwo();
+    const [first, second] = scene.layers[0].elements;
+    scene = addLayer(scene);
+    scene = addElement(scene, scene.activeLayerId, 'rect', 0, 0);
+    const other = scene.layers[1].elements[0];
+    const next = selectElements(scene, [other.id, first.id, second.id]);
+    expect(selectedIds(next)).toEqual([first.id, second.id]);
+    expect(next.activeElementId).toBe(second.id);
+    expect(next.activeLayerId).toBe(scene.layers[0].id);
+    expect(selectedIds(selectElements(scene, []))).toEqual([]);
+  });
+
+  it('toggleSelected ajoute ou retire une forme du même calque, sinon la sélectionne seule', () => {
+    let scene = withTwo();
+    const [first, second] = scene.layers[0].elements;
+    scene = toggleSelected(scene, first.id);
+    expect(selectedIds(scene)).toEqual([second.id, first.id]);
+    expect(scene.activeElementId).toBe(first.id);
+    scene = toggleSelected(scene, first.id);
+    expect(selectedIds(scene)).toEqual([second.id]);
+    expect(selectedIds(toggleSelected(scene, second.id))).toEqual([]);
+    scene = addLayer(scene);
+    scene = addElement(scene, scene.activeLayerId, 'rect', 0, 0);
+    const other = scene.layers[1].elements[0];
+    const back = toggleSelected(selectElements(scene, [first.id, second.id]), other.id);
+    expect(selectedIds(back)).toEqual([other.id]);
+  });
+
+  it('setStyle règle toute la sélection ; mixedStyle dit ce qui diffère', () => {
+    let scene = withTwo();
+    const [first, second] = scene.layers[0].elements;
+    scene = updateElement(scene, first.id, { stroke: '#ff0000' });
+    scene = selectElements(scene, [first.id, second.id]);
+    expect(mixedStyle(scene)).toEqual({ stroke: true, strokeWidth: false });
+    scene = setStyle(scene, { stroke: '#00ff00' });
+    expect(scene.layers[0].elements.map((el) => el.stroke)).toEqual(['#00ff00', '#00ff00']);
+    expect(mixedStyle(scene)).toEqual({ stroke: false, strokeWidth: false });
+    scene = setStyle(scene, { strokeWidth: 6 });
+    expect(scene.layers[0].elements.map((el) => el.strokeWidth)).toEqual([6, 6]);
+    expect(mixedStyle(setActiveElement(scene, null))).toEqual({ stroke: false, strokeWidth: false });
+  });
+
+  it('translateElements déplace plusieurs formes en une transition', () => {
+    const scene = withTwo();
+    const [first, second] = scene.layers[0].elements;
+    const next = translateElements(scene, [first.id, second.id], 5, -2);
+    expect(next.layers[0].elements.map(({ x, y }) => [x, y])).toEqual([[15, 8], [25, 18]]);
+    expect(translateElements(scene, [], 5, 5)).toBe(scene);
+  });
+
+  it('removeElements supprime la sélection et lâche les outils qu’elle portait', () => {
+    let scene = withTwo();
+    const [first, second] = scene.layers[0].elements;
+    scene = addElement(scene, scene.layers[0].id, 'rect', 0, 0);
+    const third = scene.layers[0].elements[2];
+    scene = addBoolean(scene, third.id);
+    scene = updateBoolean(scene, third.id, 0, { with: first.id });
+    const next = removeElements(selectElements(scene, [first.id, second.id]), [first.id, second.id]);
+    expect(next.layers[0].elements.map((el) => el.id)).toEqual([third.id]);
+    expect(next.layers[0].elements[0].booleans).toEqual([]);
+    expect(selectedIds(next)).toEqual([third.id]);
+  });
+
+  it('duplicateElements copie un groupe, ses booléens internes suivent les copies', () => {
+    let scene = withTwo();
+    const [first, second] = scene.layers[0].elements;
+    scene = addBoolean(scene, second.id);
+    scene = updateBoolean(scene, second.id, 0, { with: first.id });
+    const next = duplicateElements(scene, [first.id, second.id], 10);
+    const elements = next.layers[0].elements;
+    expect(elements).toHaveLength(4);
+    const [, copyA, , copyB] = elements;
+    expect(elements[0]).toBe(scene.layers[0].elements[0]);
+    expect(copyA).toMatchObject({ x: first.x + 10, y: first.y + 10 });
+    expect(copyB.booleans[0].with).toBe(copyA.id);
+    expect(selectedIds(next)).toEqual([copyA.id, copyB.id]);
+    /* Seule, la copie garde son outil d'origine. */
+    const alone = duplicateElement(scene, second.id, 10);
+    expect(alone.layers[0].elements.at(-1).booleans[0].with).toBe(first.id);
   });
 
   it('duplicateLayer recrée le calque juste au-dessus, ids neufs, liaisons et booléens suivis', () => {

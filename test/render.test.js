@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { areaPath, childBounds, MASK_REGION, render, shapePreview, toSvgDocument } from '../src/renderer-svg.js';
-import { createElement, createInterpolation, createLayer, STAGE } from '../src/scene.js';
+import { createElement, createInterpolation, createLayer, selectedIds, STAGE } from '../src/scene.js';
 import { createStore } from '../src/store.js';
 import { mountToolbar } from '../src/ui/toolbar.js';
 import { gridImage } from '../src/ui/settings.js';
@@ -544,22 +544,52 @@ describe('outil curseur', () => {
     expect(store.get().layers[0].elements[0]).toMatchObject({ x: 150, y: 80, rx: 80 });
   });
 
-  it('glisser ailleurs dans le dessin déplace la forme sélectionnée', () => {
-    const { store, svg, layer } = mountWithShape();
+  const twoShapes = () =>
+    mountWithShape({
+      elements: [createElement('ellipse', 100, 100, { filled: true }), createElement('rect', 400, 100, { filled: true })],
+    });
+
+  it('glisser dans le vide trace un lasso qui sélectionne les formes touchées', () => {
+    const { store, svg, layer } = twoShapes();
     on(svg.querySelector('ellipse'), 'pointerdown', 100, 100);
     on(svg, 'pointerup', 100, 100);
 
-    on(svg, 'pointermove', 600, 600);
-    /* Tout le dessin déplace la sélection : il prend le curseur de saisie. */
-    expect(svg.hasAttribute('data-has-selection')).toBe(true);
-    on(svg, 'pointerdown', 600, 600);
-    on(svg, 'pointermove', 640, 610);
-    expect(svg.hasAttribute('data-dragging')).toBe(true);
-    on(svg, 'pointerup', 640, 610);
-    expect(svg.hasAttribute('data-dragging')).toBe(false);
+    on(svg, 'pointerdown', 20, 300);
+    on(svg, 'pointermove', 600, 110);
+    expect(svg.querySelector('[data-hover]')).not.toBeNull();
+    on(svg, 'pointerup', 600, 110);
+    expect(selectedIds(store.get())).toEqual(layer.elements.map((element) => element.id));
+    expect(svg.querySelectorAll('[data-selection] rect')).toHaveLength(2);
+    /* Rien n'a bougé. */
+    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 100, y: 100 });
 
-    expect(store.get().activeElementId).toBe(layer.elements[0].id);
-    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 140, y: 110 });
+    on(svg, 'pointerdown', 20, 500);
+    on(svg, 'pointerup', 20, 500);
+    expect(selectedIds(store.get())).toEqual([]);
+  });
+
+  it('Maj+clic ajoute une forme ; glisser l’une déplace le groupe en un pas', () => {
+    const { store, svg } = twoShapes();
+    on(svg.querySelector('ellipse'), 'pointerdown', 100, 100);
+    on(svg, 'pointerup', 100, 100);
+    svg.querySelector('rect[data-element-id]').dispatchEvent(
+      new MouseEvent('pointerdown', { button: 0, bubbles: true, clientX: 400, clientY: 100, shiftKey: true }),
+    );
+    on(svg, 'pointerup', 400, 100);
+    expect(selectedIds(store.get())).toHaveLength(2);
+
+    on(svg.querySelector('ellipse'), 'pointerdown', 100, 100);
+    on(svg, 'pointermove', 130, 90);
+    expect(svg.hasAttribute('data-dragging')).toBe(true);
+    on(svg, 'pointerup', 140, 110);
+    expect(svg.hasAttribute('data-dragging')).toBe(false);
+    expect(store.get().layers[0].elements.map(({ x, y }) => [x, y])).toEqual([[140, 110], [440, 110]]);
+    expect(selectedIds(store.get())).toHaveLength(2);
+
+    /* Un clic sans glisser sur une forme du groupe la sélectionne seule. */
+    on(svg.querySelector('ellipse'), 'pointerdown', 140, 110);
+    on(svg, 'pointerup', 140, 110);
+    expect(selectedIds(store.get())).toEqual([store.get().layers[0].elements[0].id]);
   });
 
   it('glisser la croix déplace le pivot du calque, sans saut au départ', () => {

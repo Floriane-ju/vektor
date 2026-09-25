@@ -123,6 +123,20 @@ it('démarre et rend après un placement', async () => {
   expect(circles()).toBe(2 * 2);
   field.remove();
 
+  /* Maj+clic dans l'arbre : dupliquer et supprimer valent pour la sélection entière, en un pas. */
+  const names = () => [...document.querySelectorAll('#shape-list .layer-name')];
+  names()[0].click();
+  names()[1].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+  expect(document.querySelectorAll('#shape-list [aria-pressed="true"]')).toHaveLength(2);
+  press({ key: 'd', metaKey: true });
+  expect(circles()).toBe(4 * 2);
+  press({ key: 'Delete' });
+  expect(circles()).toBe(2 * 2);
+  key(false);
+  expect(circles()).toBe(4 * 2);
+  key(false);
+  expect(circles()).toBe(2 * 2);
+
   /* Sans forme sélectionnée, Suppr vise le calque actif. */
   const layerCount = () => document.querySelectorAll('.layer-card[data-layer-id]').length;
   const before = layerCount();
@@ -206,6 +220,23 @@ it('démarre et rend après un placement', async () => {
   pointer('pointerdown', 460, 460);
   pointer('pointerup', 460, 460);
   expect(strokes()).toEqual(['#7dd3c0', '#ee4722', '#ee4722']);
+  /* Plusieurs formes de couleurs différentes : la carte dit « multi », un clic les accorde. */
+  const rectIds = [...new Set([...stage.querySelectorAll('rect[data-element-id]')].map((node) => node.dataset.elementId))];
+  const shapeName = (id) => document.querySelector(`#shape-list [data-element-id="${id}"] .layer-name`);
+  shapeName(rectIds[0]).click();
+  shapeName(rectIds[1]).dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+  expect(card.querySelector('.stroke-current').hasAttribute('data-mixed')).toBe(true);
+  expect(document.getElementById('stroke-width').placeholder).toBe('multi');
+  swatch('#ee4722').click();
+  expect(strokes()).toEqual(['#ee4722', '#ee4722', '#ee4722']);
+  expect(card.querySelector('.stroke-current').hasAttribute('data-mixed')).toBe(false);
+  width.value = '2';
+  width.dispatchEvent(new Event('change'));
+  expect(document.getElementById('stroke-width').placeholder).toBe('');
+  shapeName(rectIds[0]).click();
+  swatch('#7dd3c0').click();
+  expect(strokes()).toEqual(['#7dd3c0', '#ee4722', '#ee4722']);
+  shapeName(rectIds[2]).click();
   swatch('#7dd3c0').click();
   expect(swatch('#7dd3c0').getAttribute('aria-pressed')).toBe('true');
   /* Palette globale : accent + blanc, plus les couleurs portées par le dessin. */

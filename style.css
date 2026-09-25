@@ -117,11 +117,9 @@ input[type="range"] {
   user-select: none;
 }
 
-#stage[data-tool="cursor"] [data-element-id] { cursor: pointer; }
-
-/* Avec une sélection, tout le dessin la déplace : le curseur le dit partout. */
-#stage[data-tool="cursor"][data-has-selection],
-#stage[data-tool="cursor"][data-has-selection] * { cursor: grab; }
+/* Une forme se saisit pour la déplacer ; le vide trace un lasso. */
+#stage[data-tool="cursor"] { cursor: crosshair; }
+#stage[data-tool="cursor"] [data-element-id] { cursor: grab; }
 
 /* Le repère d'un pivot se saisit pour le déplacer. */
 #stage[data-tool="cursor"] [data-pivot] [data-grip] { cursor: move; }
@@ -327,6 +325,8 @@ input.layer-name-input {
 #shape-list .layer-name { font-weight: 400; }
 #shape-list .layer-card[data-active="true"] > .layer-row { background: var(--accent); color: var(--ink); }
 #shape-list .layer-card[data-active="true"] .layer-name { font-weight: 600; }
+/* Les autres formes de la sélection : l’accent atténué. */
+#shape-list .layer-card[data-selected="true"] > .layer-row { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 /* L'aperçu porte la couleur de la forme ; en blanc sur l'accent de la ligne
    sélectionnée. */
 .shape-glyph { color: var(--shape-color, currentColor); }
@@ -605,6 +605,15 @@ input.layer-name-input {
   border-radius: var(--pill);
   background: var(--swatch, transparent);
   box-shadow: inset 0 0 0 1.5px var(--line);
+}
+/* Sélection de plusieurs couleurs : le mot à la place de la pastille. */
+.stroke-current[data-mixed]::before {
+  content: 'multi';
+  width: auto;
+  height: auto;
+  background: none;
+  box-shadow: none;
+  font-size: var(--text-xs);
 }
 .stroke-width-field { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 4px; }
 .stroke-line { width: 14px; height: 0; border-top: 3px solid var(--text-dim); border-radius: var(--radius-line); }

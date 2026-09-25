@@ -7,8 +7,10 @@ import {
   placeElement,
   removeElement,
   renameElement,
-  setActiveElement,
+  selectedIds,
+  selectElements,
   SHAPES,
+  toggleSelected,
 } from '../scene.js';
 import { clearHover, shapePreview, showHover } from '../renderer-svg.js';
 import {
@@ -101,7 +103,7 @@ const hoverCard = (ctx, card, element) => {
 };
 
 /* Nom, aperçu et actions d'une forme. */
-const shapeLine = ({ store, remove }, layer, element, isActive) => {
+const shapeLine = ({ store, remove }, layer, element, isSelected) => {
   /* Même ligne que l'arbre des calques, sans la bascule de visibilité : une
      forme se masque en la supprimant ou en masquant son calque. */
   const row = document.createElement('div');
@@ -112,8 +114,11 @@ const shapeLine = ({ store, remove }, layer, element, isActive) => {
   name.className = 'layer-name';
   name.textContent = shapeName(layer, element, SHAPES);
   name.dataset.focusKey = `name-${element.id}`;
-  name.setAttribute('aria-pressed', String(isActive));
-  name.addEventListener('click', () => store.apply(setActiveElement, element.id));
+  name.setAttribute('aria-pressed', String(isSelected));
+  /* Maj+clic ajoute ou retire la forme de la sélection, comme sur le plan. */
+  name.addEventListener('click', (event) =>
+    event.shiftKey ? store.apply(toggleSelected, element.id) : store.apply(selectElements, [element.id]),
+  );
   /* Vider le champ rend le libellé par défaut, qui suit le rang de la forme. */
   inlineRename(name, {
     label: `Nom de ${name.textContent}`,
@@ -150,17 +155,19 @@ const shapeLine = ({ store, remove }, layer, element, isActive) => {
 
 /**
  * Card d'une forme, avec ses outils booléens et ses formes logées rangés
- * dessous. `tree` = `{ layer, activeElementId, displayed, parents, hosts }`.
+ * dessous. `tree` = `{ layer, activeElementId, selected, displayed, parents, hosts }`.
  */
 const shapeRow = (ctx, tree, element) => {
-  const { layer, activeElementId, displayed, parents, hosts } = tree;
+  const { layer, activeElementId, selected, displayed, parents, hosts } = tree;
   const isActive = element.id === activeElementId;
   const card = document.createElement('li');
   card.className = 'layer-card';
   card.dataset.active = String(isActive);
+  /* Membre de la sélection sans être la forme active que montre le panneau. */
+  if (!isActive && selected.includes(element.id)) card.dataset.selected = 'true';
   card.dataset.elementId = element.id;
   hoverCard(ctx, card, element);
-  const { row, label } = shapeLine(ctx, layer, element, isActive);
+  const { row, label } = shapeLine(ctx, layer, element, selected.includes(element.id));
   card.append(row);
 
   /* Outils de cette forme, rangés sous elle : ils ne se dessinent pas,
@@ -200,6 +207,7 @@ const signature = (scene) => {
   return JSON.stringify([
     layer?.id ?? null,
     scene.activeElementId,
+    selectedIds(scene),
     layer?.elements.map((element) => [element.id, element.type, element.name, element.booleans.map((step) => step.with), element.inside]) ?? [],
   ]);
 };
@@ -297,7 +305,7 @@ export const mountShapeList = ({
       const displayed = [...layer.elements].reverse();
       const parents = booleanParents(displayed);
       const hosts = insideParents(displayed, parents);
-      const tree = { layer, activeElementId: scene.activeElementId, displayed, parents, hosts };
+      const tree = { layer, activeElementId: scene.activeElementId, selected: selectedIds(scene), displayed, parents, hosts };
       const list = document.createElement('ul');
       list.className = 'layer-list';
       list.append(

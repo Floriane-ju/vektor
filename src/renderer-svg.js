@@ -6,6 +6,7 @@ import {
   getActiveLayer,
   getRenderedChildren,
   pivotOf,
+  selectedIds,
   SHAPES,
   STAGE,
 } from './scene.js';
@@ -292,8 +293,8 @@ const GUIDES = {
   mirrorV: mirrorGuides,
   axial: guideCenter,
   spiral: guideCenter,
-};
   archimedes: guideCenter,
+};
 
 /**
  * Repères de la pile de modificateurs du calque actif : chaque modificateur qui
@@ -858,13 +859,34 @@ const exportFrame = (svgRoot) => {
 };
 
 const createSelection = (scene, svgRoot, entries) => {
-  if (scene.activeElementId) {
-    const box = sourceBounds.get(svgRoot)?.get(scene.activeElementId);
+  const ids = selectedIds(scene);
+  if (ids.length === 1) {
+    const box = sourceBounds.get(svgRoot)?.get(ids[0]);
     return box ? frame(box, 'selection') : null;
+  }
+  /* Plusieurs formes : un cadre chacune, regroupés pour que survol et export
+     les traitent comme un seul `[data-selection]`. */
+  if (ids.length > 1) {
+    const group = document.createElementNS(SVG_NS, 'g');
+    group.dataset.selection = 'selection';
+    const boxes = ids.map((id) => sourceBounds.get(svgRoot)?.get(id)).filter(Boolean);
+    group.append(...boxes.map((box) => frame(box, 'selection')));
+    return group;
   }
   /* Calque sans forme sélectionnée : le cadre entoure toutes ses copies. */
   const box = entries.get(scene.activeLayerId)?.frame;
   return box ? frame(box, 'layer') : null;
+};
+
+/** Formes du calque actif dont la copie source touche `box` (repère de l'écran) : le lasso. */
+export const elementsInBox = (svgRoot, layer, box) => {
+  const bounds = sourceBounds.get(svgRoot);
+  return (layer?.elements ?? [])
+    .filter((element) => {
+      const b = bounds?.get(element.id);
+      return b && b.minX <= box.maxX && b.maxX >= box.minX && b.minY <= box.maxY && b.maxY >= box.minY;
+    })
+    .map((element) => element.id);
 };
 
 /** Retire le cadre de survol, où qu'il ait été posé, et rend la sélection. */

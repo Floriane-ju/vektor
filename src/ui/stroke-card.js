@@ -1,10 +1,11 @@
-import { currentStyle, getActiveElement, setStyle } from '../scene.js';
+import { currentStyle, getActiveElement, mixedStyle, setStyle } from '../scene.js';
 import { rebuildWithFocus, whenChanged } from './list.js';
 import { el } from './fields.js';
 
 /**
- * Carte du trait, en haut à droite : couleur et épaisseur de la forme active,
- * ou sans sélection celles des prochaines formes (`currentStyle`), toujours
+ * Carte du trait, en haut à droite : couleur et épaisseur de la sélection
+ * (« multi » si elles diffèrent d'une forme à l'autre ; un réglage les
+ * accorde toutes), ou sans sélection celles des prochaines formes (`currentStyle`), toujours
  * sous la main comme dans Illustrator. La pastille ouvre la palette
  * globale, un sélecteur natif et le champ hexadécimal.
  *
@@ -93,7 +94,7 @@ const colorPalette = (store, setStroke) => {
   hex.addEventListener('change', () => {
     const match = HEX.exec(hex.value.trim());
     if (match) setStroke({ stroke: `#${match[1].toLowerCase()}` });
-    else hex.value = currentStyle(store.get()).stroke.toUpperCase();
+    else hex.value = mixedStyle(store.get()).stroke ? '' : currentStyle(store.get()).stroke.toUpperCase();
   });
   const hexLabel = el('label', null, 'Hex');
   hexLabel.htmlFor = hex.id;
@@ -104,9 +105,11 @@ const colorPalette = (store, setStroke) => {
   swatchRow.append(swatchList, custom);
   palette.append(el('h2', null, 'Couleur'), swatchRow, hexRow);
 
+  /* `current` = null : la sélection porte plusieurs couleurs. */
   const sync = (scene, current) => {
-    if (document.activeElement !== hex) hex.value = current.toUpperCase();
-    picker.value = current;
+    if (document.activeElement !== hex) hex.value = current?.toUpperCase() ?? '';
+    hex.placeholder = current ? '' : 'multi';
+    if (current) picker.value = current;
     rebuildSwatches(scene);
     const element = getActiveElement(scene);
     for (const swatch of swatchList.children) markSwatch(swatch, scene, element, current);
@@ -156,9 +159,13 @@ export const mountStrokeCard = ({ store, container = null }) => {
 
   const sync = (scene) => {
     const style = currentStyle(scene);
-    const current = style.stroke.toLowerCase();
-    trigger.style.setProperty('--swatch', current);
-    if (document.activeElement !== width) width.value = String(style.strokeWidth);
+    const mixed = mixedStyle(scene);
+    const current = mixed.stroke ? null : style.stroke.toLowerCase();
+    trigger.style.setProperty('--swatch', current ?? 'transparent');
+    trigger.toggleAttribute('data-mixed', mixed.stroke);
+    trigger.title = mixed.stroke ? 'Couleur du trait — plusieurs couleurs' : 'Couleur du trait';
+    width.placeholder = mixed.strokeWidth ? 'multi' : '';
+    if (document.activeElement !== width) width.value = mixed.strokeWidth ? '' : String(style.strokeWidth);
     palette.sync(scene, current);
   };
 

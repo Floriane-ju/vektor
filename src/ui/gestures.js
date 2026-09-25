@@ -8,18 +8,22 @@ import {
   recenterTrace,
   removeElement,
   rotateVector,
+  selectedIds,
+  selectElements,
   setLayerCenter,
   SHAPES,
+  toggleSelected,
+  translateElements,
   updateElement,
   updateModifier,
 } from '../scene.js';
 import { axisDirection, MIRROR_AXIS } from '../modifiers.js';
-import { clearHover } from '../renderer-svg.js';
+import { clearHover, elementsInBox } from '../renderer-svg.js';
 
 /**
  * Gestes au pointeur sur le plan de travail. Chaque geste commencé est un
  * objet `{ move(event), end(event), cancel() }` : la toolbar n'en tient qu'un
- * à la fois. `ctx` = `{ store, svgRoot, snap, planePoint, stagePoint, select }`
+ * à la fois. `ctx` = `{ store, svgRoot, snap, planePoint, stagePoint, screenPoint }`
  * (voir `mountToolbar`).
  */
 
@@ -114,16 +118,23 @@ const vertexGesture = (ctx, event, handle, element) => {
   };
 };
 
-/* Déplacement de la forme active. Le geste part de n'importe où dans le
-   dessin — sur une autre forme, il la sélectionne d'abord et c'est elle qui
-   bouge ; un clic dans le vide relâche la sélection. */
+/* Déplacement de la sélection, depuis une de ses formes. Hors sélection, la
+   forme est d'abord sélectionnée seule ; déjà sélectionnée, tout le groupe
+   bouge avec elle, et un clic sans glisser la sélectionne seule. */
 const moveGesture = (ctx, event, node) => {
-  const { store, snap, planePoint, select } = ctx;
-  if (node) select(node);
-  const origin = getActiveElement(store.get());
+  const { store, snap, planePoint } = ctx;
+  const id = node.dataset.elementId;
+  const grouped = selectedIds(store.get()).includes(id);
+  /* La forme saisie devient l'active : c'est elle que montre le panneau. */
+  const others = grouped ? selectedIds(store.get()).filter((other) => other !== id) : [];
+  store.apply(selectElements, [...others, id]);
+  const ids = selectedIds(store.get());
+  const origin = elementById(store.get(), id);
   if (!origin) return null;
   const start = planePoint(event);
   let moved = false;
+  /* Écart déjà appliqué : chaque pas ne déplace que la différence. */
+  let applied = { x: 0, y: 0 };
   const move = (next) => {
     const { x, y } = planePoint(next);
     const dx = x - start.x;
@@ -131,21 +142,78 @@ const moveGesture = (ctx, event, node) => {
     /* Sans seuil, le tremblement d'un clic décalerait la forme d'un pixel. */
     if (!moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     moved = true;
-    store.apply(updateElement, origin.id, snap({ x: origin.x + dx, y: origin.y + dy }));
+    /* La forme saisie s'aimante, le groupe suit du même écart. */
+    const target = snap({ x: origin.x + dx, y: origin.y + dy });
+    const total = { x: target.x - origin.x, y: target.y - origin.y };
+    store.apply(translateElements, ids, total.x - applied.x, total.y - applied.y);
+    applied = total;
   };
   capture(ctx, event, true);
   return {
     move,
     end: (next) => {
       move(next);
-      if (!node && !moved) select(null);
+      if (grouped && !moved) store.apply(selectElements, [id]);
       release(ctx, next);
     },
     cancel: () => {},
   };
 };
 
-/** Geste du curseur : un pivot, un sommet, sinon la forme sous le pointeur. */
+/* Rectangle du lasso : état d'écran posé comme le survol, que le rendu
+   suivant et l'export effacent d'eux-mêmes. */
+const lassoFrame = (svgRoot, box) => {
+  clearHover(svgRoot);
+  const node = document.createElementNS(svgRoot.namespaceURI, 'rect');
+  const attrs = { x: box.minX, y: box.minY, width: box.maxX - box.minX, height: box.maxY - box.minY };
+  for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, String(value));
+  node.dataset.hover = '';
+  node.setAttribute('fill', 'none');
+  node.setAttribute('stroke', 'currentColor');
+  node.setAttribute('stroke-dasharray', '4 4');
+  node.setAttribute('vector-effect', 'non-scaling-stroke');
+  node.setAttribute('pointer-events', 'none');
+  svgRoot.append(node);
+};
+
+/* Lasso, depuis le vide : sélectionne les formes du calque actif qu'il touche,
+   en plus de la sélection avec Maj. Un clic sans glisser relâche la sélection. */
+const lassoGesture = (ctx, event) => {
+  const { store, svgRoot, screenPoint } = ctx;
+  const start = screenPoint(event);
+  const base = event.shiftKey ? selectedIds(store.get()) : [];
+  let moved = false;
+  const move = (next) => {
+    const point = screenPoint(next);
+    if (!moved && Math.hypot(point.x - start.x, point.y - start.y) < DRAG_THRESHOLD) return;
+    moved = true;
+    const box = {
+      minX: Math.min(start.x, point.x),
+      minY: Math.min(start.y, point.y),
+      maxX: Math.max(start.x, point.x),
+      maxY: Math.max(start.y, point.y),
+    };
+    const hits = elementsInBox(svgRoot, getActiveLayer(store.get()), box);
+    store.apply(selectElements, [...base, ...hits.filter((id) => !base.includes(id))]);
+    lassoFrame(svgRoot, box);
+  };
+  capture(ctx, event);
+  return {
+    move,
+    end: (next) => {
+      move(next);
+      if (!moved && !next.shiftKey) store.apply(selectElements, []);
+      clearHover(svgRoot);
+      release(ctx, next);
+    },
+    cancel: () => clearHover(svgRoot),
+  };
+};
+
+/**
+ * Geste du curseur : un pivot, un sommet, la forme sous le pointeur (Maj :
+ * l'ajoute ou la retire de la sélection), sinon un lasso.
+ */
 export const selectGesture = (ctx, event) => {
   const grip = event.target.closest?.('[data-pivot]');
   const pivot = grip && pivotGesture(ctx, event, grip);
@@ -155,7 +223,11 @@ export const selectGesture = (ctx, event) => {
   if (handle && selected?.points) return vertexGesture(ctx, event, handle, selected);
   /* Toutes les copies d'un modificateur portent l'id de leur forme source :
      cliquer n'importe laquelle désigne cette forme. */
-  return moveGesture(ctx, event, event.target.closest?.('[data-element-id]') ?? null);
+  const node = event.target.closest?.('[data-element-id]');
+  if (!node) return lassoGesture(ctx, event);
+  if (!event.shiftKey) return moveGesture(ctx, event, node);
+  ctx.store.apply(toggleSelected, node.dataset.elementId);
+  return null;
 };
 
 /* Sur un calque en 3D, la forme naît sur le plan incliné mais sans
