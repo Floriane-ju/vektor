@@ -476,6 +476,7 @@ export const createNode = (child) => {
        anneau réduit garde le même nombre de tirets, pas la même longueur. */
     if (child.dash?.length) {
       node.setAttribute('stroke-dasharray', child.dash.map((v) => round(v * strokeWidth * scale)).join(' '));
+      if (child.dashOffset) node.setAttribute('stroke-dashoffset', round(child.dashOffset * strokeWidth * scale));
     }
   }
   node.setAttribute('fill-opacity', round(child.opacity ?? 1));

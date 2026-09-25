@@ -41,6 +41,7 @@ export const createPlaneDouble = (child, [outer, inner], closed = true) => {
       fill,
       /* Tirets suivis de l'échelle de la copie, comme sur la forme. */
       dash: (child.dash ?? []).map((value) => value * scale),
+      dashOffset: (child.dashOffset ?? 0) * scale,
     });
   const group = svgNode('g');
   group.dataset.elementId = child.id;
@@ -400,6 +401,7 @@ const createExtrusion = (child, v, others = []) => {
     /* Tirets comme `createNode` : multiples de l'épaisseur, suivis de l'échelle. */
     if (dashed && child.dash?.length) {
       node.setAttribute('stroke-dasharray', child.dash.map((value) => round(value * width * (child.scale ?? 1))).join(' '));
+      if (child.dashOffset) node.setAttribute('stroke-dashoffset', round(child.dashOffset * width * (child.scale ?? 1)));
     }
     return node;
   };

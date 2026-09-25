@@ -9,8 +9,24 @@
 export const t = (i, n) => (n <= 1 ? 0 : i / (n - 1));
 
 /**
- * Courbes de rampe : `(i, n) -> facteur` entre 0 et 1, toutes bâties sur `t`
- * sauf l'alternance, qui ne lit que la parité du rang. Une interpolation porte
+ * Bruit déterministe dans [0, 1) : même graine, même rang, même valeur — le
+ * dessin se relit à l'identique. Hachage entier (mélangeur de murmur3), pas
+ * de générateur à état : chaque copie se tire seule, dans n'importe quel ordre.
+ */
+export const noise = (i, seed = 0) => {
+  let h = Math.imul((seed | 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul((i | 0) + 1, 0xc2b2ae35);
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+
+/** Graine neuve, tirée par l'interface — les transitions restent pures. */
+export const randomSeed = () => Math.floor(Math.random() * 2 ** 31);
+
+/**
+ * Courbes de rampe : `(i, n, seed) -> facteur` entre 0 et 1, toutes bâties sur
+ * `t` sauf l'alternance, qui ne lit que la parité du rang, et l'aléatoire, qui
+ * tire chaque copie au hasard de sa graine. Une interpolation porte
  * la sienne ; absente ou inconnue, la rampe reste linéaire.
  */
 export const CURVES = {
@@ -20,6 +36,8 @@ export const CURVES = {
   /* Aller-retour : 0 aux deux bouts, 1 à mi-course. */
   pingPong: (i, n) => 1 - Math.abs(2 * t(i, n) - 1),
   alternate: (i) => i % 2,
+  /* Une copie seule reste au début de la plage, comme sous les autres courbes. */
+  random: (i, n, seed) => (n <= 1 ? 0 : noise(i, seed)),
 };
 
 export const CURVE_LABELS = {
@@ -28,9 +46,10 @@ export const CURVE_LABELS = {
   easeOut: 'Sortie douce',
   pingPong: 'Aller-retour',
   alternate: 'Alternance',
+  random: 'Aléatoire',
 };
 
-export const ramp = (curve, i, n) => (CURVES[curve] ?? t)(i, n);
+export const ramp = (curve, i, n, seed = 0) => (CURVES[curve] ?? t)(i, n, seed);
 
 export const lerp = (from, to, factor) => from + (to - from) * factor;
 

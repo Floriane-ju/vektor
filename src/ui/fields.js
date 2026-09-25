@@ -1,5 +1,7 @@
 /* Briques DOM des panneaux de réglages : partagées par le panneau de droite et
    la section « Répéter », qui se monte pour le calque comme pour la forme. */
+import { icon } from './icons.js';
+import { loadCollapsed, saveCollapsed } from './settings.js';
 
 let uid = 0;
 export const nextId = () => `prop-${++uid}`;
@@ -94,3 +96,40 @@ export const slider = (bind, labelText, attrs, read, write, options = {}) => {
   wrap.append(head, range);
   return wrap;
 };
+
+/* Sections repliées, par clé : la même clé sert au calque et à la forme, donc
+   replier « Répéter » d'un côté le replie de l'autre. */
+let collapsed = null;
+const refreshers = new Set();
+
+/**
+ * Rend la section repliable par son titre : un bouton natif dans le `h3`
+ * (Entrée et Espace au clavier), `aria-expanded` et chevron à jour. Repliée,
+ * seul l'entête reste, avec le résumé que la section pose par `summarize`.
+ */
+export const collapsible = (section, head, key) => {
+  collapsed ??= loadCollapsed();
+  const title = head.querySelector('h3');
+  const button = el('button', 'section-toggle');
+  button.type = 'button';
+  const summary = el('span', 'section-summary');
+  button.append(icon('chevronDown', 14), el('span', 'section-title', title.textContent), summary);
+  title.replaceChildren(button);
+  const refresh = () => {
+    const open = collapsed[key] !== true;
+    section.classList.toggle('is-collapsed', !open);
+    button.setAttribute('aria-expanded', String(open));
+  };
+  button.addEventListener('click', () => {
+    const { [key]: was, ...rest } = collapsed;
+    collapsed = was ? rest : { ...rest, [key]: true };
+    saveCollapsed(collapsed);
+    for (const other of refreshers) other();
+  });
+  refreshers.add(refresh);
+  refresh();
+  return { summarize: (text) => { summary.textContent = text; } };
+};
+
+/** « 1 étage », « 3 étages ». */
+export const countLabel = (count, noun) => `${count} ${noun}${count > 1 ? 's' : ''}`;

@@ -41,7 +41,7 @@ import {
   updateInterpolation,
   updateInterpolationRange,
 } from '../src/scene.js';
-import { deserialize, serialize } from '../src/persistence.js';
+import { deserialize, FORMAT, serialize } from '../src/persistence.js';
 import { createStore, HISTORY_LIMIT } from '../src/store.js';
 import { parseTrace } from '../src/path.js';
 import { MAX_POINTS, RANGE_BOUNDS, SHAPES } from '../src/scene.js';
@@ -1381,7 +1381,7 @@ describe('rotation et épaisseur interpolées', () => {
       layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
     });
     const again = deserialize(serialize(deserialize(old)));
-    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@26');
+    expect(JSON.parse(serialize(again)).format).toBe(FORMAT);
     expect(orients(again.layers[0].modifiers[0])).toBe(true);
   });
 
@@ -1601,6 +1601,35 @@ describe('plafond de copies', () => {
   });
 });
 
+describe('étirement interpolé', () => {
+  const stretched = (property, element) =>
+    createLayer({
+      elements: [element],
+      modifiers: [createModifier({ n: 5, stepX: 0 })],
+      interpolations: [createInterpolation({ property, range: [1, 0.2] })],
+    });
+
+  it('scaleY 1 → 0,2 sur 5 copies fait décroître ry, rx intact, et se relit', () => {
+    const layer = stretched('scaleY', createElement('rect', 0, 0, { rx: 50, ry: 50 }));
+    const children = getRenderedChildren(layer);
+    expect(children.map((c) => Math.round(c.ry))).toEqual([50, 40, 30, 20, 10]);
+    expect(children.every((c) => c.rx === 50)).toBe(true);
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    const again = deserialize(serialize(scene));
+    expect(again.layers[0].interpolations[0]).toMatchObject({ property: 'scaleY', range: [1, 0.2] });
+    expect(getRenderedChildren(again.layers[0]).map((c) => c.ry)).toEqual(children.map((c) => c.ry));
+  });
+
+  it('scaleX étire les sommets d’un tracé, rien sur le point', () => {
+    const trace = getRenderedChildren(
+      stretched('scaleX', createElement('polyline', 0, 0, { points: [{ x: -10, y: 5 }, { x: 10, y: -5 }] })),
+    );
+    expect(trace.at(-1).points.map((p) => [p.x, p.y].map((v) => Math.round(v * 1e9) / 1e9))).toEqual([[-2, 5], [2, -5]]);
+    const dots = getRenderedChildren(stretched('scaleX', createElement('point', 0, 0)));
+    expect(dots.every((c) => c.rx === 0 && c.ry === 0)).toBe(true);
+  });
+});
+
 describe('courbes de rampe', () => {
   const values = (curve, n = 5) => Array.from({ length: n }, (_, i) => curveRamp(curve, i, n));
 
@@ -1616,6 +1645,35 @@ describe('courbes de rampe', () => {
     expect(values(undefined)).toEqual(values('linear'));
     expect(values('bogus')).toEqual(values('linear'));
     for (const curve of Object.keys(CURVES)) expect(curveRamp(curve, 0, 1)).toBe(0);
+  });
+
+  it('l’aléatoire est déterministe par graine, dans [0, 1), et change avec elle', () => {
+    const draw = (seed) => Array.from({ length: 8 }, (_, i) => curveRamp('random', i, 8, seed));
+    expect(draw(7)).toEqual(draw(7));
+    expect(draw(7)).not.toEqual(draw(8));
+    expect(draw(7).every((v) => v >= 0 && v < 1)).toBe(true);
+    expect(new Set(draw(7)).size).toBe(8);
+  });
+
+  it('une interpolation aléatoire rend le même dessin après sérialisation', () => {
+    const layer = createLayer({
+      elements: [createElement('ellipse', 0, 0)],
+      modifiers: [createModifier({ n: 6 })],
+      interpolations: [createInterpolation({ property: 'rotation', range: [0, 90], curve: 'random', seed: 1234 })],
+    });
+    const scene = { layers: [layer], activeLayerId: layer.id, activeElementId: null };
+    const again = deserialize(serialize(scene));
+    expect(again.layers[0].interpolations[0].seed).toBe(1234);
+    const rotations = (s) => getRenderedChildren(s.layers[0]).map((c) => c.rotation);
+    expect(rotations(again)).toEqual(rotations(scene));
+    expect(new Set(rotations(scene)).size).toBeGreaterThan(1);
+  });
+
+  it('une graine illisible se replie sur 0', () => {
+    const layer = createLayer({ interpolations: [createInterpolation({ curve: 'random', seed: 5 })] });
+    const raw = JSON.parse(serialize({ layers: [layer], activeLayerId: layer.id, activeElementId: null }));
+    raw.layers[0].interpolations[0].seed = 'x';
+    expect(deserialize(JSON.stringify(raw)).layers[0].interpolations[0].seed).toBe(0);
   });
 
   it('s’applique aux copies du calque, étage lié compris', () => {

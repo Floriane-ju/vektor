@@ -448,6 +448,23 @@ input[type="range"] {
 
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .section-head h3 { margin: 0; font: 600 14px/1 var(--font); }
+/* Titre repliable : tout le titre est le bouton, chevron à gauche. */
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.section-toggle .icon { display: flex; color: var(--text-dim); transition: transform 0.15s; }
+.section-toggle[aria-expanded="false"] .icon { transform: rotate(-90deg); }
+.section-summary { font-weight: 400; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.section-toggle[aria-expanded="true"] .section-summary { display: none; }
+/* Repliée, seul l'entête reste — sans son bouton d'ajout, dont l'effet ne se verrait pas. */
+.group.is-collapsed > :not(.section-head), .group.is-collapsed .section-head .text-btn { display: none; }
 .copy-count { margin: 0; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .copy-count[data-tone="error"] { color: var(--danger); }
 

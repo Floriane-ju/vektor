@@ -8,11 +8,12 @@ import {
   updateInterpolationRange,
 } from '../scene.js';
 import { MODIFIER_LABELS } from '../modifiers.js';
-import { CURVE_LABELS } from '../interpolate.js';
+import { CURVE_LABELS, randomSeed } from '../interpolate.js';
 
 /* Les bornes se saisissent en pourcentage : 1 = 100 %. */
 const PERCENT = 100;
 import { iconButton, rebuildWithFocus } from './list.js';
+import { collapsible, countLabel } from './fields.js';
 
 /**
  * Section « Faire varier les itérations » du calque ou de la forme : un bloc par interpolation,
@@ -158,18 +159,31 @@ export const interpolationSection = ({ store, ownerOf, key = '' }) => {
   };
 
   /* Forme de la rampe, par interpolation. Resynchronisée sans reconstruction :
-     l'annulation la ramène sans arracher le bloc. */
+     l'annulation la ramène sans arracher le bloc. Passer à l'aléatoire tire
+     une graine neuve : deux bruits de la pile ne se suivent pas pas à pas. */
   const curveField = (interpolation) => {
     const node = select('Courbe de la rampe', Object.entries(CURVE_LABELS), interpolation.curve, (value) =>
-      apply(updateInterpolation, interpolation.id, { curve: value }),
+      apply(updateInterpolation, interpolation.id, { curve: value, ...(value === 'random' ? { seed: randomSeed() } : {}) }),
     );
+    /* Même réglage, autre tirage : un pas d'historique. */
+    const reroll = document.createElement('button');
+    reroll.type = 'button';
+    reroll.className = 'text-btn';
+    reroll.textContent = 'Relancer';
+    reroll.title = 'Tirer une autre graine';
+    reroll.dataset.focusKey = `reroll${key}${interpolation.id}`;
+    reroll.addEventListener('click', () => apply(updateInterpolation, interpolation.id, { seed: randomSeed() }));
     bounds.push({
       sync: (layer) => {
         const current = layer.interpolations.find((candidate) => candidate.id === interpolation.id);
-        if (current) node.value = current.curve;
+        if (!current) return;
+        node.value = current.curve;
+        reroll.hidden = current.curve !== 'random';
       },
     });
-    return field('Courbe', node);
+    const wrap = field('Courbe', node);
+    wrap.append(reroll);
+    return wrap;
   };
 
   const block = (interpolation, modifiers) => {
@@ -230,6 +244,7 @@ export const interpolationSection = ({ store, ownerOf, key = '' }) => {
   clearButton.addEventListener('click', () => apply(clearInterpolations));
 
   set.append(head, host, clearButton);
+  const fold = collapsible(set, head, 'interpolations');
 
   /* Tout ce que les blocs affichent, sauf les valeurs des curseurs : les types
      des modificateurs en font partie, ils nomment les options de la rampe. */
@@ -262,6 +277,7 @@ export const interpolationSection = ({ store, ownerOf, key = '' }) => {
     }
 
     clearButton.hidden = layer.interpolations.length === 0;
+    fold.summarize(countLabel(layer.interpolations.length, 'interpolation'));
     for (const control of bounds) control.sync(layer);
   };
 

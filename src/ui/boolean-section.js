@@ -9,6 +9,7 @@ import {
   updateBoolean,
 } from '../scene.js';
 import { iconButton, rebuildWithFocus, shapeName } from './list.js';
+import { collapsible, countLabel } from './fields.js';
 
 /**
  * Section « Booléen » d'une forme : une pile d'opérations appliquées dans
@@ -112,6 +113,7 @@ export const booleanSection = ({ store }) => {
   const host = document.createElement('div');
   host.className = 'stack';
   set.append(head, host);
+  const fold = collapsible(set, head, 'booleans');
 
   /* Ce que la section montre : la pile, et les formes du calque qui nomment
      les outils possibles. */
@@ -129,6 +131,7 @@ export const booleanSection = ({ store }) => {
     /* Seule, ou entourée d'outils qui fermeraient une boucle : rien à ajouter. */
     const scene = store.get();
     addButton.disabled = addBoolean(scene, element.id) === scene;
+    fold.summarize(countLabel(element.booleans.length, 'opération'));
     const next = signature(layer, element);
     if (next === last) return;
     last = next;

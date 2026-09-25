@@ -1526,6 +1526,23 @@ describe('style de trait', () => {
     expect(toSvgDocument(svg)).toContain('stroke-dasharray="0 4"');
   });
 
+  it('le décalage des tirets interpolé défile en multiples de l’épaisseur, rien sur un trait plein', () => {
+    const svg = stage();
+    const layer = createLayer({
+      elements: [
+        createElement('ellipse', 0, 0, { strokeWidth: 2, dash: [4, 2] }),
+        createElement('ellipse', 0, 0, { strokeWidth: 2 }),
+      ],
+      modifiers: [{ type: 'step', n: 2, stepX: 0, stepY: 0, angleStep: 0, radiusStep: 0 }],
+      interpolations: [ramp('dashOffset', [0, 3])],
+    });
+    render({ layers: [layer] }, svg);
+    const [first, plain, second] = svg.querySelectorAll('ellipse');
+    expect(first.hasAttribute('stroke-dashoffset')).toBe(false);
+    expect(second.getAttribute('stroke-dashoffset')).toBe('6');
+    expect(plain.hasAttribute('stroke-dashoffset')).toBe(false);
+  });
+
   it('le contour double élargit le trait et l’évide de l’écart, centré sur la forme', () => {
     const svg = stage();
     const element = createElement('rect', 0, 0, { rx: 50, ry: 50, strokeWidth: 4, gap: 6, outlined: true, filled: true });
@@ -1737,6 +1754,29 @@ describe('booléens entre formes', () => {
   });
 });
 
+describe('panneau : sections repliables', () => {
+  it('replie « Répéter » au clic, pour le calque comme pour la forme, résumé et mémoire compris', async () => {
+    localStorage.removeItem('illu/settings');
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const forme = createElement('ellipse', 0, 0);
+    const layer = createLayer({ elements: [forme], modifiers: [createModifier({ n: 3 }), createModifier({ n: 2 })] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const { layerDetail, shapeDetail } = mountPropertyPanel({ store });
+    const toggle = (root) => root.querySelector('[data-focus-key^="add-modifier"]').closest('section').querySelector('.section-toggle');
+    const button = toggle(layerDetail);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    button.click();
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(button.closest('section').classList.contains('is-collapsed')).toBe(true);
+    expect(button.querySelector('.section-summary').textContent).toBe('2 étages · 6 copies');
+    expect(toggle(shapeDetail).getAttribute('aria-expanded')).toBe('false');
+    expect(JSON.parse(localStorage.getItem('illu/settings')).collapsed).toEqual({ repeat: true });
+    button.click();
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(JSON.parse(localStorage.getItem('illu/settings')).collapsed).toEqual({});
+  });
+});
+
 describe('panneau : booléen', () => {
   it('empile des opérations, chacune avec son outil et son mode', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
@@ -1748,7 +1788,7 @@ describe('panneau : booléen', () => {
     const { shapeDetail } = mountPropertyPanel({ store });
     const add = shapeDetail.querySelector('[data-focus-key="add-boolean"]');
     const steps = () => store.get().layers[0].elements[2].booleans;
-    expect(add.closest('section').querySelector('h3').textContent).toBe('Booléen');
+    expect(add.closest('section').querySelector('.section-title').textContent).toBe('Booléen');
 
     add.click();
     add.click();

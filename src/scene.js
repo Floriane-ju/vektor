@@ -46,6 +46,13 @@ export const RANGE_BOUNDS = {
   rotation: { min: -720, max: 720, step: 1, identity: 0, defaultRange: [0, 180], additive: true, unit: '°' },
   /* Facteur de l'épaisseur du calque, comme l'échelle l'est de la taille. */
   strokeWidth: { min: 0, max: 5, step: 0.01, identity: 1, defaultRange: [1, 0.2] },
+  /* Étirement : facteurs de `rx`/`ry` (et des sommets d'un tracé), dans le
+     repère de la forme, avant sa rotation. Sans effet sur le point. */
+  scaleX: { min: 0, max: 3, step: 0.01, identity: 1, defaultRange: [1, 0.2] },
+  scaleY: { min: 0, max: 3, step: 0.01, identity: 1, defaultRange: [1, 0.2] },
+  /* Décalage des tirets, en multiples de l'épaisseur comme le motif. Additive :
+     deux défilements s'ajoutent. Sans effet sur un trait plein. */
+  dashOffset: { min: -100, max: 100, step: 0.5, identity: 0, defaultRange: [0, 6], additive: true, unit: '× ép.' },
   /* Couleur du trait et de l'aplat, qui remplace celle du calque. Pas de
      bornes numériques : une plage de deux `#rrggbb`, du trait par défaut à
      l'accent. */
@@ -57,6 +64,9 @@ export const RANGE_LABELS = {
   scale: 'Échelle',
   rotation: 'Rotation',
   strokeWidth: 'Épaisseur',
+  scaleX: 'Étirement X',
+  scaleY: 'Étirement Y',
+  dashOffset: 'Décalage des tirets',
   color: 'Couleur',
 };
 
@@ -387,7 +397,8 @@ export const createLayer = (overrides = {}) => ({
  * La pile s'ajoute par produit et non par écrasement, donc deux interpolations
  * d'opacité se composent — voir `stackValues`.
  *
- * `curve` = forme de la rampe, clé de `CURVES` (`interpolate.js`).
+ * `curve` = forme de la rampe, clé de `CURVES` (`interpolate.js`). `seed` =
+ * graine de la courbe aléatoire, ignorée par les autres.
  */
 export const createInterpolation = (overrides = {}) => ({
   id: nextId('I'),
@@ -395,6 +406,7 @@ export const createInterpolation = (overrides = {}) => ({
   range: [...RANGE_BOUNDS.opacity.defaultRange],
   binding: null,
   curve: 'linear',
+  seed: 0,
   ...overrides,
 });
 
@@ -463,9 +475,9 @@ export const getActiveElement = (scene) =>
  * ne désigne plus de modificateur — fichier importé, étage supprimé ailleurs —
  * retombe sur la rampe globale plutôt que de rendre `NaN`.
  */
-const rangeFactor = (owner, { binding, curve }, indices, i, total) => {
+const rangeFactor = (owner, { binding, curve, seed }, indices, i, total) => {
   const modifier = binding === null ? null : owner.modifiers[binding];
-  return modifier ? ramp(curve, indices[binding], effectiveCount(modifier)) : ramp(curve, i, total);
+  return modifier ? ramp(curve, indices[binding], effectiveCount(modifier), seed) : ramp(curve, i, total, seed);
 };
 
 /**
@@ -478,6 +490,19 @@ export const copyTotal = (layer) =>
 
 /** Pile qui dépasse `MAX_COPIES` : le calque n'est pas rendu, le panneau le dit. */
 export const isSuspended = (layer) => copyTotal(layer) > MAX_COPIES;
+
+/* Étirement interpolé, dans le repère de la forme : demi-extensions et
+   sommets d'un tracé. Rien à étirer sur un point (extensions nulles).
+   ponytail: polygone et arc ne lisent que `rx` — seul l'étirement X les
+   touche (uniformément). Les échantillonner en tracé le jour où il faut les aplatir. */
+const stretch = (element, sx, sy) => {
+  if (sx === 1 && sy === 1) return {};
+  return {
+    rx: element.rx * sx,
+    ry: element.ry * sy,
+    ...(element.points ? { points: element.points.map((p) => ({ x: p.x * sx, y: p.y * sy })) } : {}),
+  };
+};
 
 /**
  * Chaque copie `i` du calque répète chaque forme, et chaque forme ses copies
@@ -501,7 +526,14 @@ export const getRenderedChildren = (layer) => {
           ...layer.interpolations.map((it) => [it, rangeFactor(layer, it, indices, i, copies.length)]),
           ...element.interpolations.map((it) => [it, rangeFactor(element, it, ownIndices, j, ownCopies.length)]),
         ]);
-        const { rotation: twist = 0, strokeWidth: widthFactor = 1, color, ...properties } = stackValues(
+        const {
+          rotation: twist = 0,
+          strokeWidth: widthFactor = 1,
+          scaleX = 1,
+          scaleY = 1,
+          color,
+          ...properties
+        } = stackValues(
           [...factors.keys()],
           (interpolation) => factors.get(interpolation),
           RANGE_BOUNDS,
@@ -514,6 +546,7 @@ export const getRenderedChildren = (layer) => {
         const spin = (element.rotation ?? 0) + twist;
         return {
           ...element,
+          ...stretch(element, scaleX, scaleY),
           strokeWidth: element.strokeWidth * widthFactor,
           stroke: color ?? element.stroke,
           fill: element.filled ? (color ?? element.stroke) : 'none',
@@ -1128,7 +1161,7 @@ export const clearInterpolations = (scene, ownerId) =>
   mapOwner(scene, ownerId, (owner) => ({ ...owner, interpolations: [] }));
 
 /**
- * `patch` porte les champs à changer : `property`, `binding`, `curve` ou `range`.
+ * `patch` porte les champs à changer : `property`, `binding`, `curve`, `seed` ou `range`.
  *
  * Changer de propriété change les bornes, donc la plage repart du réglage par
  * défaut de la nouvelle plutôt que d'être rabotée à une valeur qui ne veut plus

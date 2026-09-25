@@ -29,13 +29,33 @@ const load = () => {
   }
 };
 
+/* Le seau entier : la grille et les sections repliées du panneau y vivent
+   côte à côte, chacun ne réécrit que ses clés. */
+const readRaw = () => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+};
+
 const save = (settings) => {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...readRaw(), ...settings }));
   } catch {
     /* Stockage indisponible (navigation privée) : le réglage vaut pour la session. */
   }
 };
+
+/** Sections repliées du panneau de réglages : `{ [clé]: true }`. */
+export const loadCollapsed = () => {
+  const { collapsed } = readRaw();
+  if (!collapsed || typeof collapsed !== 'object') return {};
+  return Object.fromEntries(Object.entries(collapsed).filter(([, value]) => value === true));
+};
+
+export const saveCollapsed = (collapsed) => save({ collapsed });
 
 const round = (value) => Math.round(value * 100) / 100;
 

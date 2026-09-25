@@ -12,7 +12,7 @@ import {
   PIVOTING,
 } from '../modifiers.js';
 import { iconButton, rebuildWithFocus } from './list.js';
-import { addButtonFor, el, field, input, row, sectionHead, select, slider, switchField } from './fields.js';
+import { addButtonFor, collapsible, countLabel, el, field, input, row, sectionHead, select, slider, switchField } from './fields.js';
 
 /* Bornes du curseur de copies. Le champ numérique voisin accepte au-delà. */
 const COUNT_SLIDER = { min: '1', max: '64', step: '1' };
@@ -66,7 +66,9 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
   /* Total de la pile, qui multiplie : au-delà du plafond, le calque ne se rend plus. */
   const copyTotalNode = el('p', 'copy-count');
   copyTotalNode.setAttribute('aria-live', 'polite');
-  root.append(sectionHead('Répéter', addButton), copyTotalNode, ...(forElement ? [] : [layerPivot]), host);
+  const head = sectionHead('Répéter', addButton);
+  root.append(head, copyTotalNode, ...(forElement ? [] : [layerPivot]), host);
+  const fold = collapsible(root, head, 'repeat');
 
   let blocks = [];
 
@@ -231,6 +233,7 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
     copyTotalNode.textContent = over
       ? `${total.toLocaleString('fr-FR')} copies — rendu suspendu au-delà de ${MAX_COPIES.toLocaleString('fr-FR')}`
       : plural(own);
+    fold.summarize(stack.length ? `${countLabel(stack.length, 'étage')} · ${plural(own)}` : countLabel(0, 'étage'));
     for (const entry of blocks) entry.sync(target);
   };
 
