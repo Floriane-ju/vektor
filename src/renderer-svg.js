@@ -15,26 +15,24 @@ import { createInside, createPlaneDouble, createShape, occlude, shapeOccluder, w
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/**
- * Rend la scène dans le `<svg>` du DOM.
- *
- * Ce nœud est à la fois le preview et la source de l'export : il n'y a qu'un
- * seul moteur de rendu, donc rien à garder en phase entre l'écran et le
- * fichier.
- */
 /* Une copie rendue : rang de la copie du calque, puis de la copie propre de la forme. */
 const copyKey = (id, { copy, own = 0 }) => `${id}:${copy}:${own}`;
 
-export const render = (scene, svgRoot) => {
-  svgRoot.replaceChildren();
-  outlineSerial = 0;
-  const bounds = new Map();
-  sourceBounds.set(svgRoot, bounds);
-  /* Nœuds de dessin dans l'ordre, et silhouette des volumes 3D : un volume
-     cache ce qui est dessiné avant lui (`occlude`). */
-  const drawn = [];
-  const occluders = new Map();
-  const boxes = [];
+/**
+ * Dessin d'un calque, retenu tant que sa référence ne change pas (les
+ * transitions sont immuables) : `group` et ses nœuds de dessin `drawn` dans
+ * l'ordre, silhouettes des volumes 3D (`occluders`), boîte de la copie source
+ * de chaque forme (`bounds`), boîte du dessin (`box`, outils exclus) et de
+ * toutes les copies (`frame`, cadre du calque sélectionné).
+ */
+const drawLayer = (layer) => {
+  const children = layerChildren(layer);
+  const entry = { layer, group: null, drawn: [], occluders: new Map(), bounds: new Map(), box: null, frame: null };
+  if (children.length === 0) return entry;
+
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.dataset.layerId = layer.id;
+  /* Masques des formes logées : propres au calque, pour qu'il se garde entier. */
   const defs = svgNode('defs');
   /* Forme logée dans un volume (`inside`) : tranchée selon la profondeur de
      son hôte de même copie (`createInside`), et dessinée juste après lui.
@@ -45,83 +43,133 @@ export const render = (scene, svgRoot) => {
     const node = hostShape ? createInside(child, host, hostShape, defs) : createShape(child, walls);
     nodeOf.set(copyKey(child.id, child), { node, host: hostShape ? copyKey(host.id, host) : null });
     const silhouette = hostShape ? null : shapeOccluder(child);
-    if (silhouette) occluders.set(node, silhouette);
+    if (silhouette) entry.occluders.set(node, silhouette);
     return node;
   };
 
+  /* Un outil booléen ne se dessine pas : il ne vit que dans le résultat. */
+  const tools = new Set(layer.elements.flatMap((element) => element.booleans.map((step) => step.with)));
+  const byCopy = new Map(children.map((child) => [copyKey(child.id, child), child]));
+  /* Outil ou hôte de même copie ; répété moins que la forme, sa copie propre 0.
+     ponytail: un outil répété sous une forme qui ne l'est pas n'agit que par
+     sa première copie propre. */
+  const partner = (id, child) => byCopy.get(copyKey(id, child)) ?? byCopy.get(copyKey(id, { ...child, own: 0 }));
+  /* Volumes qui se cachent eux-mêmes : ils se cachent aussi l'un l'autre. */
+  const walls = wallNeighbours(children.filter((child) => !tools.has(child.id) && child.booleans.length === 0 && !child.inside));
+  /* Recoupements creux : les aplats rejoignent un tracé commun, chaque forme
+     ne garde que son trait. */
+  const holes = [];
+  let holeFill;
+  for (const child of children) {
+    const box = childBounds(child);
+    if (!entry.bounds.has(child.id)) entry.bounds.set(child.id, box);
+    entry.frame = entry.frame ? union(entry.frame, box) : box;
+    if (tools.has(child.id)) continue;
+    entry.box = entry.box ? union(entry.box, box) : box;
+    const steps = child.booleans
+      .map((step) => ({ shape: partner(step.with, child), op: step.op }))
+      .filter((step) => step.shape);
+    if (steps.length > 0) {
+      group.append(createBoolean(child, steps));
+      continue;
+    }
+    const host = child.inside ? partner(child.inside, child) : null;
+    const hostCopies = host && children.filter((other) => other.id === host.id && other.copy === host.copy);
+    const others = walls.get(child);
+    const area = layer.evenOdd && child.fill !== 'none' ? areaPath(child) : null;
+    if (!area) {
+      group.append(shape(child, host, hostCopies, others));
+      continue;
+    }
+    holes.push({ area, opacity: child.opacity ?? 1 });
+    holeFill ??= child.fill;
+    const outline = shape({ ...child, fill: 'none' }, host, hostCopies, others);
+    /* L'intérieur reste cliquable au curseur, même creusé. */
+    outline.setAttribute('pointer-events', 'visible');
+    group.append(outline);
+  }
+  if (holes.length > 0) {
+    const { node, mask } = createEvenOdd(layer, holes, holeFill);
+    group.prepend(node);
+    if (mask) group.append(mask);
+  }
+  /* Chaque forme logée passe juste après son hôte : ni l'hôte ne la cache en
+     entier, ni elle ne passe devant les volumes qui le suivent. */
+  for (const { node, host } of [...nodeOf.values()].reverse()) {
+    const hostNode = host && nodeOf.get(host)?.node;
+    if (hostNode?.parentNode === group) hostNode.after(node);
+  }
+  entry.drawn = [...group.children];
+  if (defs.children.length > 0) group.append(defs);
+  entry.group = group;
+  return entry;
+};
+
+/* Un calque repris du rendu précédent quitte les enveloppes d'occlusion que
+   les volumes des autres calques lui avaient posées : elles se refont. */
+const unwrap = (entry) => {
+  for (const node of entry.drawn) {
+    if (node.parentNode !== entry.group) node.parentNode?.replaceWith(node);
+  }
+  return entry;
+};
+
+/* Dernier rendu de chaque `<svg>` : `layers` = le tableau de la scène dessinée,
+   `entries` = le dessin de chaque calque visible, `overlay` = la couche d'écran. */
+const renders = new WeakMap();
+
+/**
+ * Dessin de la scène : chaque calque repris s'il n'a pas changé, puis
+ * l'occlusion entre volumes, qui traverse les calques (`occlude`), refaite
+ * sur l'ensemble depuis les silhouettes retenues.
+ */
+const drawScene = (scene, svgRoot, state) => {
+  const entries = new Map();
   for (const layer of scene.layers) {
     if (!layer.visible) continue;
-    const children = layerChildren(layer);
-    if (children.length === 0) continue;
-
-    const group = document.createElementNS(SVG_NS, 'g');
-    group.dataset.layerId = layer.id;
-    /* Un outil booléen ne se dessine pas : il ne vit que dans le résultat. */
-    const tools = new Set(layer.elements.flatMap((element) => element.booleans.map((step) => step.with)));
-    const byCopy = new Map(children.map((child) => [copyKey(child.id, child), child]));
-    /* Outil ou hôte de même copie ; répété moins que la forme, sa copie propre 0.
-       ponytail: un outil répété sous une forme qui ne l'est pas n'agit que par
-       sa première copie propre. */
-    const partner = (id, child) => byCopy.get(copyKey(id, child)) ?? byCopy.get(copyKey(id, { ...child, own: 0 }));
-    /* Volumes qui se cachent eux-mêmes : ils se cachent aussi l'un l'autre. */
-    const walls = wallNeighbours(children.filter((child) => !tools.has(child.id) && child.booleans.length === 0 && !child.inside));
-    /* Recoupements creux : les aplats rejoignent un tracé commun, chaque forme
-       ne garde que son trait. */
-    const holes = [];
-    let holeFill;
-    for (const child of children) {
-      if (!bounds.has(child.id)) bounds.set(child.id, childBounds(child));
-      if (tools.has(child.id)) continue;
-      boxes.push(childBounds(child));
-      const steps = child.booleans
-        .map((step) => ({ shape: partner(step.with, child), op: step.op }))
-        .filter((step) => step.shape);
-      if (steps.length > 0) {
-        group.append(createBoolean(child, steps));
-        continue;
-      }
-      const host = child.inside ? partner(child.inside, child) : null;
-      const hostCopies = host && children.filter((other) => other.id === host.id && other.copy === host.copy);
-      const others = walls.get(child);
-      const area = layer.evenOdd && child.fill !== 'none' ? areaPath(child) : null;
-      if (!area) {
-        group.append(shape(child, host, hostCopies, others));
-        continue;
-      }
-      holes.push({ area, opacity: child.opacity ?? 1 });
-      holeFill ??= child.fill;
-      const outline = shape({ ...child, fill: 'none' }, host, hostCopies, others);
-      /* L'intérieur reste cliquable au curseur, même creusé. */
-      outline.setAttribute('pointer-events', 'visible');
-      group.append(outline);
-    }
-    if (holes.length > 0) {
-      const { node, mask } = createEvenOdd(layer, holes, holeFill);
-      group.prepend(node);
-      if (mask) group.append(mask);
-    }
-    /* Chaque forme logée passe juste après son hôte : ni l'hôte ne la cache en
-       entier, ni elle ne passe devant les volumes qui le suivent. */
-    for (const { node, host } of [...nodeOf.values()].reverse()) {
-      const hostNode = host && nodeOf.get(host)?.node;
-      if (hostNode?.parentNode === group) hostNode.after(node);
-    }
-    nodeOf.clear();
-    drawn.push(...group.children);
-    svgRoot.append(group);
+    const cached = state.entries.get(layer.id);
+    entries.set(layer.id, cached?.layer === layer ? unwrap(cached) : drawLayer(layer));
   }
-  drawings.set(svgRoot, boxes.length > 0 ? union(boxes) : null);
+  const visible = [...entries.values()].filter((entry) => entry.group);
+  const drawn = visible.flatMap((entry) => entry.drawn);
+  const occluders = new Map(visible.flatMap((entry) => [...entry.occluders]));
+  const defs = svgNode('defs');
   if (occluders.size > 0) occlude(drawn, occluders, defs);
-  if (defs.children.length > 0) svgRoot.prepend(defs);
+  svgRoot.replaceChildren(...(defs.children.length > 0 ? [defs] : []), ...visible.map((entry) => entry.group));
 
-  const selection = createSelection(scene, svgRoot);
-  if (selection) svgRoot.append(selection);
+  sourceBounds.set(svgRoot, new Map(visible.flatMap((entry) => [...entry.bounds])));
+  const boxes = visible.map((entry) => entry.box).filter(Boolean);
+  drawings.set(svgRoot, boxes.length > 0 ? boxes.reduce(union) : null);
+  return { layers: scene.layers, entries, overlay: [] };
+};
+
+/**
+ * Rend la scène dans le `<svg>` du DOM.
+ *
+ * Ce nœud est à la fois le preview et la source de l'export : il n'y a qu'un
+ * seul moteur de rendu, donc rien à garder en phase entre l'écran et le
+ * fichier.
+ *
+ * Incrémental : un calque inchangé garde ses nœuds ; sans calque changé
+ * (sélection seule), seule la couche d'écran — sélection, repères, poignées —
+ * est refaite. Le survol, état d'écran lui aussi, est effacé à chaque rendu.
+ */
+export const render = (scene, svgRoot) => {
+  let state = renders.get(svgRoot);
+  if (state?.layers === scene.layers) {
+    for (const node of [...state.overlay, ...svgRoot.querySelectorAll('[data-hover]')]) node.remove();
+  } else {
+    state = drawScene(scene, svgRoot, state ?? { entries: new Map() });
+  }
   const layer = getActiveLayer(scene);
   const element = getActiveElement(scene);
-  const guides = createGuides(layer, layer?.elements.includes(element) ? element : null);
-  if (guides) svgRoot.append(guides);
-  const handles = createHandles(scene);
-  if (handles) svgRoot.append(handles);
+  state.overlay = [
+    createSelection(scene, svgRoot, state.entries),
+    createGuides(layer, layer?.elements.includes(element) ? element : null),
+    createHandles(scene),
+  ].filter(Boolean);
+  svgRoot.append(...state.overlay);
+  renders.set(svgRoot, state);
 };
 
 /**
@@ -508,8 +556,10 @@ export const projectedPath = (matrix, points, closed) => {
   return `M${(xy.length === 1 ? [xy[0], xy[0]] : xy).join(' L')}${closed ? ' Z' : ''}`;
 };
 
-/* Numéro des masques de contour double, remis à zéro à chaque rendu : un id
-   par nœud, même quand une copie est dessinée plusieurs fois (booléens). */
+/* Numéro des masques : un id par nœud, même quand une copie est dessinée
+   plusieurs fois (booléens). Jamais remis à zéro : un calque repris du rendu
+   précédent garde les siens, un calque refait ne doit pas les croiser.
+   ponytail: le compteur grandit sans fin — 2^53 masques avant d'y penser. */
 let outlineSerial = 0;
 export const maskId = (prefix) => `${prefix}-${outlineSerial++}`;
 
@@ -758,11 +808,13 @@ export const childBounds = (child) => {
   };
 };
 
-const union = (boxes) => ({
-  minX: Math.min(...boxes.map((box) => box.minX)),
-  minY: Math.min(...boxes.map((box) => box.minY)),
-  maxX: Math.max(...boxes.map((box) => box.maxX)),
-  maxY: Math.max(...boxes.map((box) => box.maxY)),
+/* Deux boîtes réunies : sans étalement, pour qu'une réduction sur des milliers
+   de copies ne dépasse pas la pile d'arguments. */
+const union = (a, b) => ({
+  minX: Math.min(a.minX, b.minX),
+  minY: Math.min(a.minY, b.minY),
+  maxX: Math.max(a.maxX, b.maxX),
+  maxY: Math.max(a.maxY, b.maxY),
 });
 
 /* ponytail: boîte alignée sur les axes, même pour une forme tournée ; un cadre
@@ -804,17 +856,14 @@ const exportFrame = (svgRoot) => {
   return { x, y, width: Math.max(1, Math.ceil(box.maxX) - x), height: Math.max(1, Math.ceil(box.maxY) - y) };
 };
 
-const createSelection = (scene, svgRoot) => {
-  const bounds = sourceBounds.get(svgRoot);
+const createSelection = (scene, svgRoot, entries) => {
   if (scene.activeElementId) {
-    const box = bounds?.get(scene.activeElementId);
+    const box = sourceBounds.get(svgRoot)?.get(scene.activeElementId);
     return box ? frame(box, 'selection') : null;
   }
   /* Calque sans forme sélectionnée : le cadre entoure toutes ses copies. */
-  const layer = getActiveLayer(scene);
-  if (!layer?.visible) return null;
-  const children = layerChildren(layer);
-  return children.length > 0 ? frame(union(children.map(childBounds)), 'layer') : null;
+  const box = entries.get(scene.activeLayerId)?.frame;
+  return box ? frame(box, 'layer') : null;
 };
 
 /** Retire le cadre de survol, où qu'il ait été posé, et rend la sélection. */

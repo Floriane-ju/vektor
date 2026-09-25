@@ -462,8 +462,8 @@ export const getActiveElement = (scene) =>
  * Le résultat est groupé par copie, ce qui fixe aussi l'ordre de dessin à
  * l'intérieur du calque.
  *
- * ponytail: pas de mémoïsation. Il n'y a pas de boucle de rendu — le renderer
- * n'est rappelé que sur notification du store. Mesurer avant d'en ajouter.
+ * Pas de mémoïsation ici : le renderer retient le dessin de chaque calque tant
+ * que sa référence ne change pas (`drawLayer`), ce qui suffit.
  */
 
 /**

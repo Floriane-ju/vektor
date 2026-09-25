@@ -18,11 +18,13 @@ it.skipIf(!process.env.BENCH)('banc : ruban de spirale lissée × axial 12', { t
     elements: [point],
   });
   const scene = { layers: [layer], activeLayerId: null, activeElementId: null };
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  /* Un `<svg>` neuf par tour : le même, le rendu incrémental reprendrait le calque. */
+  const stage = () => document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const svg = stage();
   render(scene, svg);
   const runs = 3;
   const start = performance.now();
-  for (let i = 0; i < runs; i++) render(scene, svg);
+  for (let i = 0; i < runs; i++) render(scene, stage());
   const ms = (performance.now() - start) / runs;
   const hash = createHash('sha1').update(svg.innerHTML).digest('hex').slice(0, 12);
   console.log(`render ${ms.toFixed(0)} ms — svg ${hash} (${svg.innerHTML.length} car.)`);
