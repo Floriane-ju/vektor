@@ -2,7 +2,7 @@
 {
   "id": "T-0093",
   "titre": "Loger une forme dans un point répété linéairement",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "modele",

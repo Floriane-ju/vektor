@@ -2,7 +2,7 @@
 {
   "id": "T-0092",
   "titre": "Parois 3D d'un tracé lissé en dents de scie",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "rendu",
