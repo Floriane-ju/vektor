@@ -198,6 +198,34 @@ describe('modificateurs', () => {
     expect(children[1].y).toBeCloseTo(15);
   });
 
+  /* Même courbe, mais parcourue à pas d'arc constant : longueur mesurée en
+     suivant la transformation à indice fractionnaire, comme le tracé lissé. */
+  it('spiral à espacement constant : copies équidistantes le long de la courbe', () => {
+    const options = { angleStep: 0.8, radiusStep: 40, evenSpacing: true };
+    const at = (i) => MODIFIERS.spiral({ x: 10, y: 0 }, i, 6, center, options);
+    const arc = (from) => {
+      let length = 0;
+      for (let s = 1; s <= 400; s += 1) {
+        const a = at(from + (s - 1) / 400);
+        const b = at(from + s / 400);
+        length += Math.hypot(b.x - a.x, b.y - a.y);
+      }
+      return length;
+    };
+    const first = arc(0);
+    for (const i of [1, 2, 3, 4]) expect(arc(i)).toBeCloseTo(first, 1);
+    /* Première copie identique à la spirale croissante. */
+    const growing = MODIFIERS.spiral({ x: 10, y: 0 }, 1, 6, center, { ...options, evenSpacing: false });
+    expect(at(1).x).toBeCloseTo(growing.x);
+    expect(at(1).y).toBeCloseTo(growing.y);
+    /* Sans croissance : un cercle, pas angulaire inchangé. */
+    const circle = MODIFIERS.spiral({ x: 10, y: 0 }, 3, 6, center, { angleStep: 0.5, radiusStep: 0, evenSpacing: true });
+    expect(circle.angle).toBeCloseTo(1.5);
+    /* Qui rétrécit : s'arrête au centre, jamais de valeur non finie. */
+    const shrink = copies('spiral', { x: 10, y: 0 }, 12, { angleStep: 0.4, radiusStep: -30, evenSpacing: true });
+    expect(shrink.every(({ x, y, angle: a }) => [x, y, a].every(Number.isFinite))).toBe(true);
+  });
+
   /* Une similitude, pas un étirement : deux formes du calque gardent leurs
      proportions d'une copie à l'autre, l'écart suivant le même facteur. */
   it('spiral grandit le motif sans le déformer', () => {
@@ -2401,9 +2429,18 @@ describe('formes nommables', () => {
   });
 
   it('le format est bumpé, l’ancien reste lisible', () => {
-    expect(FORMAT).toBe('vektor/scene@28');
+    expect(FORMAT).toBe('vektor/scene@29');
     const raw = JSON.parse(serialize(withShapes()));
-    raw.format = 'vektor/scene@27';
+    raw.format = 'vektor/scene@28';
     expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);
+  });
+
+  it('l’espacement constant d’une spirale se relit ; tout autre valeur est ignorée', () => {
+    const scene = withShapes();
+    const layer = { ...scene.layers[0], modifiers: [createModifier({ type: 'spiral', evenSpacing: true })] };
+    const raw = JSON.parse(serialize({ ...scene, layers: [layer] }));
+    expect(deserialize(JSON.stringify(raw)).layers[0].modifiers[0].evenSpacing).toBe(true);
+    raw.layers[0].modifiers[0].evenSpacing = 'oui';
+    expect(deserialize(JSON.stringify(raw)).layers[0].modifiers[0]).not.toHaveProperty('evenSpacing');
   });
 });

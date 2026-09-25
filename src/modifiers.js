@@ -115,6 +115,30 @@ const axial = (point, i, n, center) => {
   return { ...rotateAround(point, center, angle), angle, flip: false };
 };
 
+/* Spirale croissante : pas angulaire et facteur constants, l'écart entre
+   copies grandit avec le rayon. */
+const growingTurn = (i, angleStep, factor) => ({
+  angle: i * angleStep,
+  growth: Math.min(MAX_GROWTH, factor ** i),
+});
+
+/* Plus petit facteur d'une spirale qui rétrécit : au-delà du centre, les
+   copies s'y empilent (angle et coordonnées restent finis). */
+const MIN_GROWTH = 1e-6;
+
+/**
+ * Spirale à espacement constant : même spirale logarithmique, parcourue à
+ * pas d'arc constant. Sur `r = r0·e^(kθ)`, l'arc depuis le centre vaut
+ * `r·√(1+k²)/k` : arcs égaux ⇔ rayons en progression arithmétique. Le facteur
+ * devient `1 + i·(factor − 1)` (la copie 1 ne bouge pas), l'angle celui où la
+ * spirale atteint ce rayon. Sans croissance, un cercle : l'angle seul avance.
+ */
+const evenTurn = (i, angleStep, factor) => {
+  if (factor === 1) return { angle: i * angleStep, growth: 1 };
+  const growth = Math.min(MAX_GROWTH, Math.max(MIN_GROWTH, 1 + i * (factor - 1)));
+  return { angle: (angleStep * Math.log(growth)) / Math.log(factor), growth };
+};
+
 /**
  * Spirale : la copie `i` est le calque tourné de `i * angleStep` autour de
  * `center`, puis dilaté de `(1 + radiusStep/100)^i` depuis ce même centre.
@@ -125,10 +149,9 @@ const axial = (point, i, n, center) => {
  * (la version précédente) poussait chaque forme dans sa propre direction et
  * disloquait le groupe copie après copie.
  */
-const spiral = (point, i, n, center, { angleStep = 0.4, radiusStep = 12 } = {}) => {
-  const angle = i * angleStep;
+const spiral = (point, i, n, center, { angleStep = 0.4, radiusStep = 12, evenSpacing = false } = {}) => {
+  const { angle, growth } = (evenSpacing ? evenTurn : growingTurn)(i, angleStep, 1 + clampGrowth(radiusStep) / 100);
   const rotated = rotateAround(point, center, angle);
-  const growth = Math.min(MAX_GROWTH, (1 + clampGrowth(radiusStep) / 100) ** i);
   return {
     x: center.x + (rotated.x - center.x) * growth,
     y: center.y + (rotated.y - center.y) * growth,

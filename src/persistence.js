@@ -37,7 +37,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@28';
+export const FORMAT = 'vektor/scene@29';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -83,7 +83,9 @@ export const FORMAT = 'vektor/scene@28';
    - `@1` à `@26` n'avaient ni courbe aléatoire, ni étirement, ni décalage des
      tirets : rien à convertir. Le bump empêche une version antérieure de
      relire un bruit comme une rampe linéaire ;
-   - `@1` à `@27` ne nommaient pas les formes : libellé par défaut, même dessin. */
+   - `@1` à `@27` ne nommaient pas les formes : libellé par défaut, même dessin ;
+   - `@1` à `@28` n'espaçaient pas les spirales à pas d'arc constant : spirale
+     croissante, même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -113,6 +115,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@25',
   'vektor/scene@26',
   'vektor/scene@27',
+  'vektor/scene@28',
   FORMAT,
 ]);
 
@@ -331,6 +334,7 @@ const readModifier = (raw, legacy, linkable = false) =>
     radiusStep: clampGrowth(num(raw?.radiusStep, 12)),
     ...readPivot(raw?.center),
     ...(Number.isFinite(raw?.axis) ? { axis: clampAxis(raw.axis) } : {}),
+    ...(raw?.evenSpacing === true ? { evenSpacing: true } : {}),
     ...(linkable && raw?.linear === true ? { linear: true } : {}),
     ...(linkable && raw?.smooth === true ? { smooth: true } : {}),
   });

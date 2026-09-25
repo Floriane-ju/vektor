@@ -43,7 +43,9 @@ const stageFlags = (bindStage) => {
   const linearField = switchField('Activer les répétitions linéaires', flag((modifier) => modifier.linear === true, 'linear'));
   /* Le tracé relié passe en courbe par les copies au lieu de les joindre en ligne brisée. */
   const smoothField = switchField('Lisser', flag((modifier) => modifier.smooth === true, 'smooth'));
-  return { orientField, linearField, smoothField };
+  /* Spirale : copies à égale distance le long de la courbe, au lieu d'un écart qui grandit avec le rayon. */
+  const evenField = switchField('Espacement constant', flag((modifier) => modifier.evenSpacing === true, 'evenSpacing'));
+  return { orientField, linearField, smoothField, evenField };
 };
 
 /* Réglages chiffrés d'un étage : pas, spirale, axe de miroir. */
@@ -123,6 +125,7 @@ const showStage = (parts, modifier, owner, forElement) => {
   parts.countField.hidden = Object.hasOwn(FIXED_COPIES, modifier.type);
   parts.stepRow.hidden = modifier.type !== 'step';
   parts.spiralRow.hidden = modifier.type !== 'spiral';
+  parts.evenField.hidden = parts.spiralRow.hidden;
   parts.axisField.hidden = !Object.hasOwn(MIRROR_AXIS, modifier.type);
   /* Un pas ne tourne rien, un point tourné reste identique : rien à orienter. */
   parts.orientField.hidden = !ORIENTING.has(modifier.type) || owner.type === 'point';
@@ -161,6 +164,7 @@ const stageBlock = ({ store, current, forElement }, index, stackSize) => {
     countField,
     parts.stepRow,
     parts.spiralRow,
+    parts.evenField,
     parts.axisField,
     parts.orientField,
     parts.linearField,
