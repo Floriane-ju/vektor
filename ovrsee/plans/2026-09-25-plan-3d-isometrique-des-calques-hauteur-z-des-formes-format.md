@@ -4,7 +4,44 @@
   "title": "Plan 3D isométrique des calques + hauteur Z des formes (format @23)",
   "opened": "2026-09-25",
   "closed": null,
-  "commits": []
+  "commits": [
+    {
+      "sha": "3bf8ed7",
+      "date": "2026-09-25",
+      "files": [
+        "CLAUDE.md",
+        "src/persistence.js",
+        "src/plane.js",
+        "src/renderer-svg.js",
+        "src/scene.js",
+        "src/ui/icons.js",
+        "src/ui/layer-panel.js",
+        "src/ui/property-panel.js",
+        "src/ui/toolbar.js",
+        "style.css",
+        "test/core.test.js",
+        "test/render.test.js"
+      ]
+    },
+    {
+      "sha": "f2789d3",
+      "date": "2026-09-25",
+      "files": [
+        "CLAUDE.md",
+        "src/persistence.js",
+        "src/plane.js",
+        "src/renderer-plane.js",
+        "src/renderer-svg.js",
+        "src/scene.js",
+        "src/ui/inside-field.js",
+        "src/ui/property-panel.js",
+        "src/ui/shape-list.js",
+        "style.css",
+        "test/core.test.js",
+        "test/render.test.js"
+      ]
+    }
+  ]
 }
 ---
 

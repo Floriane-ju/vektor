@@ -2,7 +2,7 @@
 {
   "id": "T-0086",
   "titre": "Plan 3D isométrique des calques et hauteur Z des formes",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "l",
   "tags": [

@@ -1,9 +1,9 @@
 ---
 {
-  "status": "open",
+  "status": "closed",
   "title": "Tickets issus du tour de code (2026-09-24)",
   "opened": "2026-09-24",
-  "closed": null,
+  "closed": "2026-09-24",
   "commits": [
     {
       "sha": "c789126",

@@ -2,9 +2,12 @@
 {
   "id": "T-0085",
   "titre": "Contour double (« outlined ») avec séparateur",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["rendu", "ui"],
+  "tags": [
+    "rendu",
+    "ui"
+  ],
   "cree": "2026-09-25",
   "maj": "2026-09-25",
   "plan": null
