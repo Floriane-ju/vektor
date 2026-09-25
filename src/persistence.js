@@ -27,6 +27,7 @@ import {
   isHexColor,
   RANGE_BOUNDS,
   reserveIds,
+  MAX_NAME_LENGTH,
   SHAPES,
   STAGE,
 } from './scene.js';
@@ -36,7 +37,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@27';
+export const FORMAT = 'vektor/scene@28';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -81,7 +82,8 @@ export const FORMAT = 'vektor/scene@27';
    - `@1` à `@25` ne lissaient pas les tracés reliés : lignes brisées, même dessin ;
    - `@1` à `@26` n'avaient ni courbe aléatoire, ni étirement, ni décalage des
      tirets : rien à convertir. Le bump empêche une version antérieure de
-     relire un bruit comme une rampe linéaire. */
+     relire un bruit comme une rampe linéaire ;
+   - `@1` à `@27` ne nommaient pas les formes : libellé par défaut, même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -110,6 +112,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@24',
   'vektor/scene@25',
   'vektor/scene@26',
+  'vektor/scene@27',
   FORMAT,
 ]);
 
@@ -256,6 +259,12 @@ const readBooleans = (raw) =>
     .filter((step) => typeof step?.with === 'string')
     .map((step) => ({ with: step.with, op: clampBooleanOp(step.op) }));
 
+/* Nom propre d'une forme (depuis `@28`) : une chaîne non vide, bornée. */
+const readName = (raw) => {
+  const name = typeof raw === 'string' ? raw.trim().slice(0, MAX_NAME_LENGTH) : '';
+  return name ? { name } : {};
+};
+
 /* `style` = couleur et épaisseur du calque, pour les formats qui les y rangeaient. */
 const readElement = (input, style) => {
   if (input == null || typeof input !== 'object') fail('Une forme doit être un objet.');
@@ -267,6 +276,7 @@ const readElement = (input, style) => {
   const legacyRadius = num(raw.radius, undefined);
   return createElement(raw.type, num(raw.x, 0), num(raw.y, 0), {
     ...(typeof raw.id === 'string' && raw.id !== '' ? { id: raw.id } : {}),
+    ...readName(raw.name),
     /* Ramenée à un tour : au-delà, le même dessin sous un nombre sans borne. */
     rotation: num(raw.rotation, 0) % 360,
     strokeWidth: raw.strokeWidth === undefined ? style.strokeWidth : Math.max(0, num(raw.strokeWidth, style.strokeWidth)),

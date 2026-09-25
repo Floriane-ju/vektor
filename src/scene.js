@@ -705,6 +705,24 @@ export const toggleVisibility = (scene, id) =>
 export const renameLayer = (scene, id, name) =>
   mapLayer(scene, id, (layer) => ({ ...layer, name }));
 
+/** Au-delà, un nom collé déborde de toute ligne de l'arbre : il est coupé. */
+export const MAX_NAME_LENGTH = 80;
+
+/* Nom propre d'une forme, borné. Vide, elle le perd et reprend son libellé par
+   défaut — son type et son rang (`shapeName`). */
+export const renameElement = (scene, elementId, name) => {
+  const next = String(name ?? '').trim().slice(0, MAX_NAME_LENGTH);
+  const element = scene.layers.flatMap((layer) => layer.elements).find((candidate) => candidate.id === elementId);
+  if (!element || (element.name ?? '') === next) return scene;
+  return mapElement(scene, elementId, (elements) =>
+    elements.map((candidate) => {
+      if (candidate.id !== elementId) return candidate;
+      const { name: _previous, ...rest } = candidate;
+      return next ? { ...rest, name: next } : rest;
+    }),
+  );
+};
+
 /** Pivot par défaut des modificateurs du calque. Une coordonnée non finie est ignorée. */
 export const setLayerCenter = (scene, id, { x, y }) =>
   Number.isFinite(x) && Number.isFinite(y)

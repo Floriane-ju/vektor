@@ -2359,3 +2359,51 @@ describe('sheet : silhouette', () => {
     expect(Math.min(...ys)).toBeCloseTo(8);
   });
 });
+
+import { MAX_NAME_LENGTH, renameElement } from '../src/scene.js';
+import { shapeName } from '../src/ui/list.js';
+
+describe('formes nommables', () => {
+  const withShapes = () => {
+    const next = createScene();
+    const layerId = next.activeLayerId;
+    return addElement(addElement(next, layerId, 'ellipse', 0, 0), layerId, 'rect', 10, 10);
+  };
+
+
+  it('garde son nom quand on la réordonne ; sans nom, libellé par rang', () => {
+    const base = withShapes();
+    const { id } = base.layers[0].elements[0];
+    const named = renameElement(base, id, '  Soleil ');
+    expect(named.layers[0].elements[0].name).toBe('Soleil');
+    const layer = moveElement(named, id, 1).layers[0];
+    expect(layer.elements.map((element) => shapeName(layer, element, SHAPES))).toEqual([`${SHAPES.rect.label} 1`, 'Soleil']);
+  });
+
+  it('un nom vide rend le libellé par défaut, un nom inchangé ne fait rien', () => {
+    const base = withShapes();
+    const { id } = base.layers[0].elements[0];
+    const named = renameElement(base, id, 'Soleil');
+    expect(renameElement(named, id, 'Soleil')).toBe(named);
+    expect(renameElement(named, id, '   ').layers[0].elements[0]).not.toHaveProperty('name');
+    expect(renameElement(base, id, '')).toBe(base);
+  });
+
+  it('se sérialise, borné ; un nom invalide est ignoré à la lecture', () => {
+    const base = withShapes();
+    const named = renameElement(base, base.layers[0].elements[0].id, 'Soleil');
+    expect(deserialize(serialize(named)).layers[0].elements[0].name).toBe('Soleil');
+    const raw = JSON.parse(serialize(named));
+    raw.layers[0].elements[0].name = 42;
+    expect(deserialize(JSON.stringify(raw)).layers[0].elements[0]).not.toHaveProperty('name');
+    raw.layers[0].elements[0].name = 'x'.repeat(500);
+    expect(deserialize(JSON.stringify(raw)).layers[0].elements[0].name).toHaveLength(MAX_NAME_LENGTH);
+  });
+
+  it('le format est bumpé, l’ancien reste lisible', () => {
+    expect(FORMAT).toBe('vektor/scene@28');
+    const raw = JSON.parse(serialize(withShapes()));
+    raw.format = 'vektor/scene@27';
+    expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);
+  });
+});

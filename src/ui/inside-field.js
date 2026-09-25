@@ -28,7 +28,9 @@ export const insideField = ({ store }) => {
     if (!layer || !element) return;
     root.hidden = !activePlane(layer) && !layer.elements.some((candidate) => candidate.inside);
     const hosts = insideHosts(layer, element.id);
-    const next = JSON.stringify([element.id, element.inside, hosts.map((host) => [host.id, host.type])]);
+    /* Les libellés suivent le rang et le nom des formes : les relire tous. */
+    const labels = layer.elements.map((candidate) => shapeName(layer, candidate, SHAPES));
+    const next = JSON.stringify([element.id, element.inside, labels, hosts.map((host) => host.id)]);
     if (next === last) return;
     last = next;
     select.replaceChildren(

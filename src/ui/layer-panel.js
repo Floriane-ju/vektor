@@ -1,4 +1,4 @@
-import { dragHandle, dropIndex, iconButton, rebuildWithFocus, rowKeys, sortableRow, whenChanged } from './list.js';
+import { dragHandle, dropIndex, iconButton, inlineRename, rebuildWithFocus, rowKeys, sortableRow, whenChanged } from './list.js';
 import { icon } from './icons.js';
 import {
   addLayer,
@@ -91,13 +91,13 @@ const layerName = (store, layer, isActive) => {
   name.type = 'button';
   name.className = 'layer-name';
   name.textContent = layer.name;
-  name.title = 'Double-clic pour renommer';
   name.dataset.focusKey = `name-${layer.id}`;
   name.setAttribute('aria-pressed', String(isActive));
   name.addEventListener('click', () => selectLayer(store, layer.id));
-  name.addEventListener('dblclick', () => {
-    const next = prompt('Nom du calque', layer.name);
-    if (next?.trim()) store.apply(renameLayer, layer.id, next.trim());
+  /* Un calque a toujours un nom : vider le champ annule. */
+  inlineRename(name, {
+    label: `Nom de ${layer.name}`,
+    rename: (text) => text && store.apply(renameLayer, layer.id, text),
   });
   return name;
 };

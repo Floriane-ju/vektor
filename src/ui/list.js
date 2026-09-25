@@ -1,4 +1,5 @@
 import { icon } from './icons.js';
+import { MAX_NAME_LENGTH } from '../scene.js';
 
 /**
  * Briques communes aux deux listes reconstruites de l'interface — le panneau
@@ -84,9 +85,61 @@ export const whenChanged = (signature, render) => {
   };
 };
 
-/** Nom affiché d'une forme : son type et son rang dans le calque, compté depuis le fond. */
+/** Nom affiché d'une forme : le sien, sinon son type et son rang dans le calque, compté depuis le fond. */
 export const shapeName = (layer, element, labels) =>
-  `${labels[element.type].label} ${layer.elements.indexOf(element) + 1}`;
+  element.name ?? `${labels[element.type].label} ${layer.elements.indexOf(element) + 1}`;
+
+/**
+ * Renommage en place du nom d'une ligne d'arbre : double-clic ou F2
+ * remplacent le bouton par un champ ; Entrée ou quitter le champ valident,
+ * Échap annule. `rename(text)` reçoit le texte saisi, rien si inchangé.
+ * Le champ porte la clé de focus du nom : après la reconstruction qui suit,
+ * le focus revient sur la ligne.
+ */
+export const inlineRename = (name, { label, rename }) => {
+  const edit = () => {
+    const current = name.textContent;
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.className = 'layer-name-input';
+    field.value = current;
+    field.maxLength = MAX_NAME_LENGTH;
+    field.spellcheck = false;
+    field.setAttribute('aria-label', label);
+    field.dataset.focusKey = name.dataset.focusKey;
+    /* Une ligne glissable volerait la sélection du texte à la souris. */
+    const row = name.closest('[draggable="true"]');
+    if (row) row.draggable = false;
+    let done = false;
+    const finish = (commit) => {
+      if (done) return;
+      done = true;
+      if (row) row.draggable = true;
+      field.replaceWith(name);
+      name.focus();
+      if (commit && field.value.trim() !== current) rename(field.value.trim());
+    };
+    /* Les touches restent au champ : ni raccourci global, ni navigation de l'arbre. */
+    field.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Enter') finish(true);
+      else if (event.key === 'Escape') finish(false);
+      else return;
+      event.preventDefault();
+    });
+    field.addEventListener('blur', () => finish(true));
+    name.replaceWith(field);
+    field.focus();
+    field.select();
+  };
+  name.title = 'Double-clic ou F2 pour renommer';
+  name.addEventListener('dblclick', edit);
+  name.addEventListener('keydown', (event) => {
+    if (event.key !== 'F2') return;
+    event.preventDefault();
+    edit();
+  });
+};
 
 /* Ligne en cours de glisser-déposer, partagée entre l'arbre des calques et la
    liste des formes : pendant `dragover`, le navigateur cache `dataTransfer`. */

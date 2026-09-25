@@ -56,7 +56,7 @@ const signature = (layer, element) =>
   JSON.stringify([
     element.id,
     element.booleans,
-    layer.elements.map((candidate) => [candidate.id, candidate.type, candidate.booleans]),
+    layer.elements.map((candidate) => [candidate.id, candidate.type, candidate.name, candidate.booleans]),
   ]);
 
 /**

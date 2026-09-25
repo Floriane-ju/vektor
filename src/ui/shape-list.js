@@ -6,11 +6,22 @@ import {
   moveElement,
   placeElement,
   removeElement,
+  renameElement,
   setActiveElement,
   SHAPES,
 } from '../scene.js';
 import { clearHover, shapePreview, showHover } from '../renderer-svg.js';
-import { dragHandle, dropIndex, iconButton, rebuildWithFocus, rowKeys, shapeName, sortableRow, whenChanged } from './list.js';
+import {
+  dragHandle,
+  dropIndex,
+  iconButton,
+  inlineRename,
+  rebuildWithFocus,
+  rowKeys,
+  shapeName,
+  sortableRow,
+  whenChanged,
+} from './list.js';
 import { icon } from './icons.js';
 import { DUPLICATE_OFFSET } from './shortcuts.js';
 
@@ -103,6 +114,11 @@ const shapeLine = ({ store, remove }, layer, element, isActive) => {
   name.dataset.focusKey = `name-${element.id}`;
   name.setAttribute('aria-pressed', String(isActive));
   name.addEventListener('click', () => store.apply(setActiveElement, element.id));
+  /* Vider le champ rend le libellé par défaut, qui suit le rang de la forme. */
+  inlineRename(name, {
+    label: `Nom de ${name.textContent}`,
+    rename: (text) => store.apply(renameElement, element.id, text),
+  });
 
   const actions = document.createElement('span');
   actions.className = 'row-actions';
@@ -184,7 +200,7 @@ const signature = (scene) => {
   return JSON.stringify([
     layer?.id ?? null,
     scene.activeElementId,
-    layer?.elements.map((element) => [element.id, element.type, element.booleans.map((step) => step.with), element.inside]) ?? [],
+    layer?.elements.map((element) => [element.id, element.type, element.name, element.booleans.map((step) => step.with), element.inside]) ?? [],
   ]);
 };
 

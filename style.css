@@ -302,6 +302,13 @@ input[type="range"] {
   color: inherit;
   font-weight: 600;
 }
+/* Renommage en place (`inlineRename`) : le champ prend la place du nom. */
+input.layer-name-input {
+  flex-grow: 1;
+  height: 28px;
+  padding: 0 6px;
+  font-weight: 600;
+}
 
 /* Formes du calque déplié. */
 #shape-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px 32px; }
