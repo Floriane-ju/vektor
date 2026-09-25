@@ -2016,11 +2016,61 @@ describe('plan 3D et contour double ouvert', () => {
     const svg = stage();
     render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
     const group = svg.querySelector(`[data-element-id="${line.id}"]`);
-    const cover = group.querySelector(':scope > mask');
+    const cover = group.querySelector(':scope > mask:not([data-walls])');
     expect(cover).not.toBeNull();
     const volume = group.querySelector(`:scope > g[mask="url(#${cover.id})"]`);
     /* Plus de fond évidé dessiné en entier : seulement le fond visible et les arêtes. */
     expect(volume.querySelector('mask')).toBeNull();
+  });
+
+  it('se cache elle-même : parois peintes de la plus loin à la plus proche', () => {
+    /* Arc ouvert : ses spires avant passent devant ses spires arrière. */
+    const arc = createElement('arc', 450, 450, { rx: 100, ry: 100, start: 0, end: 300, closure: 'open', strokeWidth: 4, gap: 10, outlined: true, height: 60 });
+    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [arc] });
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const walls = svg.querySelector(`[data-element-id="${arc.id}"] mask[data-walls]`);
+    expect(walls).not.toBeNull();
+    const quads = [...walls.querySelectorAll('path[fill="#000"]')].slice(0, -1);
+    expect(quads.length).toBeGreaterThan(10);
+    /* Pente vers le bas de l'écran (cap 0) : le haut est au fond, peint d'abord. */
+    const depth = (quad) => {
+      const ys = [...quad.getAttribute('d').matchAll(/,(-?[\d.]+)/g)].map((m) => Number(m[1]));
+      return ys.reduce((sum, y) => sum + y, 0) / ys.length;
+    };
+    const depths = quads.map(depth);
+    expect(depths).toEqual([...depths].sort((a, b) => a - b));
+    /* Le masque découpe un aplat de la couleur du trait. */
+    expect(svg.querySelector(`rect[mask="url(#${walls.id})"]`).getAttribute('fill')).toBe(arc.stroke);
+  });
+
+  it('une étoile ou un tracé fermé creux se cachent eux-mêmes, un rectangle garde la moitié proche du fond', () => {
+    const star = createElement('polygon', 450, 450, { rx: 100, ry: 100, sides: 5, inner: 40, height: 60 });
+    const free = createElement('polyline', 450, 450, {
+      points: [{ x: -80, y: -60 }, { x: 80, y: -60 }, { x: 80, y: 60 }, { x: 0, y: 0 }, { x: -80, y: 60 }],
+      closed: true,
+      height: 60,
+    });
+    const box = createElement('rect', 450, 450, { rx: 50, ry: 50, height: 60 });
+    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [star, free, box] });
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const walls = (element) => svg.querySelector(`[data-element-id="${element.id}"] mask[data-walls]`);
+    expect(walls(star)).not.toBeNull();
+    expect(walls(free)).not.toBeNull();
+    expect(walls(box)).toBeNull();
+  });
+
+  it('un tracé ouvert simple extrudé se cache aussi lui-même', () => {
+    const line = createElement('polyline', 450, 450, {
+      points: [{ x: -100, y: 0 }, { x: 0, y: 60 }, { x: 100, y: 0 }, { x: 0, y: -60 }, { x: -60, y: 0 }],
+      closed: false,
+      height: 60,
+    });
+    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [line] });
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    expect(svg.querySelector(`[data-element-id="${line.id}"] mask[data-walls]`)).not.toBeNull();
   });
 });
 

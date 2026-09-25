@@ -113,6 +113,63 @@ const openBand = (child, { closed, corners }, flat, width) => {
   };
 };
 
+/**
+ * Parois d'un volume qui peut se cacher lui-même (ruban, tracé ouvert, étoile,
+ * tracé fermé creux). Peintes dans un masque de la plus loin à la plus proche :
+ * chaque paroi efface (noir) ce qu'elle couvre puis trace ses arêtes (blanc) ;
+ * la face avant efface en dernier, son contour se dessine par-dessus. Le
+ * masque découpe un aplat de la couleur du trait. `base` = contour du bas à
+ * l'écran, `edges` = sommets dont l'arête de flanc se voit.
+ *
+ * ponytail: ordre du peintre par milieu de paroi — juste pour des parois
+ * courtes (tracé échantillonné) ; une longue paroi en biais peut mal se
+ * trier. Arêtes du fond en segments à bouts ronds, sans tirets.
+ */
+const createWalls = (child, { base, closed, edges, v, up, width }) => {
+  const n = base.length;
+  const [backShift, frontShift] = up ? [{ x: 0, y: 0 }, v] : [v, { x: 0, y: 0 }];
+  const top = moved(base, v);
+  /* Le plan descend vers le bas de l'écran : plus un point monte le long de
+     l'extrusion (hauteur positive), plus il est loin. */
+  const rise = up ? v : { x: -v.x, y: -v.y };
+  const far = (i, j) => ((base[i].x + base[j].x) * rise.x + (base[i].y + base[j].y) * rise.y) / 2;
+  const line = (d) => svgNode('path', { d, fill: 'none', stroke: '#fff', 'stroke-width': round(width), 'stroke-linecap': 'round' });
+  const shown = new Set(edges);
+  const walls = Array.from({ length: closed ? n : n - 1 }, (_, i) => [i, (i + 1) % n])
+    .sort(([a, b], [c, d]) => far(c, d) - far(a, b))
+    .flatMap(([i, j]) => [
+      /* Liseré noir : deux parois voisines se chevauchent, sans couture d'anticrénelage. */
+      svgNode('path', { d: screenPath([base[i], base[j], top[j], top[i]], true), fill: '#000', stroke: '#000', 'stroke-width': 1 }),
+      line(
+        [
+          screenPath(moved([base[i], base[j]], backShift), false),
+          ...[i, j].filter((k) => shown.has(k)).map((k) => screenPath([base[k], top[k]], false)),
+        ].join(' '),
+      ),
+    ]);
+  const mask = svgNode('mask', { id: maskId(`walls-${child.id}`), maskUnits: 'userSpaceOnUse', ...MASK_REGION });
+  mask.dataset.walls = '';
+  mask.append(
+    svgNode('rect', { ...MASK_REGION, fill: '#000' }),
+    line(screenPath(moved(base, backShift), closed)),
+    ...walls,
+    ...(closed ? [svgNode('path', { d: screenPath(moved(base, frontShift), true), fill: '#000', stroke: 'none' })] : []),
+  );
+  const paint = svgNode('rect', { ...MASK_REGION, fill: child.stroke, opacity: round(child.opacity ?? 1), mask: `url(#${mask.id})` });
+  return [mask, paint];
+};
+
+/* Contour fermé sans creux : tous ses virages tournent du même côté. */
+const convex = (points) => {
+  const n = points.length;
+  const turns = points.map((p, i) => {
+    const [q, r] = [points[(i + 1) % n], points[(i + 2) % n]];
+    const cross = (q.x - p.x) * (r.y - q.y) - (q.y - p.y) * (r.x - q.x);
+    return Math.abs(cross) < 1e-9 ? 0 : Math.sign(cross);
+  });
+  return !(turns.includes(1) && turns.includes(-1));
+};
+
 const createExtrusion = (child, v) => {
   const up = child.height > 0;
   const lifted = { ...child, matrix: shifted(child.matrix, v) };
@@ -225,6 +282,13 @@ const createExtrusion = (child, v) => {
     hole.setAttribute('mask', `url(#${opening.id})`);
     /* Hors du volume : le masque de la face avant cacherait l'ouverture. */
     group.append(opening, hole);
+  } else if (band || (!closed && !dot) || (closed && !convex(base))) {
+    /* Ruban, tracé ouvert, étoile, tracé fermé creux : ses parois proches
+       cachent les lointaines, ce que la moitié proche du fond ignore. */
+    const edges = [...new Set([...silhouette(base, closed, v), ...corners])];
+    const [mask, paint] = createWalls(child, { base, closed, edges, v, up, width });
+    group.append(mask);
+    volume.append(paint);
   } else if (closed) {
     volume.append(...[stroked(chain(base, 1), true), stroked(sides(base, 1), false, 'round')].filter(Boolean));
   } else {
