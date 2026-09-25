@@ -271,7 +271,7 @@ export const createModifier = (overrides = {}) => ({
  * 1728 copies, chacune répétant toutes les formes du calque. Au-delà, le rendu
  * du calque est suspendu plutôt que tenté — l'onglet se figerait.
  */
-export const MAX_COPIES = 2000;
+export const MAX_COPIES = 10000;
 
 /** Nombre de copies de la pile, sans les énumérer : se lit avant de décider de rendre. */
 export const copyCount = (modifiers) =>

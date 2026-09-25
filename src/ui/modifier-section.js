@@ -29,7 +29,7 @@ import {
 } from './fields.js';
 
 /* Bornes du curseur de copies. Le champ numérique voisin accepte au-delà. */
-const COUNT_SLIDER = { min: '1', max: '64', step: '1' };
+const COUNT_SLIDER = { min: '1', max: '256', step: '1' };
 
 const plural = (total) => `${total} copie${total > 1 ? 's' : ''}`;
 

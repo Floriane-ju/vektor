@@ -1149,7 +1149,7 @@ describe('accessibilité au clavier', () => {
     expect(total.hidden).toBe(false);
     expect(total.textContent).toBe('36 copies');
 
-    store.apply(updateModifier, layer.id, 0, { n: 1000 });
+    store.apply(updateModifier, layer.id, 0, { n: 2000 });
     expect(total.dataset.tone).toBe('error');
     expect(total.textContent).toMatch(/suspendu/);
   });

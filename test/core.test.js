@@ -2397,7 +2397,7 @@ describe('répétitions et itérations de la forme', () => {
   });
 
   it('suspend le calque sur le total des copies', () => {
-    const big = createModifier({ n: 50 });
+    const big = createModifier({ n: 150 });
     const layer = createLayer({
       modifiers: [big],
       elements: [createElement('ellipse', 0, 0, { modifiers: [big] })],
