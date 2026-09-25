@@ -1,4 +1,4 @@
-import { applyStack, clampAxis, copyCount, createModifier, effectiveCount, MAX_COPIES, stackCopies } from './modifiers.js';
+import { applyStack, clampAxis, clampGrowth, copyCount, createModifier, effectiveCount, MAX_COPIES, stackCopies } from './modifiers.js';
 import { clampCount, ramp, stackValues } from './interpolate.js';
 
 export const STAGE = { width: 900, height: 900 };
@@ -1130,6 +1130,7 @@ export const updateModifier = (scene, id, index, patch) =>
         n: clampCount(modifier.n),
         ...(center ? { center } : {}),
         ...(keepAxis ? { axis: clampAxis(axis) } : {}),
+        ...('radiusStep' in modifier ? { radiusStep: clampGrowth(modifier.radiusStep) } : {}),
       };
     }),
   }));
@@ -1178,6 +1179,8 @@ export const updateInterpolation = (scene, ownerId, id, patch) =>
 export const updateInterpolationRange = (scene, ownerId, id, index, value) =>
   mapInterpolation(scene, ownerId, id, (interpolation) => {
     const range = [...interpolation.range];
-    range[index] = value;
+    /* Mêmes bornes que l'import : la valeur saisie survit au rechargement. */
+    const { min, max, color } = RANGE_BOUNDS[interpolation.property];
+    range[index] = color ? value : Math.min(max, Math.max(min, value));
     return { ...interpolation, range };
   });

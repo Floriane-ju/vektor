@@ -69,6 +69,8 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     { event = 'input', parse = Number, subject = 'element', into = controls } = {},
   ) => {
     node.addEventListener(event, () => {
+      /* Champ vidé pour retaper : rien n'est écrit, `Number('')` vaudrait 0. */
+      if (node.type === 'number' && node.value === '') return;
       const scene = store.get();
       const target = subject === 'element' ? getActiveElement(scene) : getActiveLayer(scene);
       if (target) write(target, parse(node.value));

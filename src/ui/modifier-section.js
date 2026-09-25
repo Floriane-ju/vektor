@@ -38,6 +38,8 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
      `{ layer, owner }`. */
   const bind = (node, read, write, { event = 'input', parse = Number, into }) => {
     node.addEventListener(event, () => {
+      /* Champ vidé pour retaper : rien n'est écrit, `Number('')` vaudrait 0. */
+      if (node.type === 'number' && node.value === '') return;
       const target = current();
       if (target) write(target, parse(node.value));
     });

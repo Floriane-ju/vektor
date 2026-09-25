@@ -181,6 +181,13 @@ describe('modificateurs', () => {
     }
   });
 
+  it('spiral : croissance bornée, jamais de coordonnée non finie', () => {
+    const far = copies('spiral', { x: 10, y: 0 }, MAX_COPIES, { angleStep: 0.1, radiusStep: 1e9 });
+    expect(far.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
+    const shrink = copies('spiral', { x: 10, y: 0 }, 3, { angleStep: 0, radiusStep: -500 });
+    expect(shrink.every(({ x }) => x > 0)).toBe(true);
+  });
+
   it('spiral tourne et dilate d’un facteur constant', () => {
     const children = copies('spiral', { x: 10, y: 0 }, 4, {
       angleStep: Math.PI / 2,
@@ -519,6 +526,15 @@ describe('pile d’interpolations', () => {
     expect(bindings(removeModifier(start, layerId(start), 0))).toEqual([1, null]);
   });
 
+  it('borne la plage saisie comme l’import : même valeur après rechargement', () => {
+    const start = scene();
+    const id = start.layers[0].interpolations[0].id;
+    const retyped = updateInterpolation(start, layerId(start), id, { property: 'scale' });
+    const typed = updateInterpolationRange(retyped, layerId(retyped), id, 0, 9.99);
+    expect(typed.layers[0].interpolations[0].range[0]).toBe(RANGE_BOUNDS.scale.max);
+    expect(deserialize(serialize(typed)).layers[0].interpolations[0].range).toEqual(typed.layers[0].interpolations[0].range);
+  });
+
   it('changer de propriété repart de la plage par défaut de la nouvelle', () => {
     const start = scene();
     const id = start.layers[0].interpolations[0].id;
@@ -694,6 +710,21 @@ describe('persistance', () => {
       activeElementId: layer.elements[1].id,
     };
     expect(deserialize(serialize(scene))).toEqual(scene);
+  });
+
+  it('un champ nul ou vide se replie sur le défaut, pas sur 0', () => {
+    const file = JSON.stringify({
+      format: FORMAT,
+      layers: [{ id: 'L1', elements: [{ id: 'E1', type: 'rect', x: 0, y: 0, rx: 10, ry: 10, strokeWidth: null }], modifiers: [{ type: 'spiral', n: 3, radiusStep: '' }] }],
+    });
+    const [layer] = deserialize(file).layers;
+    expect(layer.elements[0].strokeWidth).toBeGreaterThan(0);
+    expect(layer.modifiers[0].radiusStep).toBe(12);
+  });
+
+  it('borne la croissance de spirale à l’import', () => {
+    const file = JSON.stringify({ format: FORMAT, layers: [{ id: 'L1', elements: [], modifiers: [{ type: 'spiral', n: 3, radiusStep: 1e6 }] }] });
+    expect(deserialize(file).layers[0].modifiers[0].radiusStep).toBe(100);
   });
 
   it('garde le signe des extensions d’une ligne et le refuse aux autres formes', () => {

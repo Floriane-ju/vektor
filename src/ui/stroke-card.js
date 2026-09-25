@@ -114,7 +114,9 @@ export const mountStrokeCard = ({ store, container = null }) => {
   width.step = '0.5';
   width.title = 'Épaisseur du trait';
   width.setAttribute('aria-label', 'Épaisseur du trait');
-  width.addEventListener('change', () => setStroke({ strokeWidth: Math.max(0, Number(width.value) || 0) }));
+  width.addEventListener('change', () => {
+    if (width.value !== '') setStroke({ strokeWidth: Math.max(0, Number(width.value)) });
+  });
   const widthField = el('label', 'stroke-width-field');
   widthField.append(el('span', 'stroke-line'), width);
 

@@ -62,6 +62,19 @@ export const MIRROR_AXIS = { mirrorH: 90, mirrorV: 0 };
 /** Un axe n'a pas de sens : 190° et 10° sont le même. */
 export const clampAxis = (degrees) => ((degrees % 180) + 180) % 180;
 
+/**
+ * Croissance d'une spirale, en % par copie. Sous -100 % le facteur changerait
+ * de signe ; au-dessus, `(1 + r)^i` déborde en Infinity bien avant `MAX_COPIES`.
+ */
+export const GROWTH_BOUNDS = { min: -50, max: 100 };
+export const clampGrowth = (percent) =>
+  Math.min(GROWTH_BOUNDS.max, Math.max(GROWTH_BOUNDS.min, Number.isFinite(percent) ? percent : 0));
+
+/* ponytail: plafond du facteur cumulé, pour qu'aucune coordonnée non finie
+   n'atteigne le SVG (100 % × 2000 copies = 2^2000). Au-delà, les copies
+   restent empilées au bord — elles sont de toute façon hors du plan. */
+const MAX_GROWTH = 1e6;
+
 export const axisAngle = (modifier) =>
   Number.isFinite(modifier.axis) ? modifier.axis : MIRROR_AXIS[modifier.type];
 
@@ -115,7 +128,7 @@ const axial = (point, i, n, center) => {
 const spiral = (point, i, n, center, { angleStep = 0.4, radiusStep = 12 } = {}) => {
   const angle = i * angleStep;
   const rotated = rotateAround(point, center, angle);
-  const growth = (1 + radiusStep / 100) ** i;
+  const growth = Math.min(MAX_GROWTH, (1 + clampGrowth(radiusStep) / 100) ** i);
   return {
     x: center.x + (rotated.x - center.x) * growth,
     y: center.y + (rotated.y - center.y) * growth,

@@ -1,4 +1,4 @@
-import { clampAxis, createModifier, MODIFIERS } from './modifiers.js';
+import { clampAxis, clampGrowth, createModifier, MODIFIERS } from './modifiers.js';
 import { clampCount, CURVES } from './interpolate.js';
 import {
   ARC_CLOSURES,
@@ -135,7 +135,12 @@ const fail = (message) => {
   throw new Error(message);
 };
 
-const num = (value, fallback) => (Number.isFinite(Number(value)) ? Number(value) : fallback);
+/* `Number(null)` et `Number('')` valent 0 : un champ vide ou nul se replie,
+   il ne devient pas un trait invisible. */
+const num = (value, fallback) =>
+  (typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')) && Number.isFinite(Number(value))
+    ? Number(value)
+    : fallback;
 
 const clamp = (value, { min, max, identity }) =>
   Math.min(max, Math.max(min, num(value, identity)));
@@ -313,7 +318,7 @@ const readModifier = (raw, legacy, linkable = false) =>
     stepX: num(raw?.stepX, 60),
     stepY: num(raw?.stepY, 0),
     angleStep: num(raw?.angleStep, 0.4),
-    radiusStep: num(raw?.radiusStep, 12),
+    radiusStep: clampGrowth(num(raw?.radiusStep, 12)),
     ...readPivot(raw?.center),
     ...(Number.isFinite(raw?.axis) ? { axis: clampAxis(raw.axis) } : {}),
     ...(linkable && raw?.linear === true ? { linear: true } : {}),
