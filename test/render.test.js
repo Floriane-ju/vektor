@@ -41,16 +41,15 @@ describe('renderer SVG', () => {
     );
     const circles = [...svg.querySelectorAll('ellipse')];
     expect(circles).toHaveLength(5);
-    expect(circles.map((c) => c.getAttribute('fill-opacity'))).toEqual([
+    expect(circles.map((c) => c.getAttribute('opacity'))).toEqual([
       '1',
       '0.75',
       '0.5',
       '0.25',
       '0',
     ]);
-    expect(circles.map((c) => c.getAttribute('stroke-opacity'))).toEqual(
-      circles.map((c) => c.getAttribute('fill-opacity')),
-    );
+    /* Une seule opacité : le trait ne fonce pas le bord de l'aplat. */
+    expect(circles.some((c) => c.hasAttribute('fill-opacity') || c.hasAttribute('stroke-opacity'))).toBe(false);
   });
 
   it('multiplie le rayon par l’échelle interpolée', () => {
@@ -604,14 +603,14 @@ describe('outil curseur', () => {
   it('la forme sélectionnée porte un contour, sans changer sa peinture', () => {
     const { store, svg, layer } = mountWithShape();
     const circle = svg.querySelector('ellipse');
-    const paint = ['fill', 'stroke', 'fill-opacity', 'stroke-opacity'].map((a) => circle.getAttribute(a));
+    const paint = ['fill', 'stroke', 'opacity'].map((a) => circle.getAttribute(a));
     on(circle, 'pointerdown', 100, 100);
     on(svg, 'pointerup', 100, 100);
 
     expect(store.get().activeElementId).toBe(layer.elements[0].id);
     expect(svg.querySelectorAll('[data-selection]')).toHaveLength(1);
     const source = svg.querySelector('[data-element-id]');
-    expect(['fill', 'stroke', 'fill-opacity', 'stroke-opacity'].map((a) => source.getAttribute(a))).toEqual(paint);
+    expect(['fill', 'stroke', 'opacity'].map((a) => source.getAttribute(a))).toEqual(paint);
     expect(svg.querySelector('[data-hover]')).toBeNull();
     expect(toSvgDocument(svg)).not.toContain('data-selection');
   });
@@ -1748,7 +1747,7 @@ describe('booléens entre formes', () => {
     expect(groups.map((g) => g.getAttribute('opacity'))).toEqual(['1', '0.5', '0']);
     const toolEdges = groups.map((g) => g.querySelector(':scope > g > ellipse'));
     expect(toolEdges.map((node) => node.getAttribute('cx'))).toEqual(['0', '100', '200']);
-    expect(toolEdges.map((node) => node.getAttribute('stroke-opacity'))).toEqual(['1', '1', '1']);
+    expect(toolEdges.map((node) => node.getAttribute('opacity'))).toEqual(['1', '1', '1']);
     const ids = [...svg.querySelectorAll('mask')].map((m) => m.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -1917,6 +1916,23 @@ describe('recoupements creux', () => {
     );
     expect(svg.querySelectorAll('[data-even-odd]')).toHaveLength(1);
     expect(svg.querySelector('[data-even-odd]').getAttribute('d').match(/M/g)).toHaveLength(6);
+  });
+
+  it('l’aplat suit la rampe d’opacité des copies', () => {
+    const plain = draw(disks({ evenOdd: true }));
+    expect(plain.querySelector('[data-even-odd]').hasAttribute('mask')).toBe(false);
+    const svg = draw(
+      disks({
+        evenOdd: true,
+        modifiers: [{ type: 'step', n: 3, stepX: 30, stepY: 0, angleStep: 0, radiusStep: 0 }],
+        interpolations: [createInterpolation({ property: 'opacity', range: [1, 0] })],
+      }),
+    );
+    const path = svg.querySelector('[data-even-odd]');
+    const mask = svg.querySelector(path.getAttribute('mask').slice(4, -1));
+    const levels = [...mask.children].map((area) => area.getAttribute('opacity'));
+    expect(levels).toHaveLength(6);
+    expect(new Set(levels)).toEqual(new Set(['1', '0.5', '0']));
   });
 
   it('cuit rotation et reflet dans le contour', () => {

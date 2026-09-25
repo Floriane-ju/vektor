@@ -93,7 +93,7 @@ it('démarre et rend après un placement', async () => {
 
   /* Une interpolation ajoutée depuis la card du calque éteint ses copies. */
   const opacities = () =>
-    [...stage.querySelectorAll('ellipse[data-element-id]')].map((node) => node.getAttribute('fill-opacity'));
+    [...stage.querySelectorAll('ellipse[data-element-id]')].map((node) => node.getAttribute('opacity'));
   expect(opacities()).toEqual(['1', '1', '1', '1']);
 
   document.querySelector('[data-focus-key="add-interpolation"]').click();

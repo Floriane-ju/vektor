@@ -88,14 +88,18 @@ export const render = (scene, svgRoot) => {
         group.append(shape(child, host, hostCopies, others));
         continue;
       }
-      holes.push(area);
+      holes.push({ area, opacity: child.opacity ?? 1 });
       holeFill ??= child.fill;
       const outline = shape({ ...child, fill: 'none' }, host, hostCopies, others);
       /* L'intérieur reste cliquable au curseur, même creusé. */
       outline.setAttribute('pointer-events', 'visible');
       group.append(outline);
     }
-    if (holes.length > 0) group.prepend(createEvenOdd(layer, holes, holeFill));
+    if (holes.length > 0) {
+      const { node, mask } = createEvenOdd(layer, holes, holeFill);
+      group.prepend(node);
+      if (mask) group.append(mask);
+    }
     /* Chaque forme logée passe juste après son hôte : ni l'hôte ne la cache en
        entier, ni elle ne passe devant les volumes qui le suivent. */
     for (const { node, host } of [...nodeOf.values()].reverse()) {
@@ -383,16 +387,22 @@ export const areaPath = (child) => {
  * Aplat commun des formes remplies d'un calque en recoupements creux : un seul
  * `<path>` pair-impair, donc une zone couverte deux fois se vide.
  *
- * ponytail: l'aplat est d'une seule opacité, pleine, et de la couleur de la
- * première copie remplie — opacité, dégradé et couleurs des autres formes ne
- * passent que sur les traits.
- * Découper l'aplat par copie défait le pair-impair ; un masque par copie le
- * jour où l'estompe ou le dégradé des aplats manque.
+ * L'estompe passe par un masque où chaque copie peint son aire de sa propre
+ * opacité : découper l'aplat par copie défairait le pair-impair.
+ * ponytail: l'aplat est de la couleur de la première copie remplie, et là où
+ * trois aires ou plus se recouvrent le masque compose leurs opacités — exact
+ * partout où une seule copie couvre.
  */
-const createEvenOdd = (layer, areas, fill) => {
-  const node = svgNode('path', { d: areas.join(' '), 'fill-rule': 'evenodd', fill, stroke: 'none' });
+const createEvenOdd = (layer, holes, fill) => {
+  const node = svgNode('path', { d: holes.map(({ area }) => area).join(' '), 'fill-rule': 'evenodd', fill, stroke: 'none' });
   node.dataset.evenOdd = layer.id;
-  return node;
+  if (holes.every(({ opacity }) => opacity >= 1)) return { node, mask: null };
+  const mask = svgNode('mask', { id: maskId(`even-odd-${layer.id}`), maskUnits: 'userSpaceOnUse', ...MASK_REGION });
+  for (const { area, opacity } of holes) {
+    mask.append(svgNode('path', { d: area, fill: '#fff', opacity: round(opacity) }));
+  }
+  node.setAttribute('mask', `url(#${mask.id})`);
+  return { node, mask };
 };
 
 export const createNode = (child) => {
@@ -479,8 +489,9 @@ export const createNode = (child) => {
       if (child.dashOffset) node.setAttribute('stroke-dashoffset', round(child.dashOffset * strokeWidth * scale));
     }
   }
-  node.setAttribute('fill-opacity', round(child.opacity ?? 1));
-  node.setAttribute('stroke-opacity', round(child.opacity ?? 1));
+  /* Une seule opacité pour trait et aplat : séparées, la moitié intérieure du
+     trait se peindrait sur l'aplat translucide et foncerait le bord. */
+  node.setAttribute('opacity', round(child.opacity ?? 1));
   /* L'écart suit l'échelle de la copie, l'épaisseur non. */
   const gap = (child.gap ?? 0) * scale;
   const hollow = child.outlined && geometry !== 'dot' && child.stroke !== 'none' && strokeWidth > 0 && gap > 0;
@@ -513,7 +524,7 @@ const hollowStroke = (node, id, strokeWidth, gap) => {
   node.setAttribute('stroke-width', round(strokeWidth * 2 + gap));
   const hollow = node.cloneNode(false);
   delete hollow.dataset.elementId;
-  for (const [name, value] of Object.entries({ fill: 'none', stroke: '#000', 'stroke-width': round(gap), 'stroke-opacity': 1 })) {
+  for (const [name, value] of Object.entries({ fill: 'none', stroke: '#000', 'stroke-width': round(gap), opacity: 1 })) {
     hollow.setAttribute(name, value);
   }
   const mask = svgNode('mask', { id, maskUnits: 'userSpaceOnUse', ...MASK_REGION });
@@ -849,7 +860,7 @@ const flipAbout = ({ x, y }) => `translate(${round(x)} ${round(y)}) scale(-1 1) 
 const stripScreenAttributes = (root) => {
   for (const node of [root, ...root.querySelectorAll('*')]) {
     for (const { name, value } of [...node.attributes]) {
-      const opaque = (name === 'fill-opacity' || name === 'stroke-opacity') && value === '1';
+      const opaque = (name === 'opacity' || name === 'fill-opacity' || name === 'stroke-opacity') && value === '1';
       if (name === 'style' || name === 'pointer-events' || name.startsWith('data-') || opaque) {
         node.removeAttribute(name);
       }
