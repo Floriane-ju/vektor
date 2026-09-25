@@ -4,7 +4,26 @@
   "title": "Répétitions et itérations portées aussi par la forme (format @25)",
   "opened": "2026-09-25",
   "closed": null,
-  "commits": []
+  "commits": [
+    {
+      "sha": "11bc44c",
+      "date": "2026-09-25",
+      "files": [
+        "CLAUDE.md",
+        "src/modifiers.js",
+        "src/persistence.js",
+        "src/renderer-svg.js",
+        "src/scene.js",
+        "src/ui/fields.js",
+        "src/ui/interpolation-section.js",
+        "src/ui/modifier-section.js",
+        "src/ui/property-panel.js",
+        "src/ui/toolbar.js",
+        "test/core.test.js",
+        "test/render.test.js"
+      ]
+    }
+  ]
 }
 ---
 

@@ -1,9 +1,9 @@
 ---
 {
-  "status": "open",
+  "status": "closed",
   "title": "Plan 3D isométrique des calques + hauteur Z des formes (format @23)",
   "opened": "2026-09-25",
-  "closed": null,
+  "closed": "2026-09-25",
   "commits": [
     {
       "sha": "3bf8ed7",

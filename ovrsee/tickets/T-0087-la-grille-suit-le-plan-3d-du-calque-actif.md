@@ -2,9 +2,12 @@
 {
   "id": "T-0087",
   "titre": "La grille suit le plan 3D du calque actif",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["ui", "3d"],
+  "tags": [
+    "ui",
+    "3d"
+  ],
   "cree": "2026-09-25",
   "maj": "2026-09-25",
   "plan": null

@@ -2,7 +2,7 @@
 {
   "id": "T-0089",
   "titre": "Répétitions et itérations portées aussi par la forme",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": [
     "modificateurs",
