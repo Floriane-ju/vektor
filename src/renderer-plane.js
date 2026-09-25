@@ -537,31 +537,47 @@ export const shapeOccluder = (child, guest = null, copies = [child]) => {
  * volumes dessinés après lui, qu'il compose (produit) : une forme ne porte que
  * le masque du premier volume qui la suit.
  */
-const createOcclusion = ({ solids, opening, width, clip }, next) => {
+const createOcclusion = (shape, next) => {
   const mask = svgNode('mask', { id: maskId('occlude'), maskUnits: 'userSpaceOnUse', ...MASK_REGION });
   const content = svgNode('g', next ? { mask: `url(#${next})` } : {});
+  content.append(svgNode('rect', { ...MASK_REGION, fill: '#fff' }));
+  /* Forme logée (`parts`) : chaque tranche ne cache que là où elle se voit,
+     sous les masques de ses hôtes. */
+  for (const { shape: part, masks } of shape.parts ?? [{ shape, masks: [] }]) {
+    content.append(...masks.reduce((inner, id) => {
+      const holder = svgNode('g', { mask: `url(#${id})` });
+      holder.append(...inner);
+      return [holder];
+    }, shadowOf(part)));
+  }
+  mask.append(content);
+  return mask;
+};
+
+/* Ombre d'une silhouette dans un masque d'occlusion : noire, rouverte en blanc
+   sur ce qu'on voit à travers son trou. */
+const shadowOf = ({ solids, opening, width, clip }) => {
+  const nodes = [];
   /* Paroi d'un volume ouvert (`width`) : son trait couvre l'épaisseur de la bande. */
   const shadow = svgNode('g', width
     ? { fill: '#000', stroke: '#000', 'stroke-width': round(width), 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }
     : { fill: '#000', stroke: 'none' });
   /* Un nœud par morceau : réunis, leurs sens de parcours s'annuleraient. */
   shadow.append(...solids.map((points) => svgNode('path', { d: screenPath(points, true) })));
-  content.append(svgNode('rect', { ...MASK_REGION, fill: '#fff' }));
   if (clip) {
     /* Bornée par la silhouette du volume ouvert : un nœud par morceau, réunis. */
     const bound = svgNode('clipPath', { id: maskId('silhouette') });
     bound.append(...clip.map((points) => svgNode('path', { d: screenPath(points, true) })));
     shadow.setAttribute('clip-path', `url(#${bound.id})`);
-    content.append(bound);
+    nodes.push(bound);
   }
-  content.append(shadow);
+  nodes.push(shadow);
   if (opening) {
     const clip = svgNode('clipPath', { id: maskId('opening') });
     clip.append(svgNode('path', { d: screenPath(opening[1], true) }));
-    content.append(clip, svgNode('path', { d: screenPath(opening[0], true), fill: '#fff', 'clip-path': `url(#${clip.id})` }));
+    nodes.push(clip, svgNode('path', { d: screenPath(opening[0], true), fill: '#fff', 'clip-path': `url(#${clip.id})` }));
   }
-  mask.append(content);
-  return mask;
+  return nodes;
 };
 
 /**
@@ -596,50 +612,77 @@ const createOpening = ([, top]) => {
 };
 
 /**
- * Forme logée dans le volume `host` (silhouette `hostShape`) : tranchée selon
- * la profondeur de l'hôte, chaque tranche dessinée comme un volume à part.
+ * Forme logée dans une chaîne d'hôtes `hosts` (`{ host, shape }`, hôte direct
+ * d'abord, `shape` = sa silhouette) : tranchée aux faces de chaque hôte, chaque
+ * tranche dessinée comme un volume à part et masquée, pour chaque hôte, selon
+ * sa hauteur :
  * - au-dessus de l'hôte : devant lui, sans masque ;
  * - dans son épaisseur : vue par l'ouverture du dessus d'un anneau seule,
  *   invisible dans un volume plein ;
  * - en dessous : derrière lui, vue autour et à travers le trou.
- * Une forme plate est tout entière dans l'épaisseur. Les masques vont dans `defs`.
+ * Une forme plate est tout entière dans l'épaisseur. Les masques vont dans
+ * `defs`. Rend `{ node, occluder }` : silhouette des tranches pleines, bornée à
+ * ce qu'on en voit (`parts`), ou `null`.
  *
- * ponytail: un volume logé montre une arête à chaque coupe ; les fondre le
- * jour où l'on loge autre chose qu'un axe.
+ * ponytail: aux coupes, les silhouettes de deux tranches se recouvrent et la
+ * forme y est peinte deux fois — un aplat semi-transparent s'y fonce. Un
+ * volume ouvert (axe, ruban) se coupe en morceaux, arête comprise.
  */
-export const createInside = (child, host, hostShape, defs) => {
+export const createInside = (child, hosts, defs) => {
   const scale = child.scale ?? 1;
   const depth = (child.height ?? 0) * scale;
-  const half = ((host.height ?? 0) * (host.scale ?? 1)) / 2;
-  const slices = depth === 0
-    ? [['middle', 0, 0]]
-    : [
-        ['below', -depth / 2, Math.min(depth / 2, -half)],
-        ['middle', Math.max(-depth / 2, -half), Math.min(depth / 2, half)],
-        ['above', Math.max(-depth / 2, half), depth / 2],
-      ].filter(([, from, to]) => to > from);
+  const halves = hosts.map(({ host }) => ((host.height ?? 0) * (host.scale ?? 1)) / 2);
+  const cuts = [...new Set([-depth / 2, depth / 2, ...halves.flatMap((half) => [-half, half])])]
+    .filter((z) => z >= -depth / 2 && z <= depth / 2)
+    .sort((a, b) => a - b);
+  const slices = depth === 0 ? [[0, 0]] : cuts.slice(1).map((to, i) => [cuts[i], to]);
+  const masks = new Map();
+  const maskOf = (index, where) => {
+    const key = `${index}:${where}`;
+    if (!masks.has(key)) {
+      const shape = hosts[index].shape;
+      const mask = where === 'below' || shape.width ? createOcclusion(shape, null) : createOpening(shape.opening);
+      defs.append(mask);
+      masks.set(key, mask.id);
+    }
+    return masks.get(key);
+  };
   const group = svgNode('g');
   group.dataset.elementId = child.id;
-  for (const [where, from, to] of slices) {
+  const parts = [];
+  for (const [from, to] of slices) {
+    const mid = (from + to) / 2;
+    const levels = halves.map((half) => (mid > half ? 'above' : mid < -half ? 'below' : 'middle'));
     /* Ruban ouvert (`width`) : pas d'intérieur, ses parois de devant cachent. */
-    if (where === 'middle' && !hostShape.opening && !hostShape.width) continue;
-    const part = createShape({
+    const hidden = levels.some((where, i) => where === 'middle' && !hosts[i].shape.opening && !hosts[i].shape.width);
+    if (hidden) continue;
+    const piece = {
       ...child,
       height: (to - from) / scale,
-      matrix: shifted(child.matrix, extrusion(child.plane, (from + to) / 2)),
-    });
+      matrix: shifted(child.matrix, extrusion(child.plane, mid)),
+    };
+    /* Volume fermé : la forme entière, bornée à la silhouette de la tranche —
+       sans les faces de la coupe, qui la subdiviseraient. */
+    const solid = shapeOccluder(piece);
+    const part = solid ? createShape(child) : createShape(piece);
     delete part.dataset.elementId;
-    const mask = where === 'above'
-      ? null
-      : where === 'below' || hostShape.width
-        ? createOcclusion(hostShape, null)
-        : createOpening(hostShape.opening);
+    if (solid) {
+      const bound = svgNode('clipPath', { id: maskId('slice') });
+      bound.append(...solid.solids.map((points) => svgNode('path', { d: screenPath(points, true) })));
+      defs.append(bound);
+      part.setAttribute('clip-path', `url(#${bound.id})`);
+    }
+    /* Hôte direct au plus près : `data-slice` et son masque portent son niveau. */
+    const ids = levels.map((where, i) => (where === 'above' ? null : maskOf(i, where)));
     /* Enveloppe à part : un contour double porte déjà son propre masque. */
-    const slice = svgNode('g', mask ? { mask: `url(#${mask.id})` } : {});
-    slice.dataset.slice = where;
-    if (mask) defs.append(mask);
-    slice.append(part);
+    const slice = [...ids].reverse().reduce((inner, id, k) => {
+      const holder = svgNode('g', id ? { mask: `url(#${id})` } : {});
+      holder.append(inner);
+      if (k === ids.length - 1) holder.dataset.slice = levels[0];
+      return holder;
+    }, part);
     group.append(slice);
+    if (solid) parts.push({ shape: solid, masks: ids.filter(Boolean) });
   }
-  return group;
+  return { node: group, occluder: parts.length ? { parts } : null };
 };

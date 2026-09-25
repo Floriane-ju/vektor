@@ -37,7 +37,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@30';
+export const FORMAT = 'vektor/scene@31';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -87,7 +87,9 @@ export const FORMAT = 'vektor/scene@30';
    - `@1` à `@28` n'espaçaient pas les spirales à pas d'arc constant : spirale
      croissante, même dessin ;
    - `@1` à `@29` ne connaissaient pas la spirale d'Archimède : rien à
-     convertir. Le bump empêche une version antérieure de la relire en `none`. */
+     convertir. Le bump empêche une version antérieure de la relire en `none` ;
+   - `@1` à `@30` n'avaient pas d'option d'opacité des volumes : opaques, même
+     dessin — sauf une forme logée, qui ne cachait rien et cache désormais. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -119,6 +121,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@27',
   'vektor/scene@28',
   'vektor/scene@29',
+  'vektor/scene@30',
   FORMAT,
 ]);
 
@@ -297,6 +300,7 @@ const readElement = (input, style) => {
     gap: clampGap(num(raw.gap, DEFAULT_OUTLINE_GAP)),
     booleans: readBooleans(raw.booleans),
     height: clampHeight(num(raw.height, 0)),
+    opaque: raw.opaque !== false,
     /* Vérifié à l'échelle du calque (`readInside`), une fois toutes ses formes lues. */
     inside: typeof raw.inside === 'string' ? raw.inside : null,
     ...(raw.type === 'polygon'

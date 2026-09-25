@@ -1587,6 +1587,13 @@ describe('rotation et épaisseur interpolées', () => {
     expect(deserialize(old).layers[0].elements[0].outlined).toBe(false);
   });
 
+  it('l’opacité d’un volume se sauvegarde ; absente (`@30`), la forme est opaque', () => {
+    const scene = { layers: [createLayer({ elements: [createElement('rect', 0, 0, { height: 20, opaque: false })] })] };
+    expect(deserialize(serialize(scene)).layers[0].elements[0].opaque).toBe(false);
+    const old = JSON.stringify({ format: 'vektor/scene@30', layers: [{ id: 'L1', elements: [{ id: 'E1', type: 'rect' }] }] });
+    expect(deserialize(old).layers[0].elements[0].opaque).toBe(true);
+  });
+
   it('une scène `@19` recopie couleur et épaisseur du calque sur ses formes', () => {
     const old = JSON.stringify({
       format: 'vektor/scene@19',
@@ -2559,7 +2566,7 @@ describe('formes nommables', () => {
   });
 
   it('le format est bumpé, l’ancien reste lisible', () => {
-    expect(FORMAT).toBe('vektor/scene@30');
+    expect(FORMAT).toBe('vektor/scene@31');
     const raw = JSON.parse(serialize(withShapes()));
     raw.format = 'vektor/scene@29';
     expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);

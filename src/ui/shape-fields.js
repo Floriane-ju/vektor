@@ -131,6 +131,11 @@ export const shapeFields = ({ store, bind }) => {
   );
   const depthField = field('Profondeur', depth);
   depthField.title = 'Épaisseur extrudée le long du plan 3D du calque, centrée sur le plan';
+  const opaque = bind(input('checkbox'), (element) => element.opaque !== false, (element, value) => store.apply(updateElement, element.id, { opaque: value }), {
+    event: 'change',
+  });
+  const opaqueField = switchField('Opaque', opaque);
+  opaqueField.title = 'Le volume cache ce qui est dessiné derrière lui';
   const types = typeFields(store, bind);
 
   const sync = (element, layer) => {
@@ -140,6 +145,7 @@ export const shapeFields = ({ store, bind }) => {
     rotationField.hidden = SHAPES[element.type].geometry === 'dot';
     /* ponytail: une forme à booléens ne s'extrude pas (voir `createExtrusion`). */
     depthField.hidden = !activePlane(layer) || element.booleans.length > 0;
+    opaqueField.hidden = depthField.hidden || !(element.height > 0);
   };
-  return { nodes: [size.root, rotationField, depthField, ...types.nodes], sync };
+  return { nodes: [size.root, rotationField, depthField, opaqueField, ...types.nodes], sync };
 };

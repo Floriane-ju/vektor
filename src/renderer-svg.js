@@ -36,14 +36,14 @@ const drawLayer = (layer) => {
   /* Masques des formes logées : propres au calque, pour qu'il se garde entier. */
   const defs = svgNode('defs');
   /* Forme logée dans un volume (`inside`) : tranchée selon la profondeur de
-     son hôte de même copie (`createInside`), et dessinée juste après lui.
-     ponytail: une forme logée ne cache pas les autres volumes. */
+     chaque hôte de sa chaîne, de même copie (`createInside`), et dessinée
+     juste après son hôte direct ; elle ne cache que ce qu'on en voit. */
   const nodeOf = new Map();
-  const shape = (child, host, hostCopies, walls) => {
-    const hostShape = host && shapeOccluder(host, child, hostCopies);
-    const node = hostShape ? createInside(child, host, hostShape, defs) : createShape(child, walls);
-    nodeOf.set(copyKey(child.id, child), { node, host: hostShape ? copyKey(host.id, host) : null });
-    const silhouette = hostShape ? null : shapeOccluder(child);
+  const shape = (child, hosts, walls) => {
+    const inside = hosts.length > 0 ? createInside(child, hosts, defs) : null;
+    const node = inside ? inside.node : createShape(child, walls);
+    nodeOf.set(copyKey(child.id, child), { node, host: inside ? copyKey(hosts[0].host.id, hosts[0].host) : null, depth: hosts.length });
+    const silhouette = child.opaque === false ? null : inside ? inside.occluder : shapeOccluder(child);
     if (silhouette) entry.occluders.set(node, silhouette);
     return node;
   };
@@ -56,6 +56,14 @@ const drawLayer = (layer) => {
      sa première copie propre. */
   const partner = (id, child) => byCopy.get(copyKey(id, child)) ?? byCopy.get(copyKey(id, { ...child, own: 0 }));
   /* Volumes qui se cachent eux-mêmes : ils se cachent aussi l'un l'autre. */
+  /* Hôtes de même copie, du direct au plus lointain (`insideLoop` exclut les boucles). */
+  const hostChain = (child) => {
+    const chain = [];
+    for (let host = child.inside && partner(child.inside, child); host && chain.length < layer.elements.length; host = host.inside && partner(host.inside, host)) {
+      chain.push(host);
+    }
+    return chain;
+  };
   const walls = wallNeighbours(children.filter((child) => !tools.has(child.id) && child.booleans.length === 0 && !child.inside));
   /* Recoupements creux : les aplats rejoignent un tracé commun, chaque forme
      ne garde que son trait. */
@@ -74,17 +82,18 @@ const drawLayer = (layer) => {
       group.append(createBoolean(child, steps));
       continue;
     }
-    const host = child.inside ? partner(child.inside, child) : null;
-    const hostCopies = host && children.filter((other) => other.id === host.id && other.copy === host.copy);
+    const hosts = hostChain(child)
+      .map((host) => ({ host, shape: shapeOccluder(host, child, children.filter((other) => other.id === host.id && other.copy === host.copy)) }))
+      .filter((link) => link.shape);
     const others = walls.get(child);
     const area = layer.evenOdd && child.fill !== 'none' ? areaPath(child) : null;
     if (!area) {
-      group.append(shape(child, host, hostCopies, others));
+      group.append(shape(child, hosts, others));
       continue;
     }
     holes.push({ area, opacity: child.opacity ?? 1 });
     holeFill ??= child.fill;
-    const outline = shape({ ...child, fill: 'none' }, host, hostCopies, others);
+    const outline = shape({ ...child, fill: 'none' }, hosts, others);
     /* L'intérieur reste cliquable au curseur, même creusé. */
     outline.setAttribute('pointer-events', 'visible');
     group.append(outline);
@@ -95,8 +104,9 @@ const drawLayer = (layer) => {
     if (mask) group.append(mask);
   }
   /* Chaque forme logée passe juste après son hôte : ni l'hôte ne la cache en
-     entier, ni elle ne passe devant les volumes qui le suivent. */
-  for (const { node, host } of [...nodeOf.values()].reverse()) {
+     entier, ni elle ne passe devant les volumes qui le suivent. Hôtes d'abord,
+     pour qu'une chaîne suive. */
+  for (const { node, host } of [...nodeOf.values()].reverse().sort((a, b) => a.depth - b.depth)) {
     const hostNode = host && nodeOf.get(host)?.node;
     if (hostNode?.parentNode === group) hostNode.after(node);
   }

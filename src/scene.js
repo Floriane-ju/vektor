@@ -310,6 +310,9 @@ export const createElement = (type, x, y, overrides = {}) => ({
   /* Profondeur d'extrusion le long de la normale du plan 3D du calque, centrée
      sur le plan (10 : de -5 à 5). Sans plan, sans effet. */
   height: 0,
+  /* En 3D, le volume cache ce qui est dessiné avant lui (`occlude`) ; éteint,
+     il ne cache que ses propres arêtes de fond. */
+  opaque: true,
   /* Forme hôte du même calque dans laquelle celle-ci est logée (`setInside`) :
      en 3D, le volume de l'hôte la cache, sauf à travers son trou. */
   inside: null,

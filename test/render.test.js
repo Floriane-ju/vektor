@@ -2319,6 +2319,16 @@ describe('plan 3D : occlusion', () => {
     expect(front.querySelector(`[data-element-id="${disk.id}"]`).parentElement.getAttribute('mask')).toBeNull();
   });
 
+  it('un volume non opaque ne cache rien, logé ou non', () => {
+    const axis = createElement('point', 450, 450, { height: 300 });
+    const disk = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, opaque: false });
+    expect(draw([axis, disk]).querySelector(`[data-element-id="${axis.id}"]`).parentElement.getAttribute('mask')).toBeNull();
+    const ring = createElement('ellipse', 450, 450, { rx: 90, ry: 90, height: 20, outlined: true, gap: 20 });
+    const guest = createElement('ellipse', 450, 450, { rx: 30, ry: 30, height: 10, inside: ring.id, opaque: false });
+    const svg = draw([guest, ring]);
+    expect(svg.querySelector(`[data-element-id="${ring.id}"]`).parentElement.getAttribute('mask')).toBeNull();
+  });
+
   it('un anneau laisse voir par son trou', () => {
     const axis = createElement('point', 450, 450, { height: 300 });
     const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
@@ -2400,11 +2410,67 @@ describe('forme logée : rendu, panneau, arbre', () => {
     expect(walls([spiral, createModifier({ type: 'axial', n: 2 })])).toBeGreaterThan(walls([spiral]));
   });
 
+  it('pleine et logée dans un anneau, elle cache ce qui est dessiné avant elle, par la seule ouverture', () => {
+    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
+    const disk = createElement('ellipse', 450, 450, { rx: 30, ry: 30, height: 10, inside: ring.id });
+    const svg = drawn([disk, ring]);
+    const holder = svg.querySelector(`[data-element-id="${ring.id}"]`).parentElement;
+    const mask = svg.querySelector(holder.getAttribute('mask').slice(4, -1));
+    expect(mask.querySelector(`g[mask="${slices(svg, disk).middle}"] > g[fill="#000"]`)).not.toBeNull();
+  });
+
+  it('un volume fermé logé n’est pas subdivisé : chaque tranche peint la forme entière, bornée à sa silhouette', () => {
+    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
+    const tube = createElement('ellipse', 450, 450, { rx: 30, ry: 30, height: 200, inside: ring.id });
+    const svg = drawn([tube, ring]);
+    const parts = [...svg.querySelectorAll(`[data-element-id="${tube.id}"] > [data-slice] > [clip-path]`)];
+    expect(parts).toHaveLength(3);
+    const faces = parts.map((part) => part.lastElementChild.outerHTML);
+    expect(new Set(faces).size).toBe(1);
+  });
+
+  it('logée dans une forme elle-même logée : tranchée par toute la chaîne, dessinée après son hôte', () => {
+    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
+    const disk = createElement('ellipse', 450, 450, { rx: 30, ry: 30, height: 10, inside: ring.id });
+    const axis = createElement('point', 450, 450, { height: 300, inside: disk.id });
+    const svg = drawn([axis, disk, ring]);
+    const order = [...svg.querySelector('[data-layer-id]').children]
+      .map((node) => node.querySelector('[data-element-id]')?.dataset.elementId ?? node.dataset.elementId)
+      .filter(Boolean);
+    expect(order).toEqual([ring.id, disk.id, axis.id]);
+    const pieces = [...svg.querySelectorAll(`[data-element-id="${axis.id}"] > [data-slice]`)];
+    /* Sous l'anneau, sous le disque dans l'anneau, au-dessus du disque dans l'anneau, au-dessus. */
+    expect(pieces.map((node) => node.dataset.slice)).toEqual(['below', 'below', 'above', 'above']);
+    expect(pieces[1].querySelector(':scope > g[mask]')).not.toBeNull();
+    expect(pieces[3].getAttribute('mask')).toBeNull();
+  });
+
   it('un anneau de points reliés (axial) accueille une forme comme un cercle', () => {
     const axial = createModifier({ type: 'axial', n: 5, linear: true });
     const ring = createElement('point', 530, 450, { height: 40, modifiers: [axial] });
     const axis = createElement('point', 450, 450, { height: 300, inside: ring.id });
     expect(Object.keys(slices(drawn([axis, ring]), axis))).toEqual(['below', 'above']);
+  });
+
+  it('l’interrupteur « Opaque » n’apparaît qu’en 3D sur une forme à profondeur, et la règle', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const disk = createElement('ellipse', 0, 0, { height: 20 });
+    const layer = createLayer({ elements: [disk] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: disk.id });
+    const inspector = document.createElement('div');
+    document.body.append(inspector);
+    const { shapeDetail } = mountPropertyPanel({ store, container: inspector });
+    const field = [...shapeDetail.querySelectorAll('.switch-field')].find((node) => node.textContent === 'Opaque');
+    expect(field.hidden).toBe(true);
+    const { setLayerPlane } = await import('../src/scene.js');
+    store.apply(setLayerPlane, layer.id, {});
+    expect(field.hidden).toBe(false);
+    const box = field.querySelector('input');
+    expect(box.checked).toBe(true);
+    box.checked = false;
+    box.dispatchEvent(new Event('change'));
+    expect(store.get().layers[0].elements[0].opaque).toBe(false);
+    inspector.remove();
   });
 
   it('le sélecteur n’apparaît qu’en 3D, ou si le calque porte déjà un lien', async () => {
