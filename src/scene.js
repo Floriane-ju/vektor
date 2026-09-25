@@ -526,7 +526,9 @@ export const getRenderedChildren = (layer) => {
           ...properties,
         };
       });
-      children.push(...(element.type === 'point' ? linkPoints(element.modifiers, ownCopies, own) : own));
+      const place = (ownIndices) =>
+        applyStack(applyStack(element, element.modifiers, ownIndices, layer.center), layer.modifiers, indices, layer.center);
+      children.push(...(element.type === 'point' ? linkPoints(element.modifiers, ownCopies, own, place) : own));
     }
   });
   return children;
@@ -580,54 +582,28 @@ const chain = (from, links, closed, smooth) => ({
 /* Sommets intermédiaires par intervalle d'une chaîne lissée. */
 const SMOOTH_STEPS = 12;
 
-/* Catmull-Rom centripète (Barry & Goldman) : passe par chaque copie, sans
-   boucle ni rebroussement quand les copies se resserrent (spirale). Une
-   chaîne ouverte est prolongée d'une copie fantôme à chaque bout, extrapolée
-   sur les trois dernières (`3a − 3b + c`) : la courbure continue jusqu'au
-   bout au lieu de s'y aplatir en ligne droite. À deux copies, un segment. */
-const beyond = (a, b, c) =>
-  c ? { x: 3 * a.x - 3 * b.x + c.x, y: 3 * a.y - 3 * b.y + c.y } : { x: 2 * a.x - b.x, y: 2 * a.y - b.y };
+/* Lissé, le tracé suit la transformation même de l'étage à indice
+   fractionnaire — arc de spirale, de cercle ou segment exacts, passant par
+   chaque copie (indices entiers). Une approximation (Catmull-Rom) ondulait
+   entre les copies dès que le pas angulaire s'élargit. À deux copies (miroir),
+   un segment. */
+const sweep = (indices, k, n, closed, place) =>
+  Array.from({ length: (closed ? n : n - 1) * SMOOTH_STEPS + (closed ? 0 : 1) }, (_, s) =>
+    place(indices.with(k, s / SMOOTH_STEPS)),
+  );
 
-const smoothLinks = (links, closed) => {
-  const n = links.length;
-  const at = (i) => {
-    if (closed) return links[(i + n) % n];
-    if (i < 0) return beyond(links[0], links[1], links[2]);
-    if (i >= n) return beyond(links[n - 1], links[n - 2], links[n - 3]);
-    return links[i];
-  };
-  const knot = (a, b) => Math.max(Math.hypot(b.x - a.x, b.y - a.y) ** 0.5, 1e-9);
-  const lerp = (a, b, ta, tb, t) => {
-    const u = (t - ta) / (tb - ta);
-    return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
-  };
-  const spans = closed ? n : n - 1;
-  const samples = Array.from({ length: spans }, (_, i) => {
-    const [p0, p1, p2, p3] = [at(i - 1), at(i), at(i + 1), at(i + 2)];
-    const t1 = knot(p0, p1);
-    const t2 = t1 + knot(p1, p2);
-    const t3 = t2 + knot(p2, p3);
-    return Array.from({ length: SMOOTH_STEPS }, (_, s) => {
-      if (s === 0) return p1;
-      const t = t1 + ((t2 - t1) * s) / SMOOTH_STEPS;
-      const a1 = lerp(p0, p1, 0, t1, t);
-      const a2 = lerp(p1, p2, t1, t2, t);
-      const a3 = lerp(p2, p3, t2, t3, t);
-      return lerp(lerp(a1, a2, 0, t2, t), lerp(a2, a3, t1, t3, t), t1, t2, t);
-    });
-  }).flat();
-  return closed ? samples : [...samples, links[n - 1]];
-};
-
-const linkPoints = (modifiers, copies, points) => {
+const linkPoints = (modifiers, copies, points, place) => {
   const stages = linearStages(modifiers);
   if (stages.length === 0) return points;
   return points.flatMap((point, j) =>
     stages
       .filter(({ k }) => copies[j][k] === 0)
-      .map(({ n, stride, wrap, smooth }) => {
-        const links = Array.from({ length: n }, (_, step) => points[j + step * stride]);
-        return chain(point, smooth ? smoothLinks(links, wrap) : links, wrap, smooth);
+      .map(({ k, n, stride, wrap, smooth }) => {
+        const links =
+          smooth && n > 2
+            ? sweep(copies[j], k, n, wrap, place)
+            : Array.from({ length: n }, (_, step) => points[j + step * stride]);
+        return chain(point, links, wrap, smooth);
       }),
   );
 };

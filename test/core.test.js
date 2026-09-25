@@ -2021,7 +2021,19 @@ describe('répétition linéaire des points', () => {
     expect(ring.closed).toBe(true);
     const radii = vertices(ring).map(([x, y]) => Math.hypot(x, y));
     expect(radii.length).toBeGreaterThan(6);
-    for (const r of radii) expect(Math.abs(r - 10)).toBeLessThan(0.3);
+    for (const r of radii) expect(Math.abs(r - 10)).toBeLessThan(1e-9);
+  });
+
+  it('lissé, une spirale suit la spirale exacte entre les copies', () => {
+    const [arc] = getRenderedChildren(
+      pointLayer([createModifier({ type: 'spiral', n: 5, angleStep: 1.2, radiusStep: 40, linear: true, smooth: true })]),
+    );
+    /* Spirale logarithmique : r = 10·1,4^(θ/1,2), sans ondulation entre copies. */
+    for (const [x, y] of vertices(arc)) {
+      const turns = Math.atan2(y, x);
+      const theta = [0, 1, 2, 3].map((w) => turns + w * 2 * Math.PI).find((t) => t >= -1e-9 && t <= 4.8 + 1e-9);
+      expect(Math.abs(Math.hypot(x, y) - 10 * 1.4 ** (theta / 1.2))).toBeLessThan(1e-6);
+    }
   });
 
   it('lissé, un arc ouvert garde sa courbure jusqu’aux extrémités', () => {
