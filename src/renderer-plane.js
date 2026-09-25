@@ -210,29 +210,30 @@ const within = (a, b, quad) => {
  * peintre : peint paroi par paroi, chaque aplat rognait le trait de ses
  * voisines — dents de scie sur le fond, flancs amincis.
  *
- * ponytail: découpe en O(n²) arête × paroi, sans index spatial, et contre
- * toutes les copies voisines (`others`) — quelques centaines de sommets en
- * tout ; un index par boîtes si une spirale à dizaines de copies rame.
+ * Chaque arête n'est testée finement que contre les parois dont la boîte à
+ * l'écran recoupe la sienne ; les parois des voisines sont construites une
+ * fois par rendu (`foreignWalls`), pas une fois par copie qui les regarde.
+ * ponytail: le tri par boîtes reste un balayage O(n²) de comparaisons, bon
+ * marché ; une grille si une spirale à centaines de copies rame encore.
  */
 const createWalls = (child, { base, closed, edges, corners, v, up, width, others = [] }) => {
   const n = base.length;
   const [backShift, frontShift] = up ? [{ x: 0, y: 0 }, v] : [v, { x: 0, y: 0 }];
   /* Parois des autres volumes (`wallNeighbours`) : elles cachent tout ce
      qu'elles couvrent, sans exception de voisinage. */
-  const foreign = others.flatMap((other) =>
-    Array.from({ length: other.closed ? other.base.length : other.base.length - 1 }, (_, i) => [
-      other.base[i],
-      other.base[(i + 1) % other.base.length],
-    ]),
-  );
+  const foreign = others.map((other) => foreignWalls(other, v));
   /* Bouts ronds : une coupure tombe sur un bord de paroi, tracé de la même
      épaisseur, qui recouvre le rond ; au pli, le fond rejoint l'arête de flanc. */
   const line = (d) => svgNode('path', { d, fill: 'none', stroke: '#fff', 'stroke-width': round(width), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
   const segments = Array.from({ length: closed ? n : n - 1 }, (_, i) => [i, (i + 1) % n]);
-  const pairs = [...segments.map(([i, j]) => [base[i], base[j]]), ...foreign];
-  const quads = pairs.map(([a, b]) => [a, b, { x: b.x + v.x, y: b.y + v.y }, { x: a.x + v.x, y: a.y + v.y }]);
-  const back = backRuns(moved(base, backShift), segments, quads, { closed, corners: new Set(corners) });
-  const flanks = edges.flatMap((k) => flankRuns(base[k], pairs, v, up));
+  const own = wallsOf(segments.map(([i, j]) => [base[i], base[j]]), v);
+  const walls = {
+    pairs: [...own.pairs, ...foreign.flatMap((other) => other.pairs)],
+    quads: [...own.quads, ...foreign.flatMap((other) => other.quads)],
+    boxes: [...own.boxes, ...foreign.flatMap((other) => other.boxes)],
+  };
+  const back = backRuns(moved(base, backShift), segments, walls, { closed, corners: new Set(corners) });
+  const flanks = edges.flatMap((k) => flankRuns(base[k], walls, v, up));
   /* Face du haut d'un autre volume : devant toutes les arêtes. */
   const fronts = [...(closed ? [base] : []), ...others.filter((other) => other.closed).map((other) => other.base)];
   const mask = svgNode('mask', { id: maskId(`walls-${child.id}`), maskUnits: 'userSpaceOnUse', ...MASK_REGION });
@@ -246,14 +247,44 @@ const createWalls = (child, { base, closed, edges, corners, v, up, width, others
   return [mask, paint];
 };
 
+/* Boîte d'un nuage de points, et recouvrement de deux boîtes. */
+const boxOf = (points) => {
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+};
+const overlaps = (p, q) => p[0] <= q[2] && q[0] <= p[2] && p[1] <= q[3] && q[1] <= p[3];
+
+/* Parois a→b extrudées de `v` : segments, quadrilatères à l'écran, boîtes. */
+const wallsOf = (pairs, v) => {
+  const quads = pairs.map(([a, b]) => [a, b, { x: b.x + v.x, y: b.y + v.y }, { x: a.x + v.x, y: a.y + v.y }]);
+  return { pairs, quads, boxes: quads.map(boxOf) };
+};
+
+/* Parois d'un volume voisin (`wallNeighbours`), construites une fois pour
+   toutes les copies qui le regardent : sans ce cache, chacune reconstruisait
+   celles de toutes les autres. */
+const foreignCache = new WeakMap();
+const foreignWalls = (other, v) => {
+  const cached = foreignCache.get(other);
+  if (cached && cached.v.x === v.x && cached.v.y === v.y) return cached.walls;
+  const { base, closed } = other;
+  const pairs = Array.from({ length: closed ? base.length : base.length - 1 }, (_, i) => [base[i], base[(i + 1) % base.length]]);
+  const walls = wallsOf(pairs, v);
+  foreignCache.set(other, { v, walls });
+  return walls;
+};
+
 /* Morceaux visibles de l'arête de flanc du sommet `foot`, de `foot` à
    `foot + v`. Son point de hauteur t tombe, à l'écran, sur la paroi d'un
    segment a→b (e = b − a) à la hauteur t + c (d = foot − a = s·e + c·v) :
    caché si ce point de paroi est plus près de la face avant (c > 0 quand elle
    est en haut, c < 0 en bas). Les parois qui partent du sommet ne le cachent pas. */
-const flankRuns = (foot, pairs, v, up) => {
+const flankRuns = (foot, { pairs, boxes }, v, up) => {
   const cross = (p, q) => p.x * q.y - p.y * q.x;
+  const reach = boxOf([foot, { x: foot.x + v.x, y: foot.y + v.y }]);
   const hidden = pairs
+    .filter((_, k) => overlaps(reach, boxes[k]))
     .flatMap(([a, b]) => {
       const e = { x: b.x - a.x, y: b.y - a.y };
       const d = { x: foot.x - a.x, y: foot.y - a.y };
@@ -283,7 +314,7 @@ const flankRuns = (foot, pairs, v, up) => {
    le long d'une courbe, la voisine, presque plate au pli, le rognait juste
    avant l'arête de flanc. Deux parois bord à bord ne laissent pas passer de
    miette entre elles (`GAP`). */
-const backRuns = (edge, segments, quads, { closed, corners }) => {
+const backRuns = (edge, segments, { quads, boxes }, { closed, corners }) => {
   const count = segments.length;
   const neighbour = (s, k) => {
     const shared = k === (s + 1) % count && (closed || k > s) ? segments[s][1] : k === (s - 1 + count) % count && (closed || k < s) ? segments[s][0] : null;
@@ -295,8 +326,9 @@ const backRuns = (edge, segments, quads, { closed, corners }) => {
     const [a, b] = [edge[i], edge[j]];
     const at = (t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
     const gap = GAP / (Math.hypot(b.x - a.x, b.y - a.y) || 1);
+    const reach = boxOf([a, b]);
     const hidden = quads
-      .flatMap((quad, k) => (k === s || neighbour(s, k) ? [] : [within(a, b, quad)]))
+      .flatMap((quad, k) => (k === s || neighbour(s, k) || !overlaps(reach, boxes[k]) ? [] : [within(a, b, quad)]))
       .filter(Boolean)
       .sort(([p], [q]) => p - q);
     /* Complément des passages cachés dans [0, 1]. */

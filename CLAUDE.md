@@ -53,6 +53,7 @@ Conventions du modèle :
 
 - `test/core.test.js` — modèle, modificateurs, interpolation (pur, Node).
 - `test/render.test.js`, `test/app.test.js` — `// @vitest-environment happy-dom` en tête de fichier ; `app.test.js` est une fumigation qui monte toute l'appli.
+- `bench/walls.bench.test.js` — banc des parois 3D (ruban de spirale × axial 12), sauté sans `BENCH=1` : `BENCH=1 pnpm vitest run bench/ --silent=false` imprime temps de `render` et empreinte du SVG.
 
 ## Suivi (ovrsee/)
 
