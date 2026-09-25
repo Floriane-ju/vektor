@@ -233,6 +233,35 @@ describe('modificateurs', () => {
     const far = { x: 300, y: -140 };
     const gap = Math.hypot(far.x - near.x, far.y - near.y);
     const options = { angleStep: 0.4, radiusStep: 12 };
+  it('archimedes : rayon linéaire en angle', () => {
+    const children = copies('archimedes', { x: 10, y: 0 }, 4, { angleStep: Math.PI / 2, radiusStep: 50 });
+    expect(children.map(dist)).toEqual([10, 15, 20, 25].map((d) => expect.closeTo(d)));
+    expect(children[1].y).toBeCloseTo(15);
+    const shrink = copies('archimedes', { x: 10, y: 0 }, 6, { angleStep: 0.4, radiusStep: -40 });
+    expect(shrink.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
+  });
+
+  it('archimedes à espacement constant : copies équidistantes le long de la courbe', () => {
+    for (const radiusStep of [40, -5]) {
+      const options = { angleStep: 0.8, radiusStep, evenSpacing: true };
+      const at = (i) => MODIFIERS.archimedes({ x: 10, y: 0 }, i, 6, center, options);
+      const arc = (from) => {
+        let length = 0;
+        for (let s = 1; s <= 400; s += 1) {
+          const a = at(from + (s - 1) / 400);
+          const b = at(from + s / 400);
+          length += Math.hypot(b.x - a.x, b.y - a.y);
+        }
+        return length;
+      };
+      const first = arc(0);
+      for (const i of [1, 2, 3, 4]) expect(arc(i)).toBeCloseTo(first, 1);
+      /* Même courbe : rayon toujours linéaire en angle. */
+      const { x, y, angle } = at(3);
+      expect(Math.hypot(x - center.x, y - center.y)).toBeCloseTo(10 * (1 + (angle / 0.8) * (radiusStep / 100)));
+    }
+  });
+
     const a = copies('spiral', near, 5, options);
     const b = copies('spiral', far, 5, options);
     for (let i = 0; i < a.length; i += 1) {
@@ -2429,9 +2458,9 @@ describe('formes nommables', () => {
   });
 
   it('le format est bumpé, l’ancien reste lisible', () => {
-    expect(FORMAT).toBe('vektor/scene@29');
+    expect(FORMAT).toBe('vektor/scene@30');
     const raw = JSON.parse(serialize(withShapes()));
-    raw.format = 'vektor/scene@28';
+    raw.format = 'vektor/scene@29';
     expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);
   });
 

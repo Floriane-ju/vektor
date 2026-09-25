@@ -37,7 +37,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@29';
+export const FORMAT = 'vektor/scene@30';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -85,7 +85,9 @@ export const FORMAT = 'vektor/scene@29';
      relire un bruit comme une rampe linéaire ;
    - `@1` à `@27` ne nommaient pas les formes : libellé par défaut, même dessin ;
    - `@1` à `@28` n'espaçaient pas les spirales à pas d'arc constant : spirale
-     croissante, même dessin. */
+     croissante, même dessin ;
+   - `@1` à `@29` ne connaissaient pas la spirale d'Archimède : rien à
+     convertir. Le bump empêche une version antérieure de la relire en `none`. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -116,6 +118,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@26',
   'vektor/scene@27',
   'vektor/scene@28',
+  'vektor/scene@29',
   FORMAT,
 ]);
 

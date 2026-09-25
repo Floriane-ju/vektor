@@ -293,6 +293,7 @@ const GUIDES = {
   axial: guideCenter,
   spiral: guideCenter,
 };
+  archimedes: guideCenter,
 
 /**
  * Repères de la pile de modificateurs du calque actif : chaque modificateur qui

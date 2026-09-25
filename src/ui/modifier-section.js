@@ -124,7 +124,7 @@ const showStage = (parts, modifier, owner, forElement) => {
      proposer un « Copies » promettrait un réglage sans effet. */
   parts.countField.hidden = Object.hasOwn(FIXED_COPIES, modifier.type);
   parts.stepRow.hidden = modifier.type !== 'step';
-  parts.spiralRow.hidden = modifier.type !== 'spiral';
+  parts.spiralRow.hidden = modifier.type !== 'spiral' && modifier.type !== 'archimedes';
   parts.evenField.hidden = parts.spiralRow.hidden;
   parts.axisField.hidden = !Object.hasOwn(MIRROR_AXIS, modifier.type);
   /* Un pas ne tourne rien, un point tourné reste identique : rien à orienter. */

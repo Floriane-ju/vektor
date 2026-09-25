@@ -149,8 +149,8 @@ const evenTurn = (i, angleStep, factor) => {
  * (la version précédente) poussait chaque forme dans sa propre direction et
  * disloquait le groupe copie après copie.
  */
-const spiral = (point, i, n, center, { angleStep = 0.4, radiusStep = 12, evenSpacing = false } = {}) => {
-  const { angle, growth } = (evenSpacing ? evenTurn : growingTurn)(i, angleStep, 1 + clampGrowth(radiusStep) / 100);
+const turning = (grow, even) => (point, i, n, center, { angleStep = 0.4, radiusStep = 12, evenSpacing = false } = {}) => {
+  const { angle, growth } = (evenSpacing ? even : grow)(i, angleStep, 1 + clampGrowth(radiusStep) / 100);
   const rotated = rotateAround(point, center, angle);
   return {
     x: center.x + (rotated.x - center.x) * growth,
@@ -160,9 +160,58 @@ const spiral = (point, i, n, center, { angleStep = 0.4, radiusStep = 12, evenSpa
   };
 };
 
+const spiral = turning(growingTurn, evenTurn);
+
+/* Spirale d'Archimède : le rayon croît de `r` fois le rayon de départ à
+   chaque pas angulaire — linéaire en angle, spires équidistantes. */
+const linearTurn = (i, angleStep, factor) => ({
+  angle: i * angleStep,
+  growth: Math.min(MAX_GROWTH, Math.max(MIN_GROWTH, 1 + i * (factor - 1))),
+});
+
+/* Longueur d'arc de `R = u`, `θ = u/c` (à facteur près), primitive de √(u²+c²). */
+const archArc = (u, c) => {
+  const root = Math.hypot(u, c);
+  return (u * root + c * c * Math.log(u + root)) / 2;
+};
+
+/**
+ * Spirale d'Archimède à espacement constant : même courbe `R = d·u`,
+ * `θ = (u − 1)·angleStep/(factor − 1)`, parcourue à pas d'arc constant. L'arc
+ * vaut `d/|c|·archArc(u, c)` : le rayon de départ `d` n'est qu'un facteur
+ * commun, la transformation reste la même pour tous les points. `u` se trouve
+ * par dichotomie, `archArc` étant croissant.
+ *
+ * ponytail: 50 itérations par point et par copie ; une table par étage si
+ * une pile de 2000 copies rame.
+ */
+const evenLinearTurn = (i, angleStep, factor) => {
+  const g = factor - 1;
+  if (g === 0 || angleStep === 0) return linearTurn(i, angleStep, factor);
+  const c = g / angleStep;
+  const start = archArc(1, c);
+  const target = start + i * (archArc(1 + g, c) - start);
+  let lo = MIN_GROWTH;
+  let hi = Math.min(MAX_GROWTH, Math.max(1, 1 + i * g));
+  if (target <= archArc(lo, c)) hi = lo;
+  for (let k = 0; k < 50 && hi - lo > 1e-12; k += 1) {
+    const mid = (lo + hi) / 2;
+    if (archArc(mid, c) < target) lo = mid;
+    else hi = mid;
+  }
+  const growth = (lo + hi) / 2;
+  return { angle: ((growth - 1) * angleStep) / g, growth };
+};
+
+/**
+ * Spirale d'Archimède : comme `spiral`, mais le facteur croît de
+ * `radiusStep` % du rayon de départ par copie au lieu de se multiplier.
+ */
+const archimedes = turning(linearTurn, evenLinearTurn);
+
 const none = (point) => ({ x: point.x, y: point.y, angle: 0, flip: false });
 
-export const MODIFIERS = { none, step, mirrorH, mirrorV, axial, spiral };
+export const MODIFIERS = { none, step, mirrorH, mirrorV, axial, spiral, archimedes };
 
 export const MODIFIER_LABELS = {
   none: 'Aucun',
@@ -171,6 +220,7 @@ export const MODIFIER_LABELS = {
   mirrorV: 'Miroir vertical',
   axial: 'Miroir axial',
   spiral: 'Spirale',
+  archimedes: "Spirale d'Archimède",
 };
 
 /**
@@ -188,13 +238,13 @@ export const FIXED_COPIES = { none: 1, mirrorH: 2, mirrorV: 2 };
  * copies » n'a pas été touchée. `step` et `none` ne tournent rien : la case n'y
  * a pas de sens et n'est pas proposée.
  */
-export const ORIENTING = new Set(['mirrorH', 'mirrorV', 'axial', 'spiral']);
+export const ORIENTING = new Set(['mirrorH', 'mirrorV', 'axial', 'spiral', 'archimedes']);
 
 /**
  * Modificateurs qui tournent ou reflètent autour d'un pivot. `step` translate,
  * `none` ne fait rien : ni l'un ni l'autre n'a de pivot à régler ni à montrer.
  */
-export const PIVOTING = new Set(['mirrorH', 'mirrorV', 'axial', 'spiral']);
+export const PIVOTING = new Set(['mirrorH', 'mirrorV', 'axial', 'spiral', 'archimedes']);
 
 /** `orient` absent = réglage par défaut du type. */
 export const orients = (modifier) => ORIENTING.has(modifier.type) && (modifier.orient ?? true);
