@@ -2,7 +2,7 @@
 {
   "id": "T-0097",
   "titre": "3D : ruban — coupe du bout en biais sur une spirale serrée",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": ["3d", "rendu"],
   "cree": "2026-09-25",
@@ -20,6 +20,6 @@ biais et ne rejoint plus l'arête qui descend : pointe en flèche.
 
 ## Critères d'acceptation
 
-- [ ] Les deux bords d'un contour double ouvert finissent sur la même droite
+- [x] Les deux bords d'un contour double ouvert finissent sur la même droite
       en travers du tracé, même quand le bord intérieur rebrousse.
-- [ ] Test qui échoue sans le correctif.
+- [x] Test qui échoue sans le correctif.
