@@ -495,7 +495,65 @@ export const getRenderedChildren = (layer) => {
       });
     }
   });
-  return children;
+  return linkPoints(layer, copies, children);
+};
+
+/**
+ * Étages dont la case « Activer les répétitions linéaires » est cochée, avec
+ * leur pas dans la numérotation de `stackCopies` (le dernier étage varie le
+ * plus vite). Un étage d'une seule copie n'a rien à relier. L'axial se referme :
+ * sa dernière copie rejoint la première.
+ */
+const linearStages = (modifiers) =>
+  modifiers.flatMap((modifier, k) => {
+    const n = effectiveCount(modifier);
+    if (!modifier.linear || n < 2) return [];
+    const stride = modifiers.slice(k + 1).reduce((total, next) => total * effectiveCount(next), 1);
+    return [{ k, n, stride, wrap: modifier.type === 'axial' && n > 2 }];
+  });
+
+/* Chaîne des copies d'un point le long d'un étage : un seul tracé, pour que
+   tirets et contour double courent d'un bout à l'autre sans casser aux
+   jointures. Elle porte le style de trait du point et les valeurs
+   interpolées de sa première copie. L'échelle de la copie passe dans
+   l'épaisseur et l'écart, comme pour le point : les sommets tombent pile sur
+   les copies. */
+const chain = (from, links, closed) => ({
+  ...from,
+  type: 'polyline',
+  points: links.map((link) => ({ x: link.x - from.x, y: link.y - from.y })),
+  closed,
+  fill: 'none',
+  rotation: 0,
+  flip: false,
+  strokeWidth: from.strokeWidth * (from.scale ?? 1),
+  gap: from.gap * (from.scale ?? 1),
+  scale: 1,
+});
+
+/**
+ * Répétition linéaire : un point qui la demande ne se dessine plus copie par
+ * copie ; le long de chaque étage coché, ses copies successives forment un
+ * tracé, émis à la première copie de la rangée. Aucun étage coché : les
+ * points restent des points.
+ *
+ * ponytail: une chaîne n'a qu'une couleur, une opacité, une épaisseur — celles
+ * de sa première copie. Un dégradé le long du tracé demanderait de le
+ * découper, ce que le contour double interdit.
+ */
+const linkPoints = (layer, copies, children) => {
+  const stages = linearStages(layer.modifiers);
+  if (stages.length === 0) return children;
+  const count = layer.elements.length;
+  return children.flatMap((child, c) => {
+    if (child.type !== 'point' || !child.linear) return [child];
+    const i = Math.floor(c / count);
+    return stages
+      .filter(({ k }) => copies[i][k] === 0)
+      .map(({ n, stride, wrap }) =>
+        chain(child, Array.from({ length: n }, (_, step) => children[c + step * stride * count]), wrap),
+      );
+  });
 };
 
 /* ---- Transitions immuables : chaque fonction renvoie une nouvelle Scene ---- */

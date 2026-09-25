@@ -333,6 +333,15 @@ export const mountPropertyPanel = ({ store, container = null }) => {
   const arcRow = row(field('Début (°)', arcStart), field('Fin (°)', arcEnd), field('Fermeture', closure));
   const closedField = switchField('Fermé', closed);
   const filledField = switchField('Remplir', filled);
+  /* Point seulement : relie chaque copie à sa voisine, le long des étages qui
+     l'autorisent (« Activer les répétitions linéaires »). */
+  const linear = bind(
+    input('checkbox'),
+    (element) => element.linear === true,
+    (element, value) => store.apply(updateElement, element.id, { linear: value }),
+    { event: 'change', parse: () => linear.checked },
+  );
+  const linearField = switchField('Répétition linéaire', linear);
 
   /* Trait : le type de motif se lit sur le tableau de tirets — vide, plein ;
      un premier tiret nul, des points ; sinon des tirets, réglés par tiret et espace.
@@ -413,6 +422,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     closedField,
     strokeSeparator,
     filledField,
+    linearField,
     strokeGroup,
     separator(),
     booleans.root,
@@ -618,11 +628,19 @@ export const mountPropertyPanel = ({ store, container = null }) => {
     const spiralRow = row(field('Pas angulaire (rad)', angleStep), field('Croissance (%)', radiusStep));
     const axisField = field("Angle de l'axe (°)", axis);
     const orientField = switchField('Orienter les copies', orient);
+    /* Décochée, l'étage ignore la répétition linéaire des points. */
+    const linear = bindModifier(
+      input('checkbox'),
+      (layer) => layer.modifiers[index].linear === true,
+      (value) => ({ linear: value }),
+      { event: 'change', parse: () => linear.checked },
+    );
+    const linearField = switchField('Activer les répétitions linéaires', linear);
     const ownPivotField = switchField('Pivot personnalisé', ownPivot);
     const pivotRow = row(field('Pivot X', pivotInput('x')), field('Pivot Y', pivotInput('y')));
 
     const root = el('div', 'modifier-block');
-    root.append(head, countField, stepRow, spiralRow, axisField, orientField, ownPivotField, pivotRow);
+    root.append(head, countField, stepRow, spiralRow, axisField, orientField, linearField, ownPivotField, pivotRow);
 
     const sync = (layer) => {
       const modifier = layer.modifiers[index];
@@ -639,6 +657,7 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       axisField.hidden = !Object.hasOwn(MIRROR_AXIS, modifier.type);
       /* Un pas ne tourne rien : rien à orienter. */
       orientField.hidden = !ORIENTING.has(modifier.type);
+      linearField.hidden = modifier.type === 'none';
       ownPivotField.hidden = !PIVOTING.has(modifier.type);
       pivotRow.hidden = ownPivotField.hidden || !modifier.center;
     };
@@ -717,8 +736,10 @@ export const mountPropertyPanel = ({ store, container = null }) => {
       widthField.hidden = uniform || trace;
       heightField.hidden = uniform || trace;
       filledField.hidden = dot;
-      strokeGroup.hidden = dot;
-      strokeSeparator.hidden = dot;
+      linearField.hidden = !dot;
+      /* Relié, le point devient des lignes : il en prend le style de trait. */
+      strokeGroup.hidden = dot && !element.linear;
+      strokeSeparator.hidden = strokeGroup.hidden;
       dashLength.hidden = dashKind(element.dash) !== 'dashed';
       dashPairRow.hidden = dashLength.hidden;
       gapField.hidden = !element.outlined;

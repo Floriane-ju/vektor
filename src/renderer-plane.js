@@ -90,16 +90,44 @@ const areaMask = (child, d, keep) => {
  * (ordre de dessin). Arêtes cachées d'un anneau en trait plein, sans tirets.
  * Un masque par copie ; mutualiser si des centaines de copies pèsent.
  */
+/**
+ * Bande d'un contour double ouvert, à l'écran : l'axe de chacun de ses deux
+ * traits (évidés par `hollowStroke`), l'un à l'aller, l'autre au retour, en
+ * un contour fermé. Ses coins sont ceux du tracé sur chaque trait. `null`
+ * hors de ce cas.
+ * Ses bouts se ferment, en haut comme au fond : c'est un volume.
+ */
+const openBand = (child, { closed, corners }, flat, width) => {
+  const gap = (child.gap ?? 0) * (child.scale ?? 1);
+  const dot = SHAPES[child.type].geometry === 'dot';
+  if (closed || dot || !child.outlined || child.stroke === 'none' || width <= 0 || gap <= 0 || flat.length < 2) {
+    return null;
+  }
+  const reach = (width + gap) / 2;
+  const [left, right] = [offsetPolygon(flat, reach, false), offsetPolygon(flat, -reach, false)];
+  const n = flat.length;
+  return {
+    base: [...left, ...right.reverse()],
+    closed: true,
+    corners: [...new Set([0, n - 1, ...corners])].flatMap((i) => [i, 2 * n - 1 - i]),
+  };
+};
+
 const createExtrusion = (child, v) => {
   const up = child.height > 0;
   const lifted = { ...child, matrix: shifted(child.matrix, v) };
   const [front, back] = up ? [lifted, child] : [child, lifted];
   const [frontShift, backShift] = up ? [v, { x: 0, y: 0 }] : [{ x: 0, y: 0 }, v];
-  const { points, closed, corners } = outlinePath(child);
-  const base = points.map((p) => project(child.matrix, p));
+  const outline = outlinePath(child);
   const geometry = SHAPES[child.type].geometry;
   const dot = geometry === 'dot';
   const width = child.strokeWidth * (dot ? (child.scale ?? 1) : 1);
+  /* Contour double ouvert : un volume plein, la bande entre ses deux traits.
+     Il se traite comme un contour fermé — face du haut et parois cachent le
+     fond et les arêtes de derrière. */
+  const flat = outline.points.map((p) => project(child.matrix, p));
+  const band = openBand(child, outline, flat, width);
+  const { base, closed, corners } = band ?? { ...outline, base: flat };
   /* Anneau : les deux bords du contour double, décalés dans le plan puis projetés. */
   const double = planeDouble(child);
   const ring = Boolean(double);
@@ -210,7 +238,9 @@ const createExtrusion = (child, v) => {
     volume.setAttribute('mask', `url(#${mask.id})`);
     group.append(mask);
   }
-  const face = createNode(front);
+  /* Bande : le haut est son contour fermé, bouts compris — le trait évidé n'y
+     a pas de bord, et le volume paraîtrait ouvert au-dessus seulement. */
+  const face = band ? stroked(screenPath(moved(base, frontShift), true), true) : createNode(front);
   delete face.dataset.elementId;
   group.append(volume, face);
   return group;

@@ -1958,6 +1958,21 @@ describe('plan 3D et contour double', () => {
   });
 });
 
+describe('plan 3D et contour double ouvert', () => {
+  it('extrude la bande entre les deux traits comme un volume plein, masqué par sa face', () => {
+    const line = createElement('line', 450, 450, { rx: 100, ry: 0, strokeWidth: 4, gap: 10, outlined: true, height: 30 });
+    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [line] });
+    const svg = stage();
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+    const group = svg.querySelector(`[data-element-id="${line.id}"]`);
+    const cover = group.querySelector(':scope > mask');
+    expect(cover).not.toBeNull();
+    const volume = group.querySelector(`:scope > g[mask="url(#${cover.id})"]`);
+    /* Plus de fond évidé dessiné en entier : seulement le fond visible et les arêtes. */
+    expect(volume.querySelector('mask')).toBeNull();
+  });
+});
+
 describe('plan 3D : paroi', () => {
   it('une extrusion haute ne trace que la moitié proche du fond, et pas les coins arrière', () => {
     const plane = { tilt: 55, heading: 30, sides: 'transparent' };

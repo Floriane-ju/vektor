@@ -36,7 +36,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@23';
+export const FORMAT = 'vektor/scene@24';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -72,7 +72,9 @@ export const FORMAT = 'vektor/scene@23';
      type, même dessin. Le bump empêche une version antérieure de redresser
      un axe incliné sans le dire ;
    - `@1` à `@21` n'avaient pas de contour double : option éteinte, même dessin ;
-   - `@1` à `@22` n'avaient ni plan 3D ni hauteur : calques à plat, même dessin. */
+   - `@1` à `@22` n'avaient ni plan 3D ni hauteur : calques à plat, même dessin ;
+   - `@1` à `@23` ne reliaient pas les points : répétition linéaire éteinte,
+     même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -97,6 +99,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@20',
   'vektor/scene@21',
   'vektor/scene@22',
+  'vektor/scene@23',
   FORMAT,
 ]);
 
@@ -275,6 +278,7 @@ const readElement = (input, style) => {
         }
       : {}),
     ...(raw.type === 'polyline' ? { points: readPoints(raw.points), closed: Boolean(raw.closed) } : {}),
+    ...(raw.type === 'point' && raw.linear === true ? { linear: true } : {}),
   });
 };
 
@@ -294,6 +298,7 @@ const readModifier = (raw, legacy) =>
     radiusStep: num(raw?.radiusStep, 12),
     ...readPivot(raw?.center),
     ...(Number.isFinite(raw?.axis) ? { axis: clampAxis(raw.axis) } : {}),
+    ...(raw?.linear === true ? { linear: true } : {}),
   });
 
 /**
@@ -425,7 +430,7 @@ export const deserialize = (text) => {
   if (!Array.isArray(raw.layers)) fail('`layers` doit être un tableau.');
 
   /* Avant `@13`, pas d'orientation des copies. */
-  const legacy = !['illu/scene@13', 'illu/scene@14', 'illu/scene@15', 'illu/scene@16', 'vektor/scene@16', 'vektor/scene@17', 'vektor/scene@18', 'vektor/scene@19', 'vektor/scene@20', 'vektor/scene@21', 'vektor/scene@22', FORMAT].includes(raw.format);
+  const legacy = !['illu/scene@13', 'illu/scene@14', 'illu/scene@15', 'illu/scene@16', 'vektor/scene@16', 'vektor/scene@17', 'vektor/scene@18', 'vektor/scene@19', 'vektor/scene@20', 'vektor/scene@21', 'vektor/scene@22', 'vektor/scene@23', FORMAT].includes(raw.format);
   const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy));
   if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
     fail('Deux calques portent le même identifiant.');

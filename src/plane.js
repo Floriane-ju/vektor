@@ -166,9 +166,10 @@ const MITER_LIMIT = 4;
 /**
  * Contour fermé décalé de `distance` vers l'extérieur (négatif : vers
  * l'intérieur), par sommet, en onglet borné. Sert aux deux bords d'un contour
- * double, posés à l'écran de part et d'autre du tracé.
+ * double, posés à l'écran de part et d'autre du tracé. Ouvert (`closed`
+ * faux), chaque bout suit la normale de sa seule arête.
  */
-export const offsetPolygon = (points, distance) => {
+export const offsetPolygon = (points, distance, closed = true) => {
   const n = points.length;
   const area = points.reduce((sum, p, i) => {
     const q = points[(i + 1) % n];
@@ -180,7 +181,10 @@ export const offsetPolygon = (points, distance) => {
     return { x: (sign * (b.y - a.y)) / length, y: (-sign * (b.x - a.x)) / length };
   };
   return points.map((p, i) => {
-    const [before, after] = [normal(points[(i - 1 + n) % n], p), normal(p, points[(i + 1) % n])];
+    const [before, after] = [
+      closed || i > 0 ? normal(points[(i - 1 + n) % n], p) : normal(p, points[i + 1]),
+      closed || i < n - 1 ? normal(p, points[(i + 1) % n]) : normal(points[i - 1], p),
+    ];
     const sum = { x: before.x + after.x, y: before.y + after.y };
     const length = Math.hypot(sum.x, sum.y) || 1;
     const miter = { x: sum.x / length, y: sum.y / length };

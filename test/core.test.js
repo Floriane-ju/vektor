@@ -1381,7 +1381,7 @@ describe('rotation et épaisseur interpolées', () => {
       layers: [{ id: 'L1', modifiers: [{ id: 'M1', type: 'axial' }] }],
     });
     const again = deserialize(serialize(deserialize(old)));
-    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@23');
+    expect(JSON.parse(serialize(again)).format).toBe('vektor/scene@24');
     expect(orients(again.layers[0].modifiers[0])).toBe(true);
   });
 
@@ -1917,5 +1917,76 @@ describe('forme logée dans une autre', async () => {
       }],
     });
     expect(deserialize(raw).layers[0].elements.map((el) => el.inside)).toEqual(['E2', null, null, null, null]);
+  });
+});
+
+describe('répétition linéaire des points', () => {
+  const pointLayer = (modifiers, linear = true) =>
+    createLayer({
+      center: { x: 0, y: 0 },
+      elements: [createElement('point', 10, 0, { linear })],
+      modifiers,
+    });
+  const vertices = (child) => child.points.map((p) => [child.x + p.x, child.y + p.y]);
+
+  it('relie les copies d’un pas en un seul tracé', () => {
+    const children = getRenderedChildren(pointLayer([createModifier({ n: 3, stepX: 50, linear: true })]));
+    expect(children).toHaveLength(1);
+    expect(children[0]).toMatchObject({ type: 'polyline', closed: false });
+    expect(vertices(children[0])).toEqual([[10, 0], [60, 0], [110, 0]]);
+  });
+
+  it('ignore l’option du point si l’étage ne l’autorise pas', () => {
+    const children = getRenderedChildren(pointLayer([createModifier({ n: 3 })]));
+    expect(children.map((c) => c.type)).toEqual(['point', 'point', 'point']);
+  });
+
+  it('laisse les points tels quels sans l’option du point', () => {
+    const children = getRenderedChildren(pointLayer([createModifier({ n: 3, linear: true })], false));
+    expect(children.every((c) => c.type === 'point')).toBe(true);
+  });
+
+  it('un miroir donne un segment, l’axial un tracé fermé', () => {
+    const [mirror] = getRenderedChildren(pointLayer([createModifier({ type: 'mirrorH', linear: true })]));
+    expect(mirror.points).toHaveLength(2);
+    const ring = getRenderedChildren(pointLayer([createModifier({ type: 'axial', n: 4, linear: true })]));
+    expect(ring).toHaveLength(1);
+    expect(ring[0]).toMatchObject({ closed: true });
+    expect(ring[0].points).toHaveLength(4);
+  });
+
+  it('ne relie que le long des étages cochés d’une pile', () => {
+    const children = getRenderedChildren(
+      pointLayer([createModifier({ n: 3, stepX: 50 }), createModifier({ n: 2, stepX: 0, stepY: 40, linear: true })]),
+    );
+    /* Trois rangées d'un segment vertical chacune. */
+    expect(children).toHaveLength(3);
+    expect(vertices(children[1])).toEqual([[60, 0], [60, 40]]);
+  });
+
+  it('le tracé porte le style de trait du point', () => {
+    const layer = pointLayer([createModifier({ n: 2, linear: true })]);
+    const styled = { ...layer, elements: [{ ...layer.elements[0], dash: [2, 1], linecap: 'square', outlined: true }] };
+    const [line] = getRenderedChildren(styled);
+    expect(line).toMatchObject({ dash: [2, 1], linecap: 'square', outlined: true, fill: 'none' });
+  });
+
+  it('survit à la sauvegarde', () => {
+    const scene = { ...createScene(), layers: [pointLayer([createModifier({ linear: true })])] };
+    const [layer] = deserialize(serialize(scene)).layers;
+    expect(layer.modifiers[0].linear).toBe(true);
+    expect(layer.elements[0].linear).toBe(true);
+  });
+});
+
+import { offsetPolygon } from '../src/plane.js';
+
+describe('offsetPolygon ouvert', () => {
+  it('décale chaque bout selon sa seule arête', () => {
+    const rail = offsetPolygon([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], 2, false);
+    expect(Math.abs(rail[0].y)).toBeCloseTo(2);
+    expect(rail[0].x).toBeCloseTo(0);
+    expect(Math.abs(rail[2].x - 10)).toBeCloseTo(2);
+    expect(rail[2].y).toBeCloseTo(10);
   });
 });
