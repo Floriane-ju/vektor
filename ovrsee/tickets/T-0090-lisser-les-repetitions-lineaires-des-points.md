@@ -2,9 +2,12 @@
 {
   "id": "T-0090",
   "titre": "Lisser les répétitions linéaires des points",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["rendu", "modificateurs"],
+  "tags": [
+    "rendu",
+    "modificateurs"
+  ],
   "cree": "2026-09-25",
   "maj": "2026-09-25",
   "plan": null

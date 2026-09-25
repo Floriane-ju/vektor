@@ -2,9 +2,12 @@
 {
   "id": "T-0091",
   "titre": "Spirale lissée à des à-coups",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["rendu", "bug"],
+  "tags": [
+    "rendu",
+    "bug"
+  ],
   "cree": "2026-09-25",
   "maj": "2026-09-25",
   "plan": null
