@@ -2,7 +2,7 @@
 {
   "id": "T-0061",
   "titre": "Bornes à la saisie : plages, croissance spirale, champ vidé",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "s",
   "tags": [
@@ -10,7 +10,7 @@
     "ui"
   ],
   "cree": "2026-09-24",
-  "maj": "2026-09-24",
+  "maj": "2026-09-25",
   "plan": null,
   "epic": "T-0056"
 }
@@ -30,6 +30,6 @@ Le panneau accepte ce que l'import refuse, donc le dessin change au rechargement
 
 ## Critères d'acceptation
 
-- [ ] Les transitions bornent avec `RANGE_BOUNDS`, comme l'import : même valeur avant et après rechargement.
-- [ ] Croissance de spirale bornée ; aucune coordonnée non finie n'atteint le SVG.
-- [ ] `null` et `""` ne deviennent jamais 0 (repli sur la valeur par défaut / champ ignoré).
+- [x] Les transitions bornent avec `RANGE_BOUNDS`, comme l'import : même valeur avant et après rechargement.
+- [x] Croissance de spirale bornée ; aucune coordonnée non finie n'atteint le SVG.
+- [x] `null` et `""` ne deviennent jamais 0 (repli sur la valeur par défaut / champ ignoré).

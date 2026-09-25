@@ -2,7 +2,7 @@
 {
   "id": "T-0065",
   "titre": "Opacité interpolée : liseré sombre et aplats pair-impair figés",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "s",
   "tags": [
@@ -10,7 +10,7 @@
     "interpolation"
   ],
   "cree": "2026-09-24",
-  "maj": "2026-09-24",
+  "maj": "2026-09-25",
   "plan": null,
   "epic": "T-0026"
 }
@@ -29,5 +29,5 @@ En « Recoupements creux », l'aplat pair-impair n'a aucune opacité
 
 ## Critères d'acceptation
 
-- [ ] Forme remplie à opacité < 1 : pas de liseré plus foncé que l'aplat.
-- [ ] En recoupements creux, l'aplat suit la rampe d'opacité des copies.
+- [x] Forme remplie à opacité < 1 : pas de liseré plus foncé que l'aplat.
+- [x] En recoupements creux, l'aplat suit la rampe d'opacité des copies.
