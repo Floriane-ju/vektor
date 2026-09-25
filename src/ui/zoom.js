@@ -1,74 +1,73 @@
 import { STAGE } from '../scene.js';
+import { drawingBounds } from '../renderer-svg.js';
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 8;
 const STEP = 1.25;
+/* Marge autour du dessin quand on ajuste la vue, en pixels écran. */
+const FIT_MARGIN = 32;
 
 export const clampZoom = (zoom) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 
 /**
- * Zoom du plan de travail.
+ * Vue du plan de travail infini.
  *
- * Le zoom ne touche que la taille CSS du `<svg>` : le `viewBox` reste celui de
- * la scène, donc l'export et `toStagePoint` (qui passe par la CTM) ne voient
- * rien. Le défilement est laissé au `overflow: auto` du conteneur, auquel on
- * donne une marge (`--slack-*`) pour que le plan défile même plus petit que
- * l'écran, jusqu'à en toucher les bords.
+ * Le `<svg>` couvre l'écran ; la vue n'est que son `viewBox` : `x, y` = point
+ * de la scène au coin haut gauche, `zoom` = pixels par unité. Les coordonnées
+ * du dessin ne bougent pas, et `toStagePoint` (qui passe par la CTM) suit.
+ * Molette = déplacement, Ctrl/⌘ + molette ou pincement = zoom sous le pointeur.
+ *
+ * ponytail: pas de glisser à la barre d'espace ni au bouton du milieu ; la
+ * molette et le trackpad suffisent tant qu'on ne le réclame pas.
  */
-export const mountZoom = ({ svgRoot, scroller, container }) => {
-  /* `null` = ajusté au conteneur (comportement par défaut via `max-width`). */
-  let zoom = null;
+export const mountZoom = ({ svgRoot, container }) => {
+  let view = { x: 0, y: 0, zoom: 1 };
+  const listeners = [];
 
   const label = document.createElement('output');
   label.className = 'zoom-level';
 
-  const currentZoom = () => zoom ?? svgRoot.getBoundingClientRect().width / STAGE.width;
+  /* Zone visible, en unités de la scène. */
+  const visible = () => ({
+    x0: view.x,
+    y0: view.y,
+    x1: view.x + (svgRoot.clientWidth || STAGE.width) / view.zoom,
+    y1: view.y + (svgRoot.clientHeight || STAGE.height) / view.zoom,
+  });
 
-  const artboard = svgRoot.closest('.artboard') ?? svgRoot;
-
-  /* Plan plus petit que l'écran : marge = place libre, de sorte qu'aux deux
-     bouts du défilement il touche un bord. Plus grand : les gouttières suffisent. */
-  const updateSlack = () => {
-    const box = artboard.getBoundingClientRect();
-    scroller.style.setProperty('--slack-x', `${Math.max(0, scroller.clientWidth - box.width)}px`);
-    scroller.style.setProperty('--slack-y', `${Math.max(0, scroller.clientHeight - box.height)}px`);
+  const apply = (next) => {
+    view = next;
+    const { x0, y0, x1, y1 } = visible();
+    svgRoot.setAttribute('viewBox', [x0, y0, x1 - x0, y1 - y0].map((v) => Math.round(v * 100) / 100).join(' '));
+    label.textContent = `${Math.round(view.zoom * 100)} %`;
+    for (const listener of listeners) listener(visible());
   };
 
-  /* Centre de la zone libre entre les panneaux, en coordonnées écran. */
-  const freeCenter = () => {
+  /* Garde sous `anchor` (coordonnées écran) le même point de la scène. */
+  const zoomAt = (next, anchor) => {
+    const box = svgRoot.getBoundingClientRect();
+    const sx = (anchor?.x ?? box.left + box.width / 2) - box.left;
+    const sy = (anchor?.y ?? box.top + box.height / 2) - box.top;
+    const zoom = clampZoom(next);
+    apply({ x: view.x + sx / view.zoom - sx / zoom, y: view.y + sy / view.zoom - sy / zoom, zoom });
+  };
+
+  /* Cadre le dessin (ou, vide, le carré de référence) dans la zone libre
+     entre les panneaux. */
+  const fit = () => {
     const root = getComputedStyle(document.documentElement);
-    const gutter = (side) => parseFloat(root.getPropertyValue(`--gutter-${side}`)) || 0;
-    return {
-      x: (gutter('left') + scroller.clientWidth - gutter('right')) / 2,
-      y: (gutter('top') + scroller.clientHeight - gutter('bottom')) / 2,
-    };
-  };
-
-  const refresh = () => {
-    label.textContent = `${Math.round(currentZoom() * 100)} %`;
-  };
-
-  /* Garde sous `anchor` (coordonnées écran) le même point de la scène.
-     « Ajuster » (`null`) recentre le plan dans la zone libre. */
-  const setZoom = (next, anchor) => {
-    const before = svgRoot.getBoundingClientRect();
-    const recenter = next === null || !before.width;
-    const point = recenter
-      ? freeCenter()
-      : anchor ?? { x: before.left + before.width / 2, y: before.top + before.height / 2 };
-    const fx = recenter ? 0.5 : (point.x - before.left) / before.width;
-    const fy = recenter ? 0.5 : (point.y - before.top) / before.height;
-
-    zoom = next === null ? null : clampZoom(next);
-    svgRoot.style.maxWidth = zoom === null ? '' : 'none';
-    svgRoot.style.maxHeight = zoom === null ? '' : 'none';
-    svgRoot.style.width = zoom === null ? '' : `${STAGE.width * zoom}px`;
-    updateSlack();
-
-    const after = svgRoot.getBoundingClientRect();
-    scroller.scrollLeft += after.left + fx * after.width - point.x;
-    scroller.scrollTop += after.top + fy * after.height - point.y;
-    refresh();
+    const gutter = (side) => (parseFloat(root.getPropertyValue(`--gutter-${side}`)) || 0) + FIT_MARGIN;
+    const width = Math.max(1, (svgRoot.clientWidth || STAGE.width) - gutter('left') - gutter('right'));
+    const height = Math.max(1, (svgRoot.clientHeight || STAGE.height) - gutter('top') - gutter('bottom'));
+    const box = drawingBounds(svgRoot) ?? { minX: 0, minY: 0, maxX: STAGE.width, maxY: STAGE.height };
+    const w = Math.max(1, box.maxX - box.minX);
+    const h = Math.max(1, box.maxY - box.minY);
+    const zoom = clampZoom(Math.min(width / w, height / h));
+    apply({
+      x: (box.minX + box.maxX) / 2 - (gutter('left') + width / 2) / zoom,
+      y: (box.minY + box.maxY) / 2 - (gutter('top') + height / 2) / zoom,
+      zoom,
+    });
   };
 
   const button = (text, title, onClick) => {
@@ -85,36 +84,44 @@ export const mountZoom = ({ svgRoot, scroller, container }) => {
   const group = document.createElement('div');
   group.className = 'zoom-controls';
   group.append(
-    button('−', 'Dézoomer', () => setZoom(currentZoom() / STEP)),
+    button('−', 'Dézoomer', () => zoomAt(view.zoom / STEP)),
     label,
-    button('+', 'Zoomer', () => setZoom(currentZoom() * STEP)),
-    button('Ajuster', "Ajuster à l'écran", () => setZoom(null)),
+    button('+', 'Zoomer', () => zoomAt(view.zoom * STEP)),
+    button('Ajuster', 'Cadrer le dessin', fit),
   );
   container.append(group);
 
-  /* Ctrl/⌘ + molette, et le pincement trackpad (émis comme wheel + ctrlKey). */
-  scroller.addEventListener(
+  /* Ctrl/⌘ + molette, et le pincement trackpad (émis comme wheel + ctrlKey) ;
+     sinon la molette déplace la vue. */
+  svgRoot.addEventListener(
     'wheel',
     (event) => {
-      if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
-      setZoom(currentZoom() * Math.exp(-event.deltaY * 0.01), {
-        x: event.clientX,
-        y: event.clientY,
-      });
+      if (event.ctrlKey || event.metaKey) {
+        zoomAt(view.zoom * Math.exp(-event.deltaY * 0.01), { x: event.clientX, y: event.clientY });
+        return;
+      }
+      apply({ ...view, x: view.x + event.deltaX / view.zoom, y: view.y + event.deltaY / view.zoom });
     },
     { passive: false },
   );
 
   window.addEventListener('keydown', (event) => {
     if (!event.ctrlKey && !event.metaKey) return;
-    if (event.key === '+' || event.key === '=') setZoom(currentZoom() * STEP);
-    else if (event.key === '-') setZoom(currentZoom() / STEP);
-    else if (event.key === '0') setZoom(null);
+    if (event.key === '+' || event.key === '=') zoomAt(view.zoom * STEP);
+    else if (event.key === '-') zoomAt(view.zoom / STEP);
+    else if (event.key === '0') fit();
     else return;
     event.preventDefault();
   });
 
-  window.addEventListener('resize', () => setZoom(zoom));
-  setZoom(null);
+  /* Le coin haut gauche reste en place ; la vue s'étend ou se réduit. */
+  window.addEventListener('resize', () => apply(view));
+
+  return {
+    fit,
+    visible,
+    /** Appelé à chaque changement de vue avec la zone visible. */
+    onChange: (listener) => listeners.push(listener),
+  };
 };

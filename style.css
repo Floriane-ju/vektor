@@ -91,50 +91,15 @@ input[type="range"] {
 .stage-wrap {
   position: fixed;
   inset: 0;
-  display: flex;
-  overflow: auto;
-  padding: var(--gutter-top) var(--gutter-right) var(--gutter-bottom) var(--gutter-left);
+  overflow: hidden;
 }
-
-.artboard {
-  /* `--slack-*` (posés par `ui/zoom.js`) : assez de marge pour que le plan,
-     plus petit que l'écran, glisse jusqu'à en toucher chaque bord. En marge
-     de l'élément et pas en padding du conteneur : un padding plus large que
-     la fenêtre élargissait `.stage-wrap` lui-même, donc la marge suivante —
-     boucle qui envoyait le plan au loin à chaque cran de dézoom. */
-  margin:
-    max(0px, var(--slack-y, 0px) - var(--gutter-top))
-    max(0px, var(--slack-x, 0px) - var(--gutter-right))
-    max(0px, var(--slack-y, 0px) - var(--gutter-bottom))
-    max(0px, var(--slack-x, 0px) - var(--gutter-left));
-  /* Sans marges auto, l'étirement flex écraserait le `<svg>` en hauteur. */
-  align-self: flex-start;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.artboard-caption {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.artboard-caption strong { color: var(--text); font-weight: 500; }
 
 #stage {
   display: block;
   background: var(--stage);
-  box-shadow: 0 0 0 1px var(--line);
   cursor: crosshair;
-  /* Ajusté : le plan tient dans la zone libre entre les panneaux. */
-  /* Pas `100%` : la marge de défilement élargit le padding du conteneur. */
-  max-width: calc(100vw - var(--gutter-left) - var(--gutter-right));
-  max-height: calc(100vh - var(--gutter-top) - var(--gutter-bottom) - 30px);
-  width: auto;
-  height: auto;
-  aspect-ratio: 1;
+  width: 100%;
+  height: 100%;
   /* Un glissement sur le stage dessine : il ne doit pas aussi faire défiler la
      page ou sélectionner du texte. */
   touch-action: none;
@@ -153,8 +118,8 @@ input[type="range"] {
 #stage[data-tool="cursor"][data-dragging],
 #stage[data-tool="cursor"][data-dragging] * { cursor: grabbing; }
 
-/* L'image de la grille (posée par `ui/settings.js`) couvre le plan à l'échelle
-   de son viewBox, donc elle suit le zoom. */
+/* L'image de la grille (posée par `ui/settings.js`) a le viewBox de la vue :
+   étirée sur tout le `<svg>`, elle tombe juste. */
 #stage[data-grid] { background-size: 100% 100%; background-repeat: no-repeat; }
 
 /* ---- Éléments flottants ---- */

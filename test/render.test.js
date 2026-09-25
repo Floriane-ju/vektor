@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { areaPath, childBounds, render, shapePreview, toSvgDocument } from '../src/renderer-svg.js';
+import { areaPath, childBounds, MASK_REGION, render, shapePreview, toSvgDocument } from '../src/renderer-svg.js';
 import { createElement, createInterpolation, createLayer, STAGE } from '../src/scene.js';
 import { createStore } from '../src/store.js';
 import { mountToolbar } from '../src/ui/toolbar.js';
@@ -104,9 +104,10 @@ describe('repères du modificateur', () => {
     const lines = [...guides.querySelectorAll('line:not([data-grip])')];
     expect(lines).toHaveLength(1);
     expect([lines[0].getAttribute('x1'), lines[0].getAttribute('x2')]).toEqual(['400', '400']);
+    /* Plan infini : l'axe court sur toute l'étendue des masques. */
     expect([lines[0].getAttribute('y1'), lines[0].getAttribute('y2')]).toEqual([
-      '0',
-      String(STAGE.height),
+      String(MASK_REGION.y),
+      String(MASK_REGION.y + MASK_REGION.height),
     ]);
   });
 
@@ -202,13 +203,26 @@ describe('export SVG', () => {
     const document_ = toSvgDocument(svg);
 
     expect(document_).toContain(`xmlns="${SVG_NS}"`);
-    expect(document_).toContain(`viewBox="0 0 ${STAGE.width} ${STAGE.height}"`);
-    expect(document_).toContain(`width="${STAGE.width}"`);
     expect(document_).not.toContain('aria-label');
     expect(document_).not.toContain('id="stage"');
     /* La racine vivante garde ses attributs d'interface : le clone ne la touche pas. */
     expect(svg.id).toBe('stage');
     expect(svg.getAttribute('aria-label')).toBe('Illustration en cours');
+  });
+
+  it('se cadre sur le dessin, où qu’il soit sur le plan infini', () => {
+    const svg = stage();
+    const element = { ...createElement('ellipse', -2000, 3000), rx: 40, ry: 20, strokeWidth: 2 };
+    render({ layers: [createLayer({ elements: [element] })], activeLayerId: null, activeElementId: null }, svg);
+    const document_ = toSvgDocument(svg);
+    expect(document_).toContain('viewBox="-2041 2979 82 42"');
+    expect(document_).toContain('width="82"');
+  });
+
+  it('vide, s’exporte sur le plan de référence', () => {
+    const svg = stage();
+    render({ layers: [], activeLayerId: null, activeElementId: null }, svg);
+    expect(toSvgDocument(svg)).toContain(`viewBox="0 0 ${STAGE.width} ${STAGE.height}"`);
   });
 
   it('laisse le style et les marqueurs d’écran hors du fichier', () => {
@@ -1610,7 +1624,7 @@ describe('panneau : motif de trait', () => {
 });
 
 describe('booléens entre formes', () => {
-  const WIDE = String(STAGE.width * 3);
+  const WIDE = String(MASK_REGION.width);
   const setup = (steps, overrides = {}) => {
     const tools = steps.map(([, geometry = 'ellipse'], i) => createElement(geometry, i * 30, 0, { rx: 40, ry: 40 }));
     const forme = createElement('rect', 0, 0, {

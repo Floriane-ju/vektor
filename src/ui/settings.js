@@ -52,11 +52,11 @@ const steps = (from, to, cell) => {
   return Array.from({ length: Math.max(0, count) }, (_, i) => round((first + i) * cell));
 };
 
-/* Boîte, dans le repère du plan, des coins de la scène ramenés de l'écran. */
-const unfolded = (plane) => {
-  if (!plane) return FLAT;
+/* Boîte, dans le repère du plan, des coins de la zone visible ramenés de l'écran. */
+const unfolded = (plane, view = FLAT) => {
+  if (!plane) return view;
   const matrix = planeMatrix(plane);
-  const corners = [FLAT.x0, FLAT.x1].flatMap((x) => [FLAT.y0, FLAT.y1].map((y) => unproject(matrix, { x, y })));
+  const corners = [view.x0, view.x1].flatMap((x) => [view.y0, view.y1].map((y) => unproject(matrix, { x, y })));
   const xs = corners.map((p) => p.x);
   const ys = corners.map((p) => p.y);
   return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
@@ -75,8 +75,8 @@ const ringCount = (circles, bounds) => {
 
 /**
  * Tracé de la grille, en unités du plan (viewBox de la scène). Elle couvre
- * `bounds` — la scène à plat, ou ce que l'écran montre du plan 3D une fois
- * déplié.
+ * `bounds` — la zone visible à plat, ou ce que l'écran montre du plan 3D une
+ * fois déplié.
  */
 const gridPath = ({ gridType, divisions, circles }, bounds = FLAT) => {
   if (gridType === 'square') {
@@ -104,17 +104,18 @@ const gridPath = ({ gridType, divisions, circles }, bounds = FLAT) => {
 };
 
 /**
- * La grille est une image SVG en fond du `<svg>` : même viewBox que la scène,
- * donc elle suit le zoom, et l'export (qui ne sérialise que le DOM) l'ignore.
+ * La grille est une image SVG en fond du `<svg>` : même viewBox que la vue
+ * (`view`, zone visible), redessinée quand elle bouge ; l'export (qui ne
+ * sérialise que le DOM) l'ignore.
  * Avec un `plane`, elle est projetée comme le calque : l'aimantation se fait
  * dans le repère du plan, les croisements visibles sont ceux qui aimantent.
  */
-export const gridImage = (settings, color, plane = null) => {
+export const gridImage = (settings, color, plane = null, view = FLAT) => {
   const m = plane && planeMatrix(plane);
-  const bounds = unfolded(plane);
+  const bounds = unfolded(plane, view);
   const transform = m ? ` transform="matrix(${[m.a, m.b, m.c, m.d, m.e, m.f].map(round).join(' ')})"` : '';
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${STAGE.width} ${STAGE.height}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${[view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0].map(round).join(' ')}" preserveAspectRatio="none">` +
     `<path d="${gridPath(settings, bounds)}"${transform} fill="none" stroke="${color}" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 };
@@ -141,10 +142,11 @@ const numberInput = (id, name) => {
  * ponytail: `popover` natif — non modal pour voir la grille changer en direct,
  * Échap et clic extérieur le ferment d'eux-mêmes.
  */
-export const mountSettings = ({ store, svgRoot, container }) => {
+export const mountSettings = ({ store, svgRoot, container, view = null }) => {
   let settings = load();
   const currentPlane = () => (store ? activePlane(getActiveLayer(store.get())) : null);
   let plane = currentPlane();
+  const visible = () => view?.visible() ?? FLAT;
   const color = getComputedStyle(document.documentElement).getPropertyValue('--grid').trim() || '#303030';
 
   const panel = document.createElement('div');
@@ -181,7 +183,7 @@ export const mountSettings = ({ store, svgRoot, container }) => {
     circles.value = String(settings.circles);
     circlesField.hidden = settings.gridType !== 'polar';
     svgRoot.toggleAttribute('data-grid', settings.grid);
-    svgRoot.style.backgroundImage = settings.grid ? gridImage(settings, color, plane) : '';
+    svgRoot.style.backgroundImage = settings.grid ? gridImage(settings, color, plane, visible()) : '';
   };
 
   /* La grille suit le plan du calque actif ; ne la redessiner que s'il change. */
@@ -229,11 +231,12 @@ export const mountSettings = ({ store, svgRoot, container }) => {
   separator.className = 'pill-sep';
   container.append(separator, toggle, open, panel);
   apply();
+  view?.onChange(() => settings.grid && apply());
 
   const snap = (point) => {
     if (!settings.grid) return point;
     return settings.gridType === 'polar'
-      ? snapToPolarGrid(point, settings.circles, settings.divisions, ringCount(settings.circles, unfolded(plane)))
+      ? snapToPolarGrid(point, settings.circles, settings.divisions, ringCount(settings.circles, unfolded(plane, visible())))
       : snapToGrid(point, settings.divisions);
   };
   return { snap };

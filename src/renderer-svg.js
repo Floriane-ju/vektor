@@ -34,6 +34,7 @@ export const render = (scene, svgRoot) => {
      cache ce qui est dessiné avant lui (`occlude`). */
   const drawn = [];
   const occluders = new Map();
+  const boxes = [];
   const defs = svgNode('defs');
   /* Forme logée dans un volume (`inside`) : tranchée selon la profondeur de
      son hôte de même copie (`createInside`), et dessinée juste après lui.
@@ -69,6 +70,7 @@ export const render = (scene, svgRoot) => {
     for (const child of children) {
       if (!bounds.has(child.id)) bounds.set(child.id, childBounds(child));
       if (tools.has(child.id)) continue;
+      boxes.push(childBounds(child));
       const steps = child.booleans
         .map((step) => ({ shape: partner(step.with, child), op: step.op }))
         .filter((step) => step.shape);
@@ -100,6 +102,7 @@ export const render = (scene, svgRoot) => {
     drawn.push(...group.children);
     svgRoot.append(group);
   }
+  drawings.set(svgRoot, boxes.length > 0 ? union(boxes) : null);
   if (occluders.size > 0) occlude(drawn, occluders, defs);
   if (defs.children.length > 0) svgRoot.prepend(defs);
 
@@ -199,17 +202,17 @@ const guideCenter = (center) => {
 
 /**
  * Axe de symétrie d'un miroir : la seule chose que `n` ne déplace plus.
- * Prolongé d'un bord du plan à l'autre ; incliné, il est coupé par le premier
+ * Prolongé sur toute l'étendue des masques ; incliné, il est coupé par le premier
  * bord atteint de chaque côté du pivot.
  */
 const mirrorGuides = (center, modifier) => {
   const d = axisDirection(modifier);
   const spans = [
-    [center.x, d.x, STAGE.width],
-    [center.y, d.y, STAGE.height],
+    [center.x, d.x, MASK_REGION.x, MASK_REGION.width],
+    [center.y, d.y, MASK_REGION.y, MASK_REGION.height],
   ]
     .filter(([, dir]) => dir !== 0)
-    .map(([from, dir, size]) => [-from / dir, (size - from) / dir].sort((a, b) => a - b));
+    .map(([from, dir, low, size]) => [(low - from) / dir, (low + size - from) / dir].sort((a, b) => a - b));
   const start = Math.max(...spans.map((span) => span[0]));
   const end = Math.min(...spans.map((span) => span[1]));
   const line = guideLine(center.x + start * d.x, center.y + start * d.y, center.x + end * d.x, center.y + end * d.y);
@@ -551,10 +554,16 @@ export const shapePreview = (element, size) => {
   return svg;
 };
 
-/* Étendue d'un masque, en unités du dessin.
-   ponytail: trois plans de large autour du plan ; une forme qui déborde plus
-   loin serait coupée net, élargir le jour où le zoom y mène. */
-export const MASK_REGION = { x: -STAGE.width, y: -STAGE.height, width: STAGE.width * 3, height: STAGE.height * 3 };
+/* Étendue d'un masque, en unités du dessin : le plan est infini, un masque non.
+   ponytail: ±20 plans autour du plan de référence, plus que ce que montre le
+   zoom minimal ; une forme posée plus loin serait coupée net. */
+const WORLD = 20;
+export const MASK_REGION = {
+  x: -STAGE.width * WORLD,
+  y: -STAGE.height * WORLD,
+  width: STAGE.width * (2 * WORLD + 1),
+  height: STAGE.height * (2 * WORLD + 1),
+};
 
 /* Ce que chaque opération garde des bords, comme un pathfinder : les bords
    déjà acquis, dedans ou dehors de l'outil ; le bord de l'outil, dedans ou
@@ -763,6 +772,20 @@ const frame = (box, marker) => {
    n'a que l'identifiant sous la main. */
 const sourceBounds = new WeakMap();
 
+/* Boîte de tout ce que le dernier rendu a dessiné (`null` : rien), pour
+   cadrer l'export et la vue. */
+const drawings = new WeakMap();
+export const drawingBounds = (svgRoot) => drawings.get(svgRoot) ?? null;
+
+/* Cadre de l'export : le dessin, ou le plan de référence s'il est vide. */
+const exportFrame = (svgRoot) => {
+  const box = drawingBounds(svgRoot);
+  if (!box) return { x: 0, y: 0, width: STAGE.width, height: STAGE.height };
+  const x = Math.floor(box.minX);
+  const y = Math.floor(box.minY);
+  return { x, y, width: Math.max(1, Math.ceil(box.maxX) - x), height: Math.max(1, Math.ceil(box.maxY) - y) };
+};
+
 const createSelection = (scene, svgRoot) => {
   const bounds = sourceBounds.get(svgRoot);
   if (scene.activeElementId) {
@@ -838,14 +861,15 @@ export const toSvgDocument = (svgRoot) => {
   clone.removeAttribute('aria-label');
   stripScreenAttributes(clone);
   clone.setAttribute('xmlns', SVG_NS);
-  clone.setAttribute('width', String(STAGE.width));
-  clone.setAttribute('height', String(STAGE.height));
-  clone.setAttribute('viewBox', `0 0 ${STAGE.width} ${STAGE.height}`);
+  const { x, y, width, height } = exportFrame(svgRoot);
+  clone.setAttribute('width', String(width));
+  clone.setAttribute('height', String(height));
+  clone.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
   return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(clone)}\n`;
 };
 
 /**
- * Rastérise le document SVG exporté en PNG, à `scale` fois la taille du plan.
+ * Rastérise le document SVG exporté en PNG, à `scale` fois la taille du dessin.
  * Passe par une `<img>` et un `<canvas>` : même source que l'export SVG, donc
  * même dessin, repères retirés. Sans fond dans le document, le PNG est
  * transparent.
@@ -859,8 +883,9 @@ export const toPng = (svgRoot, scale) =>
     image.onload = () => {
       URL.revokeObjectURL(url);
       const canvas = document.createElement('canvas');
-      canvas.width = STAGE.width * scale;
-      canvas.height = STAGE.height * scale;
+      const { width, height } = exportFrame(svgRoot);
+      canvas.width = width * scale;
+      canvas.height = height * scale;
       canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
       canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('image trop grande pour le navigateur.'))), 'image/png');
     };

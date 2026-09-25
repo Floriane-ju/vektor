@@ -43,12 +43,8 @@ const shapeList = document.getElementById('shape-list');
 mountHistory({ store, container: actions });
 mountScrub();
 mountShortcuts({ store, container: actions, status });
-mountZoom({
-  svgRoot,
-  scroller: svgRoot.closest('.stage-wrap') ?? svgRoot.parentElement,
-  container: viewControls,
-});
-const { snap } = mountSettings({ store, svgRoot, container: viewControls });
+const view = mountZoom({ svgRoot, container: viewControls });
+const { snap } = mountSettings({ store, svgRoot, container: viewControls, view });
 const { getTool } = mountToolbar({
   store,
   svgRoot,
@@ -69,6 +65,7 @@ mountLayerPanel({
 });
 
 render(store.get(), svgRoot);
+view.fit();
 if (restored.error) {
   status.show(`Sauvegarde locale illisible, projet vierge — ${restored.error}`, 'error');
 } else if (restored.scene) {

@@ -8,20 +8,16 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <!-- Le plan de travail occupe tout l'écran ; les panneaux flottent dessus. -->
+    <!-- Le plan de travail, infini, occupe tout l'écran ; les panneaux flottent
+         dessus. Son viewBox est la vue (ui/zoom.js). -->
     <main class="stage-wrap" aria-label="Plan de travail">
-      <figure class="artboard">
-        <figcaption class="artboard-caption"><strong>Zone de dessin</strong></figcaption>
-        <svg
-          id="stage"
-          xmlns="http://www.w3.org/2000/svg"
-          width="900"
-          height="900"
-          viewBox="0 0 900 900"
-          role="img"
-          aria-label="Illustration en cours"
-        ></svg>
-      </figure>
+      <svg
+        id="stage"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 900 900"
+        role="img"
+        aria-label="Illustration en cours"
+      ></svg>
     </main>
 
     <h1 class="brand">Vektor</h1>
