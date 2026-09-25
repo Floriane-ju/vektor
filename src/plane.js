@@ -329,6 +329,21 @@ export const planeDouble = (child) => {
 };
 
 /**
+ * Contour double ouvert sur un plan 3D (ruban, ligne, arc, tracé ouvert) : ses
+ * deux traits, décalés dans le repère du plan et débouclés, avant projection
+ * — l'écart s'écrase avec la perspective, comme celui de `planeDouble`.
+ * `null` hors de ce cas (fermé, point, sans écart).
+ */
+export const planeBand = (child) => {
+  const gap = (child.gap ?? 0) * (child.scale ?? 1);
+  const { points, closed } = outlinePath(child);
+  const band = child.outlined && !closed && points.length > 1 && child.stroke !== 'none' && child.strokeWidth > 0 && gap > 0;
+  if (!band) return null;
+  const offset = (child.strokeWidth + gap) / 2;
+  return [offset, -offset].map((distance) => untangle(offsetPolygon(points, distance, false), points, distance));
+};
+
+/**
  * Silhouette opaque d'un volume extrudé de `v` à l'écran, depuis sa face
  * `child.matrix` : ce qu'il cache des formes dessinées avant lui. `solids` =
  * morceaux à peindre (deux faces et une paroi par arête), élargis d'une
@@ -366,7 +381,9 @@ export const occluder = (child, v) => {
  * de l'axe de la forme (la droite par `from` le long de `v`) — le croisement
  * s'il y en a un : au pied, son milieu peut tomber de l'autre côté.
  *
- * ponytail: une forme logée large (disque) n'est jugée que sur son axe.
+ * ponytail: une forme logée large (disque) n'est jugée que sur son axe, et la
+ * largeur de la bande est prise à l'écran, pas dans le plan (`planeBand`) —
+ * l'ombre déborde un peu sur un plan très incliné.
  */
 export const sheet = (child, v, from) => {
   const { points } = outlinePath(child);

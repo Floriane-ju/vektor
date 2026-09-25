@@ -5,8 +5,8 @@ import {
   nearRuns,
   occluder,
   offsetPolygon,
-  untangle,
   outlinePath,
+  planeBand,
   planeDouble,
   project,
   sheet,
@@ -24,15 +24,16 @@ import { SHAPES } from './scene.js';
  */
 
 /* Chaque bord en tracé fermé, relatif au centre et déjà placé ; le fond se
-   peint à l'intérieur du bord intérieur, le séparateur reste vide. */
-export const createPlaneDouble = (child, [outer, inner]) => {
+   peint à l'intérieur du bord intérieur, le séparateur reste vide. Ouvert
+   (`planeBand`), deux traits ouverts, l'aplat sous eux sans trait. */
+export const createPlaneDouble = (child, [outer, inner], closed = true) => {
   const scale = child.scale ?? 1;
   const edge = (points, fill) =>
     createNode({
       ...child,
       type: 'polyline',
       points: points.map((p) => ({ x: p.x - child.x, y: p.y - child.y })),
-      closed: true,
+      closed,
       rotation: 0,
       flip: false,
       scale: 1,
@@ -43,7 +44,9 @@ export const createPlaneDouble = (child, [outer, inner]) => {
     });
   const group = svgNode('g');
   group.dataset.elementId = child.id;
-  const nodes = [edge(outer, 'none'), edge(inner, child.fill)];
+  const nodes = closed
+    ? [edge(outer, 'none'), edge(inner, child.fill)]
+    : [...(child.fill === 'none' ? [] : [createNode({ ...child, outlined: false, stroke: 'none' })]), edge(outer, 'none'), edge(inner, 'none')];
   for (const node of nodes) delete node.dataset.elementId;
   group.append(...nodes);
   return group;
@@ -74,7 +77,7 @@ const volumeOf = (child) => {
   const dot = SHAPES[child.type].geometry === 'dot';
   const width = child.strokeWidth * (dot ? (child.scale ?? 1) : 1);
   const flat = outline.points.map((p) => project(child.matrix, p));
-  const band = openBand(child, outline, flat, width);
+  const band = openBand(child, outline, flat);
   return { ...(band ?? { ...outline, base: flat }), band, dot, width };
 };
 
@@ -144,19 +147,15 @@ const areaMask = (child, d, keep) => {
  */
 /**
  * Bande d'un contour double ouvert, à l'écran : l'axe de chacun de ses deux
- * traits (évidés par `hollowStroke`), l'un à l'aller, l'autre au retour, en
+ * traits (`planeBand`, décalés dans le plan), l'un à l'aller, l'autre au retour, en
  * un contour fermé. Ses coins sont ceux du tracé sur chaque trait. `null`
  * hors de ce cas.
  * Ses bouts se ferment, en haut comme au fond : c'est un volume.
  */
-const openBand = (child, { closed, corners }, flat, width) => {
-  const gap = (child.gap ?? 0) * (child.scale ?? 1);
-  const dot = SHAPES[child.type].geometry === 'dot';
-  if (closed || dot || !child.outlined || child.stroke === 'none' || width <= 0 || gap <= 0 || flat.length < 2) {
-    return null;
-  }
-  const reach = (width + gap) / 2;
-  const [left, right] = [reach, -reach].map((distance) => untangle(offsetPolygon(flat, distance, false), flat, distance));
+const openBand = (child, { corners }, flat) => {
+  const edges = planeBand(child);
+  if (!edges) return null;
+  const [left, right] = edges.map((edge) => edge.map((p) => project(child.matrix, p)));
   const n = flat.length;
   return {
     base: [...left, ...right.reverse()],

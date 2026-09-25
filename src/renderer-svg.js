@@ -10,7 +10,7 @@ import {
   STAGE,
 } from './scene.js';
 import { axisDirection } from './modifiers.js';
-import { extrusion, outlinePath, planeDouble, planeMatrix, polygonVertices, project, shifted } from './plane.js';
+import { extrusion, outlinePath, planeBand, planeDouble, planeMatrix, polygonVertices, project, shifted } from './plane.js';
 import { createInside, createPlaneDouble, createShape, occlude, shapeOccluder, wallNeighbours } from './renderer-plane.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -398,6 +398,8 @@ const createEvenOdd = (layer, areas, fill) => {
 export const createNode = (child) => {
   const double = child.matrix ? planeDouble(child) : null;
   if (double) return createPlaneDouble(child, double);
+  const band = child.matrix ? planeBand(child) : null;
+  if (band) return createPlaneDouble(child, band, false);
   const scale = child.scale ?? 1;
   const rx = clampExtent(child.type, child.rx * scale);
   const ry = clampExtent(child.type, child.ry * scale);

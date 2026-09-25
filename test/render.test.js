@@ -2187,6 +2187,25 @@ describe('plan 3D : contour double', () => {
     expect(extent(outer, 'x') - extent(inner, 'x')).toBeCloseTo(48, 0);
     expect(extent(outer, 'y') - extent(inner, 'y')).toBeCloseTo(24, 0);
   });
+
+  it('ouvert (ligne, ruban) : ses deux traits aussi, avec ou sans profondeur', () => {
+    const plane = { tilt: 60, heading: 0, sides: 'transparent' };
+    const coords = (node) =>
+      [...node.getAttribute('d').matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
+    const draw = (extra) => {
+      const line = createElement('line', 450, 450, { rx: 100, ry: 0, strokeWidth: 4, gap: 20, outlined: true, ...extra });
+      const svg = stage();
+      render({ layers: [createLayer({ plane, elements: [line] })], activeLayerId: null, activeElementId: null }, svg);
+      return svg.querySelector(`[data-layer-id] > [data-element-id="${line.id}"]`);
+    };
+    const flat = draw({});
+    expect(flat.querySelector('mask')).toBeNull();
+    const [left, right] = [...flat.querySelectorAll('path')].map(coords);
+    /* ± 12 dans le plan, en travers de la ligne : moitié à l'écran (cos 60°). */
+    expect(Math.abs(left[0].y - right[0].y)).toBeCloseTo(12, 0);
+    const face = coords(draw({ height: 30 }).lastElementChild);
+    expect(Math.max(...face.map((p) => p.y)) - Math.min(...face.map((p) => p.y))).toBeCloseTo(12, 0);
+  });
 });
 
 describe('plan 3D : occlusion', () => {
