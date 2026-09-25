@@ -2221,3 +2221,39 @@ describe('untangle', () => {
     expect(untangle(edge, path, 3)).toEqual(edge);
   });
 });
+
+import { sheet } from '../src/plane.js';
+
+describe('sheet', () => {
+  /* Paroi devant ou derrière le pied de la forme logée, jugée là où elle croise son axe. */
+  const wall = (points) =>
+    sheet(
+      { type: 'polyline', x: 0, y: 0, rx: 100, ry: 20, points, closed: false, strokeWidth: 4, matrix: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } },
+      { x: 0, y: -10 },
+      { x: 0, y: 0 },
+    ).solids.length;
+
+  it('garde la paroi qui croise l’axe devant le pied, même si son milieu est derrière', () => {
+    expect(wall([{ x: -100, y: -20 }, { x: 10, y: 5 }])).toBe(1);
+  });
+
+  it('écarte la paroi qui croise l’axe derrière le pied, même si son milieu est devant', () => {
+    expect(wall([{ x: -100, y: 20 }, { x: 10, y: -5 }])).toBe(0);
+  });
+});
+
+describe('sheet : silhouette', () => {
+  it('s’arrête au bout du ruban : l’arrondi du trait des parois ne déborde pas', () => {
+    const shape = sheet(
+      { type: 'polyline', x: 0, y: 0, rx: 100, ry: 0, points: [{ x: -100, y: 20 }, { x: 100, y: 20 }], closed: false, strokeWidth: 4, matrix: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } },
+      { x: 0, y: -10 },
+      { x: 0, y: 0 },
+    );
+    const xs = shape.clip.flat().map((p) => p.x);
+    expect(Math.max(...xs)).toBeCloseTo(100);
+    expect(Math.min(...xs)).toBeCloseTo(-100);
+    const ys = shape.clip.flat().map((p) => p.y);
+    expect(Math.max(...ys)).toBeCloseTo(22);
+    expect(Math.min(...ys)).toBeCloseTo(8);
+  });
+});

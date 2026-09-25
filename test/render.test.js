@@ -2085,6 +2085,25 @@ describe('plan 3D et contour double ouvert', () => {
     }
   });
 
+  it('des rubans répétés (spirale puis axial) se cachent l’un l’autre', () => {
+    /* Longueur des arêtes visibles de la première copie. */
+    const visible = (modifiers) => {
+      const point = createElement('point', 520, 450, { strokeWidth: 6, height: 60, outlined: true, gap: 14, modifiers });
+      const layer = createLayer({ center: { x: 450, y: 450 }, plane: { tilt: 55, heading: 20, sides: 'transparent' }, elements: [point] });
+      const svg = stage();
+      render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
+      const [first] = svg.querySelectorAll('mask[data-walls]');
+      return [...first.querySelectorAll('path[fill="none"]')]
+        .flatMap((path) => path.getAttribute('d').split('M').slice(1))
+        .map((run) => [...run.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]))
+        .reduce((sum, points) => sum + points.slice(1).reduce((length, p, i) => length + Math.hypot(p[0] - points[i][0], p[1] - points[i][1]), 0), 0);
+    };
+    const spiral = createModifier({ type: 'spiral', n: 16, angleStep: 0.6, radiusStep: 10, linear: true });
+    const alone = visible([spiral]);
+    const paired = visible([spiral, createModifier({ type: 'axial', n: 2 })]);
+    expect(paired).toBeLessThan(alone - 20);
+  });
+
   it('une étoile ou un tracé fermé creux se cachent eux-mêmes, un rectangle garde la moitié proche du fond', () => {
     const star = createElement('polygon', 450, 450, { rx: 100, ry: 100, sides: 5, inner: 40, height: 60 });
     const free = createElement('polyline', 450, 450, {
@@ -2255,6 +2274,20 @@ describe('forme logée : rendu, panneau, arbre', () => {
     const walls = svg.querySelector(masks.middle.slice(4, -1)).querySelectorAll('g[fill="#000"] > path');
     expect(walls.length).toBeGreaterThan(0);
     expect(walls.length).toBeLessThan(11);
+    /* Ombre découpée par la silhouette du ruban : pas d'arrondi au-delà de ses bouts. */
+    const shadow = svg.querySelector(masks.middle.slice(4, -1)).querySelector('g[fill="#000"]');
+    expect(svg.querySelector(`clipPath${shadow.getAttribute('clip-path').slice(4, -1)} path`)).not.toBeNull();
+  });
+
+  it('traverse une spirale répétée en axial : les parois de chaque copie la cachent', () => {
+    const spiral = createModifier({ type: 'spiral', n: 12, angleStep: 0.6, radiusStep: 12, linear: true });
+    const walls = (modifiers) => {
+      const ribbon = createElement('point', 500, 450, { height: 40, modifiers });
+      const axis = createElement('point', 450, 450, { height: 300, inside: ribbon.id });
+      const svg = drawn([axis, ribbon]);
+      return svg.querySelector(slices(svg, axis).middle.slice(4, -1)).querySelectorAll('g[fill="#000"] > path').length;
+    };
+    expect(walls([spiral, createModifier({ type: 'axial', n: 2 })])).toBeGreaterThan(walls([spiral]));
   });
 
   it('un anneau de points reliés (axial) accueille une forme comme un cercle', () => {

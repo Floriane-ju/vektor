@@ -53,11 +53,61 @@ export const createPlaneDouble = (child, [outer, inner]) => {
  * Forme dessinée : extrudée si son calque a un plan 3D et qu'elle a une
  * hauteur, sinon le nœud simple.
  */
-export const createShape = (child) => {
+export const createShape = (child, others = []) => {
+  const v = extrusionOf(child);
+  if (!v) return createNode(child);
+  return createExtrusion(centred(child, v), v, others);
+};
+
+const extrusionOf = (child) => {
   const v = child.plane && child.height ? extrusion(child.plane, child.height * (child.scale ?? 1)) : null;
-  if (!v || Math.hypot(v.x, v.y) <= 1e-6) return createNode(child);
-  /* Centrée sur le plan : une profondeur de 10 va de -5 à 5. */
-  return createExtrusion({ ...child, matrix: shifted(child.matrix, { x: -v.x / 2, y: -v.y / 2 }) }, v);
+  return v && Math.hypot(v.x, v.y) > 1e-6 ? v : null;
+};
+
+/* Centrée sur le plan : une profondeur de 10 va de -5 à 5. */
+const centred = (child, v) => ({ ...child, matrix: shifted(child.matrix, { x: -v.x / 2, y: -v.y / 2 }) });
+
+/* Contour du bas à l'écran d'une copie déjà centrée : bande d'un contour
+   double ouvert, sinon le contour projeté. */
+const volumeOf = (child) => {
+  const outline = outlinePath(child);
+  const dot = SHAPES[child.type].geometry === 'dot';
+  const width = child.strokeWidth * (dot ? (child.scale ?? 1) : 1);
+  const flat = outline.points.map((p) => project(child.matrix, p));
+  const band = openBand(child, outline, flat, width);
+  return { ...(band ?? { ...outline, base: flat }), band, dot, width };
+};
+
+/* Volume qui se cache lui-même (ruban, tracé ouvert, étoile, tracé fermé
+   creux), hors anneau : ses parois proches cachent les lointaines. */
+const hidesItself = (child, { band, closed, dot, base }) =>
+  !planeDouble(child) && Boolean(band || (!closed && !dot) || (closed && !convex(base)));
+
+/**
+ * Parois des volumes qui se cachent eux-mêmes, pour qu'ils se cachent aussi
+ * l'un l'autre (rubans d'une spirale répétée en axial) : `Map` copie →
+ * `{ base, closed }` des autres volumes de même extrusion à l'écran — même
+ * projection parallèle, donc même découpe qu'entre ses propres parois.
+ *
+ * ponytail: volumes d'un même calque et de même profondeur seulement ; entre
+ * profondeurs ou calques différents, l'ordre de dessin reste la règle.
+ */
+export const wallNeighbours = (children) => {
+  const groups = new Map();
+  for (const child of children) {
+    const v = extrusionOf(child);
+    if (!v) continue;
+    const volume = volumeOf(centred(child, v));
+    if (!hidesItself(child, volume)) continue;
+    const key = `${round(v.x)},${round(v.y)},${child.height > 0}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push([child, { base: volume.base, closed: volume.closed }]);
+  }
+  const neighbours = new Map();
+  for (const members of groups.values()) {
+    for (const [child] of members) neighbours.set(child, members.filter(([other]) => other !== child).map(([, wall]) => wall));
+  }
+  return neighbours;
 };
 
 /* Contour déjà à l'écran en données `d`. */
@@ -160,42 +210,53 @@ const within = (a, b, quad) => {
  * peintre : peint paroi par paroi, chaque aplat rognait le trait de ses
  * voisines — dents de scie sur le fond, flancs amincis.
  *
- * ponytail: découpe en O(n²) arête × paroi, sans index spatial — quelques
- * centaines de sommets.
+ * ponytail: découpe en O(n²) arête × paroi, sans index spatial, et contre
+ * toutes les copies voisines (`others`) — quelques centaines de sommets en
+ * tout ; un index par boîtes si une spirale à dizaines de copies rame.
  */
-const createWalls = (child, { base, closed, edges, corners, v, up, width }) => {
+const createWalls = (child, { base, closed, edges, corners, v, up, width, others = [] }) => {
   const n = base.length;
   const [backShift, frontShift] = up ? [{ x: 0, y: 0 }, v] : [v, { x: 0, y: 0 }];
-  const top = moved(base, v);
+  /* Parois des autres volumes (`wallNeighbours`) : elles cachent tout ce
+     qu'elles couvrent, sans exception de voisinage. */
+  const foreign = others.flatMap((other) =>
+    Array.from({ length: other.closed ? other.base.length : other.base.length - 1 }, (_, i) => [
+      other.base[i],
+      other.base[(i + 1) % other.base.length],
+    ]),
+  );
   /* Bouts ronds : une coupure tombe sur un bord de paroi, tracé de la même
      épaisseur, qui recouvre le rond ; au pli, le fond rejoint l'arête de flanc. */
   const line = (d) => svgNode('path', { d, fill: 'none', stroke: '#fff', 'stroke-width': round(width), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
   const segments = Array.from({ length: closed ? n : n - 1 }, (_, i) => [i, (i + 1) % n]);
-  const quads = segments.map(([i, j]) => [base[i], base[j], top[j], top[i]]);
+  const pairs = [...segments.map(([i, j]) => [base[i], base[j]]), ...foreign];
+  const quads = pairs.map(([a, b]) => [a, b, { x: b.x + v.x, y: b.y + v.y }, { x: a.x + v.x, y: a.y + v.y }]);
   const back = backRuns(moved(base, backShift), segments, quads, { closed, corners: new Set(corners) });
-  const flanks = edges.flatMap((k) => flankRuns(base, k, segments, v, up));
+  const flanks = edges.flatMap((k) => flankRuns(base[k], pairs, v, up));
+  /* Face du haut d'un autre volume : devant toutes les arêtes. */
+  const fronts = [...(closed ? [base] : []), ...others.filter((other) => other.closed).map((other) => other.base)];
   const mask = svgNode('mask', { id: maskId(`walls-${child.id}`), maskUnits: 'userSpaceOnUse', ...MASK_REGION });
   mask.dataset.walls = '';
   mask.append(
     svgNode('rect', { ...MASK_REGION, fill: '#000' }),
     ...[back, flanks].filter((runs) => runs.length).map((runs) => line(runs.map((run) => screenPath(run, false)).join(' '))),
-    ...(closed ? [svgNode('path', { d: screenPath(moved(base, frontShift), true), fill: '#000', stroke: 'none' })] : []),
+    ...fronts.map((front) => svgNode('path', { d: screenPath(moved(front, frontShift), true), fill: '#000', stroke: 'none' })),
   );
   const paint = svgNode('rect', { ...MASK_REGION, fill: child.stroke, opacity: round(child.opacity ?? 1), mask: `url(#${mask.id})` });
   return [mask, paint];
 };
 
-/* Morceaux visibles de l'arête de flanc du sommet `k`, de `base[k]` à
-   `base[k] + v`. Son point de hauteur t tombe, à l'écran, sur la paroi d'un
-   segment e à la hauteur t + c (d = base[k] − départ de e = s·e + c·v) :
+/* Morceaux visibles de l'arête de flanc du sommet `foot`, de `foot` à
+   `foot + v`. Son point de hauteur t tombe, à l'écran, sur la paroi d'un
+   segment a→b (e = b − a) à la hauteur t + c (d = foot − a = s·e + c·v) :
    caché si ce point de paroi est plus près de la face avant (c > 0 quand elle
-   est en haut, c < 0 en bas). Les parois qui partent de `k` ne le cachent pas. */
-const flankRuns = (base, k, segments, v, up) => {
+   est en haut, c < 0 en bas). Les parois qui partent du sommet ne le cachent pas. */
+const flankRuns = (foot, pairs, v, up) => {
   const cross = (p, q) => p.x * q.y - p.y * q.x;
-  const hidden = segments
-    .flatMap(([i, j]) => {
-      const e = { x: base[j].x - base[i].x, y: base[j].y - base[i].y };
-      const d = { x: base[k].x - base[i].x, y: base[k].y - base[i].y };
+  const hidden = pairs
+    .flatMap(([a, b]) => {
+      const e = { x: b.x - a.x, y: b.y - a.y };
+      const d = { x: foot.x - a.x, y: foot.y - a.y };
       const det = cross(e, v);
       if (Math.abs(det) < EPSILON) return [];
       const [s, c] = [cross(d, v) / det, cross(e, d) / det];
@@ -204,7 +265,7 @@ const flankRuns = (base, k, segments, v, up) => {
       return t1 - t0 > EPSILON ? [[t0, t1]] : [];
     })
     .sort(([p], [q]) => p - q);
-  const at = (t) => ({ x: base[k].x + v.x * t, y: base[k].y + v.y * t });
+  const at = (t) => ({ x: foot.x + v.x * t, y: foot.y + v.y * t });
   const gap = GAP / (Math.hypot(v.x, v.y) || 1);
   const runs = [];
   let from = 0;
@@ -274,21 +335,16 @@ const convex = (points) => {
   return !(turns.includes(1) && turns.includes(-1));
 };
 
-const createExtrusion = (child, v) => {
+const createExtrusion = (child, v, others = []) => {
   const up = child.height > 0;
   const lifted = { ...child, matrix: shifted(child.matrix, v) };
   const [front, back] = up ? [lifted, child] : [child, lifted];
   const [frontShift, backShift] = up ? [v, { x: 0, y: 0 }] : [{ x: 0, y: 0 }, v];
-  const outline = outlinePath(child);
-  const geometry = SHAPES[child.type].geometry;
-  const dot = geometry === 'dot';
-  const width = child.strokeWidth * (dot ? (child.scale ?? 1) : 1);
   /* Contour double ouvert : un volume plein, la bande entre ses deux traits.
      Il se traite comme un contour fermé — face du haut et parois cachent le
      fond et les arêtes de derrière. */
-  const flat = outline.points.map((p) => project(child.matrix, p));
-  const band = openBand(child, outline, flat, width);
-  const { base, closed, corners } = band ?? { ...outline, base: flat };
+  const shape = volumeOf(child);
+  const { base, closed, corners, band, dot, width } = shape;
   /* Anneau : les deux bords du contour double, décalés dans le plan puis projetés. */
   const double = planeDouble(child);
   const ring = Boolean(double);
@@ -386,11 +442,11 @@ const createExtrusion = (child, v) => {
     hole.setAttribute('mask', `url(#${opening.id})`);
     /* Hors du volume : le masque de la face avant cacherait l'ouverture. */
     group.append(opening, hole);
-  } else if (band || (!closed && !dot) || (closed && !convex(base))) {
+  } else if (hidesItself(child, shape)) {
     /* Ruban, tracé ouvert, étoile, tracé fermé creux : ses parois proches
        cachent les lointaines, ce que la moitié proche du fond ignore. */
     const edges = [...new Set([...silhouette(base, closed, v), ...corners])];
-    const [mask, paint] = createWalls(child, { base, closed, edges, corners, v, up, width });
+    const [mask, paint] = createWalls(child, { base, closed, edges, corners, v, up, width, others });
     group.append(mask);
     volume.append(paint);
   } else if (closed) {
@@ -418,13 +474,25 @@ const createExtrusion = (child, v) => {
 /**
  * Silhouette opaque d'une forme extrudée (`occluder`), ou `null`. Hôte d'une
  * forme logée `guest`, un contour ouvert a aussi la sienne : ses parois devant
- * la forme (`sheet`).
+ * la forme (`sheet`), sur toutes ses copies propres `copies` — les rubans
+ * d'une spirale répétée en axial la cachent tous.
  */
-export const shapeOccluder = (child, guest = null) => {
-  const v = child.plane && child.height ? extrusion(child.plane, child.height * (child.scale ?? 1)) : null;
-  if (!v || Math.hypot(v.x, v.y) <= 1e-6) return null;
-  const base = { ...child, matrix: shifted(child.matrix, { x: -v.x / 2, y: -v.y / 2 }) };
-  return occluder(base, v) ?? (guest ? sheet(base, v, project(base.matrix, guest)) : null);
+export const shapeOccluder = (child, guest = null, copies = [child]) => {
+  const v = extrusionOf(child);
+  if (!v) return null;
+  const base = centred(child, v);
+  const solid = occluder(base, v);
+  if (solid || !guest) return solid;
+  const foot = project(base.matrix, guest);
+  const sheets = copies
+    .map((copy) => {
+      const w = extrusionOf(copy);
+      return w && sheet(centred(copy, w), w, foot);
+    })
+    .filter(Boolean);
+  return sheets.length
+    ? { ...sheets[0], solids: sheets.flatMap((one) => one.solids), clip: sheets.flatMap((one) => one.clip) }
+    : null;
 };
 
 /**
@@ -433,7 +501,7 @@ export const shapeOccluder = (child, guest = null) => {
  * volumes dessinés après lui, qu'il compose (produit) : une forme ne porte que
  * le masque du premier volume qui la suit.
  */
-const createOcclusion = ({ solids, opening, width }, next) => {
+const createOcclusion = ({ solids, opening, width, clip }, next) => {
   const mask = svgNode('mask', { id: maskId('occlude'), maskUnits: 'userSpaceOnUse', ...MASK_REGION });
   const content = svgNode('g', next ? { mask: `url(#${next})` } : {});
   /* Paroi d'un volume ouvert (`width`) : son trait couvre l'épaisseur de la bande. */
@@ -442,7 +510,15 @@ const createOcclusion = ({ solids, opening, width }, next) => {
     : { fill: '#000', stroke: 'none' });
   /* Un nœud par morceau : réunis, leurs sens de parcours s'annuleraient. */
   shadow.append(...solids.map((points) => svgNode('path', { d: screenPath(points, true) })));
-  content.append(svgNode('rect', { ...MASK_REGION, fill: '#fff' }), shadow);
+  content.append(svgNode('rect', { ...MASK_REGION, fill: '#fff' }));
+  if (clip) {
+    /* Bornée par la silhouette du volume ouvert : un nœud par morceau, réunis. */
+    const bound = svgNode('clipPath', { id: maskId('silhouette') });
+    bound.append(...clip.map((points) => svgNode('path', { d: screenPath(points, true) })));
+    shadow.setAttribute('clip-path', `url(#${bound.id})`);
+    content.append(bound);
+  }
+  content.append(shadow);
   if (opening) {
     const clip = svgNode('clipPath', { id: maskId('opening') });
     clip.append(svgNode('path', { d: screenPath(opening[1], true) }));

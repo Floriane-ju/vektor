@@ -359,21 +359,43 @@ export const occluder = (child, v) => {
  * le pied tombe en `from` à l'écran : une paroi par arête, peinte avec un trait
  * de `width` — l'épaisseur de la bande. Seules les parois devant `from` (côté
  * spectateur, à l'opposé de `v` à l'écran) la cachent : celles de derrière ne
- * passent jamais devant elle. `null` sans arête.
+ * passent jamais devant elle, et `clip` = silhouette du ruban qui les borne.
+ * `null` sans arête.
  *
- * ponytail: une arête est devant ou derrière d'un bloc, selon son milieu —
- * découper celle qui passe au pied si des tracés très grossiers le montrent.
+ * Une arête est devant ou derrière d'un bloc, jugée en son point le plus proche
+ * de l'axe de la forme (la droite par `from` le long de `v`) — le croisement
+ * s'il y en a un : au pied, son milieu peut tomber de l'autre côté.
+ *
+ * ponytail: une forme logée large (disque) n'est jugée que sur son axe.
  */
 export const sheet = (child, v, from) => {
   const { points } = outlinePath(child);
   if (points.length < 2) return null;
   const screen = points.map((p) => project(child.matrix, p));
   const toward = { x: -v.x, y: -v.y };
+  const across = { x: -v.y, y: v.x };
+  const off = (p) => (p.x - from.x) * across.x + (p.y - from.y) * across.y;
+  const nearest = (p, q) => {
+    const [dp, dq] = [off(p), off(q)];
+    if (dp * dq < 0) {
+      const t = dp / (dp - dq);
+      return { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t };
+    }
+    return Math.abs(dp) <= Math.abs(dq) ? p : q;
+  };
   const solids = screen.slice(1).flatMap((q, i) => {
     const p = screen[i];
-    const ahead = ((p.x + q.x) / 2 - from.x) * toward.x + ((p.y + q.y) / 2 - from.y) * toward.y;
+    const at = nearest(p, q);
+    const ahead = (at.x - from.x) * toward.x + (at.y - from.y) * toward.y;
     return ahead > 0 ? [[p, q, { x: q.x + v.x, y: q.y + v.y }, { x: p.x + v.x, y: p.y + v.y }]] : [];
   });
   const gap = child.outlined ? child.strokeWidth + (child.gap ?? 0) * (child.scale ?? 1) : 0;
-  return { solids, opening: null, width: child.strokeWidth + gap };
+  const width = child.strokeWidth + gap;
+  /* Silhouette du ruban (sa bande, bouts coupés net, extrudée) : le trait des
+     parois, joint en rond, déborderait au-delà de ses bouts. */
+  const [left, right] = [width / 2, -width / 2].map((distance) => untangle(offsetPolygon(screen, distance, false), screen, distance));
+  const band = [...left, ...right.reverse()];
+  const lift = (p) => ({ x: p.x + v.x, y: p.y + v.y });
+  const clip = [band, band.map(lift), ...band.map((p, i) => [p, band[(i + 1) % band.length], lift(band[(i + 1) % band.length]), lift(p)])];
+  return { solids, opening: null, width, clip };
 };

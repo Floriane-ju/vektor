@@ -11,7 +11,7 @@ import {
 } from './scene.js';
 import { axisDirection } from './modifiers.js';
 import { extrusion, outlinePath, planeDouble, planeMatrix, polygonVertices, project, shifted } from './plane.js';
-import { createInside, createPlaneDouble, createShape, occlude, shapeOccluder } from './renderer-plane.js';
+import { createInside, createPlaneDouble, createShape, occlude, shapeOccluder, wallNeighbours } from './renderer-plane.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -40,9 +40,9 @@ export const render = (scene, svgRoot) => {
      son hôte de même copie (`createInside`), et dessinée juste après lui.
      ponytail: une forme logée ne cache pas les autres volumes. */
   const nodeOf = new Map();
-  const shape = (child, host) => {
-    const hostShape = host && shapeOccluder(host, child);
-    const node = hostShape ? createInside(child, host, hostShape, defs) : createShape(child);
+  const shape = (child, host, hostCopies, walls) => {
+    const hostShape = host && shapeOccluder(host, child, hostCopies);
+    const node = hostShape ? createInside(child, host, hostShape, defs) : createShape(child, walls);
     nodeOf.set(copyKey(child.id, child), { node, host: hostShape ? copyKey(host.id, host) : null });
     const silhouette = hostShape ? null : shapeOccluder(child);
     if (silhouette) occluders.set(node, silhouette);
@@ -63,6 +63,8 @@ export const render = (scene, svgRoot) => {
        ponytail: un outil répété sous une forme qui ne l'est pas n'agit que par
        sa première copie propre. */
     const partner = (id, child) => byCopy.get(copyKey(id, child)) ?? byCopy.get(copyKey(id, { ...child, own: 0 }));
+    /* Volumes qui se cachent eux-mêmes : ils se cachent aussi l'un l'autre. */
+    const walls = wallNeighbours(children.filter((child) => !tools.has(child.id) && child.booleans.length === 0 && !child.inside));
     /* Recoupements creux : les aplats rejoignent un tracé commun, chaque forme
        ne garde que son trait. */
     const holes = [];
@@ -79,14 +81,16 @@ export const render = (scene, svgRoot) => {
         continue;
       }
       const host = child.inside ? partner(child.inside, child) : null;
+      const hostCopies = host && children.filter((other) => other.id === host.id && other.copy === host.copy);
+      const others = walls.get(child);
       const area = layer.evenOdd && child.fill !== 'none' ? areaPath(child) : null;
       if (!area) {
-        group.append(shape(child, host));
+        group.append(shape(child, host, hostCopies, others));
         continue;
       }
       holes.push(area);
       holeFill ??= child.fill;
-      const outline = shape({ ...child, fill: 'none' }, host);
+      const outline = shape({ ...child, fill: 'none' }, host, hostCopies, others);
       /* L'intérieur reste cliquable au curseur, même creusé. */
       outline.setAttribute('pointer-events', 'visible');
       group.append(outline);
