@@ -427,7 +427,7 @@ export const createInterpolation = (overrides = {}) => ({
 });
 
 export const createScene = () => {
-  const layer = createLayer();
+  const layer = createLayer({ name: layerName([]) });
   return { layers: [layer], activeLayerId: layer.id, activeElementId: null };
 };
 
@@ -664,8 +664,15 @@ const mapLayer = (scene, id, fn) => ({
   layers: scene.layers.map((layer) => (layer.id === id ? fn(layer) : layer)),
 });
 
+/* Numéro suivant dans ce dessin, pas le compteur d'ids : celui-ci est commun à
+   tous les onglets. Un calque renommé compte pour sa place. */
+const layerName = (layers) => {
+  const numbers = layers.map((layer) => Number(/^Calque (\d+)$/.exec(layer.name)?.[1] ?? 0));
+  return `Calque ${Math.max(layers.length, ...numbers) + 1}`;
+};
+
 export const addLayer = (scene) => {
-  const layer = createLayer();
+  const layer = createLayer({ name: layerName(scene.layers) });
   return { ...scene, layers: [...scene.layers, layer], activeLayerId: layer.id };
 };
 

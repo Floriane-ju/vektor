@@ -75,6 +75,19 @@ export const createStore = (initialState) => {
     redo() {
       [future, past] = travel(future, past);
     },
+    /**
+     * Change de document (onglet de dessin) : installe une autre scène avec
+     * son propre historique, rend ceux du document quitté.
+     */
+    swap({ state: nextState, past: nextPast = [], future: nextFuture = [] }) {
+      const previous = { state, past, future };
+      state = nextState;
+      past = nextPast;
+      future = nextFuture;
+      gesture = null;
+      notify();
+      return previous;
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

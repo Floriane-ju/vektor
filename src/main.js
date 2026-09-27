@@ -1,7 +1,7 @@
 import { createStore } from './store.js';
 import { createScene, reserveIds } from './scene.js';
 import { render } from './renderer-svg.js';
-import { debounce, deserialize, loadLocal, saveLocal } from './persistence.js';
+import { debounce, deserialize, loadDrawings, loadLocal, saveLocal, sceneKey } from './persistence.js';
 import example from './example.json?raw';
 import { mountToolbar } from './ui/toolbar.js';
 import { mountLayerPanel } from './ui/layer-panel.js';
@@ -13,6 +13,7 @@ import { mountShortcuts } from './ui/shortcuts.js';
 import { mountSettings } from './ui/settings.js';
 import { mountScrub } from './ui/scrub.js';
 import { mountStrokeCard } from './ui/stroke-card.js';
+import { mountDrawingTabs } from './ui/drawing-tabs.js';
 
 const svgRoot = document.getElementById('stage');
 const statusNode = document.getElementById('status');
@@ -24,11 +25,12 @@ const status = {
   },
 };
 
-const restored = loadLocal();
+const drawings = loadDrawings();
+const restored = loadLocal(sceneKey(drawings.active));
 /* Premier lancement (aucune sauvegarde) : dessin d'exemple. Une sauvegarde
    illisible garde le projet vierge ; une scène vidée est sauvegardée, donc
-   reste vide. */
-const firstRun = !restored.scene && !restored.error;
+   reste vide. Un nouvel onglet part vierge (`ui/drawing-tabs.js`). */
+const firstRun = !restored.scene && !restored.error && drawings.tabs.length === 1;
 const scene = restored.scene ?? (firstRun ? deserialize(example) : createScene());
 reserveIds(scene.layers);
 
@@ -41,8 +43,9 @@ store.subscribe((next) => render(next, svgRoot));
    `layers`) n'écrit pas ; la fermeture de l'onglet vide l'attente. */
 let savedLayers = scene.layers;
 let saveFailed = false;
+let activeKey = () => sceneKey(drawings.active);
 const autosave = debounce((next) => {
-  const ok = saveLocal(next);
+  const ok = saveLocal(next, activeKey());
   if (ok === !saveFailed) return;
   saveFailed = !ok;
   if (ok) status.show('Sauvegarde locale rétablie.');
@@ -61,6 +64,19 @@ const shapeList = document.getElementById('shape-list');
 
 /* Ordre de montage = ordre d'affichage dans les pastilles. */
 mountHistory({ store, container: actions });
+/* Changer d'onglet : l'écriture en attente part dans la clé du dessin quitté,
+   et le dessin ouvert n'est pas réécrit tant qu'on ne le touche pas. */
+({ activeKey } = mountDrawingTabs({
+  store,
+  container: document.getElementById('drawing-tabs'),
+  status,
+  drawings,
+  beforeSwitch: (next) => {
+    autosave.flush();
+    savedLayers = next.layers;
+  },
+  afterSwitch: () => view.fit(),
+}));
 mountScrub();
 mountShortcuts({ store, container: actions, status });
 const view = mountZoom({ svgRoot, container: viewControls });

@@ -24,6 +24,8 @@ const PATHS = {
   chevronDown: '<path d="M5 8 L10 13 L15 8" stroke-linecap="round" stroke-linejoin="round"/>',
   /* Poignée de glisser-déposer : deux colonnes de trois points. */
   grip: [7, 13].flatMap((x) => [5, 10, 15].map((y) => `<circle cx="${x}" cy="${y}" r="1.4" fill="currentColor" stroke="none"/>`)).join(''),
+  plus: '<path d="M10 4 V16 M4 10 H16" stroke-linecap="round"/>',
+  close: '<path d="M5.5 5.5 L14.5 14.5 M14.5 5.5 L5.5 14.5" stroke-linecap="round"/>',
   chevronRight: '<path d="M8 5 L13 10 L8 15" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 

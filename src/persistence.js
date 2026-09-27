@@ -498,9 +498,9 @@ export const deserialize = (text) => {
 /* ---- Supports ---- */
 
 /** @returns {boolean} faux si l'écriture a échoué (quota plein, stockage refusé). */
-export const saveLocal = (scene) => {
+export const saveLocal = (scene, key = STORAGE_KEY) => {
   try {
-    localStorage.setItem(STORAGE_KEY, serialize(scene, 0));
+    localStorage.setItem(key, serialize(scene, 0));
     return true;
   } catch {
     return false;
@@ -514,10 +514,10 @@ export const saveLocal = (scene) => {
  * efface le travail de l'utilisateur et doit le lui dire, contrairement à
  * `saveLocal` dont l'échec est rattrapable par l'export fichier.
  */
-export const loadLocal = () => {
+export const loadLocal = (key = STORAGE_KEY) => {
   let text;
   try {
-    text = localStorage.getItem(STORAGE_KEY);
+    text = localStorage.getItem(key);
   } catch {
     return { scene: null, error: null };
   }
@@ -526,6 +526,62 @@ export const loadLocal = () => {
     return { scene: deserialize(text), error: null };
   } catch (error) {
     return { scene: null, error: error.message };
+  }
+};
+
+/* ---- Onglets de dessins ---- */
+
+/* Le premier dessin garde la clé historique : la sauvegarde d'avant les
+   onglets devient « Vektor 1 » sans migration. */
+const FIRST_DRAWING = 'D1';
+const DRAWINGS_KEY = 'illu/drawings';
+const DRAWING_ID = /^D[1-9]\d{0,5}$/;
+const MAX_DRAWINGS = 100;
+
+export const sceneKey = (id) => (id === FIRST_DRAWING ? STORAGE_KEY : `${STORAGE_KEY}:${id}`);
+
+export const drawingName = (id) => `Vektor ${id.slice(1)}`;
+
+const defaultDrawings = () => ({
+  tabs: [{ id: FIRST_DRAWING, name: drawingName(FIRST_DRAWING) }],
+  active: FIRST_DRAWING,
+});
+
+/** Liste des onglets `{ tabs: [{ id, name }], active }`, validée ; repli sur « Vektor 1 ». */
+export const loadDrawings = () => {
+  let raw;
+  try {
+    raw = JSON.parse(localStorage.getItem(DRAWINGS_KEY) ?? 'null');
+  } catch {
+    return defaultDrawings();
+  }
+  const seen = new Set();
+  const tabs = (Array.isArray(raw?.tabs) ? raw.tabs : [])
+    .filter((tab) => DRAWING_ID.test(tab?.id) && !seen.has(tab.id) && seen.add(tab.id))
+    .slice(0, MAX_DRAWINGS)
+    .map(({ id, name }) => ({
+      id,
+      name: String(name ?? '').trim().slice(0, MAX_NAME_LENGTH) || drawingName(id),
+    }));
+  if (tabs.length === 0) return defaultDrawings();
+  return { tabs, active: seen.has(raw.active) ? raw.active : tabs[0].id };
+};
+
+/** @returns {boolean} faux si l'écriture a échoué. */
+export const saveDrawings = (drawings) => {
+  try {
+    localStorage.setItem(DRAWINGS_KEY, JSON.stringify(drawings));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const removeLocal = (key) => {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ponytail: clé orpheline si le stockage refuse, sans conséquence sur les autres dessins.
   }
 };
 

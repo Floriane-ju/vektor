@@ -13,6 +13,7 @@ import { serialize } from '../src/persistence.js';
  */
 it('démarre et rend après un placement', async () => {
   document.body.innerHTML = `
+    <nav id="drawing-tabs"></nav>
     <div id="toolbar-shapes"></div>
     <div id="toolbar-actions"></div>
     <div id="stroke-card"></div>

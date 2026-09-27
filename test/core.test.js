@@ -2578,3 +2578,30 @@ it('le dessin d’exemple du premier lancement se relit', async () => {
   const { default: example } = await import('../src/example.json?raw');
   expect(deserialize(example).layers[0].elements.length).toBeGreaterThan(0);
 });
+
+describe('store.swap (onglets de dessins)', () => {
+  it("isole l'historique de chaque dessin", () => {
+    const first = createScene();
+    const store = createStore(first);
+    store.apply(addLayer);
+    const drawn = store.get();
+    const left = store.swap({ state: createScene() });
+    expect(left.state).toBe(drawn);
+    expect(left.past).toEqual([first]);
+    store.undo();
+    expect(store.get()).not.toBe(first);
+    store.swap(left);
+    store.undo();
+    expect(store.get()).toBe(first);
+  });
+});
+
+describe('nom des nouveaux calques', () => {
+  it('suit les calques du dessin, pas le compteur d’ids partagé', () => {
+    addLayer(addLayer(createScene()));
+    const scene = addLayer(createScene());
+    expect(scene.layers.map((layer) => layer.name)).toEqual(['Calque 1', 'Calque 2']);
+    const renamed = { ...scene, layers: [{ ...scene.layers[0], name: 'Fond' }, { ...scene.layers[1], name: 'Calque 7' }] };
+    expect(addLayer(renamed).layers.at(-1).name).toBe('Calque 8');
+  });
+});

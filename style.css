@@ -149,10 +149,21 @@ input[type="range"] {
   background: var(--bg-panel);
 }
 
-.brand {
+.topbar {
   position: fixed;
+  z-index: 1;
   left: 32px;
-  top: 34px;
+  top: 24px;
+  /* Ne passe pas sous la carte du trait et les actions, à droite. */
+  max-width: calc(100vw - 32px - var(--gutter-right));
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.topbar > .float { position: static; }
+
+.brand {
+  flex: none;
   margin: 0;
   font: 600 var(--text-xl)/1 var(--font);
   display: flex;
@@ -208,6 +219,34 @@ input[type="range"] {
 .pill-btn.is-square { width: 36px; padding: 0; justify-content: center; }
 .pill-btn.is-primary { background: var(--text); color: var(--ink); padding-right: 14px; }
 .pill-btn.is-primary:hover { background: var(--white); }
+
+/* ---- Onglets de dessins ---- */
+.drawing-tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.drawing-tab {
+  flex: none;
+  display: flex;
+  align-items: center;
+  border-radius: var(--pill);
+  color: var(--text-dim);
+}
+.drawing-tab:hover { color: var(--text); }
+.drawing-tab[data-active="true"] { background: var(--bg-field); color: var(--text); }
+.drawing-tab-name {
+  height: 36px;
+  padding: 0 16px;
+  background: none;
+  color: inherit;
+  white-space: nowrap;
+}
+.drawing-tab:has(.drawing-tab-close) .drawing-tab-name { padding-right: 4px; }
+.drawing-tab .layer-name-input { width: 12ch; margin: 0 8px; }
+.drawing-tab-close { margin-right: 8px; opacity: 0; }
+.drawing-tab:hover .drawing-tab-close,
+.drawing-tab[data-active="true"] .drawing-tab-close,
+.drawing-tab-close:focus-visible { opacity: 0.75; }
+.drawing-tab .drawing-tab-close:hover { opacity: 1; }
+.drawing-new { flex: none; color: var(--text-dim); }
+.drawing-new:hover { color: var(--text); }
 
 /* Bascule : la case native, cachée, pilote l'aspect pressé de la pastille. */
 .pill-toggle { cursor: pointer; font: 500 var(--text-sm)/1 var(--font); padding: 0 14px; }

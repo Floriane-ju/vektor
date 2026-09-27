@@ -1,9 +1,9 @@
 ---
 {
-  "status": "open",
+  "status": "closed",
   "title": "Profondeur réelle dans un calque 3D (lignes cachées), fin des formes logées",
   "opened": "2026-09-27",
-  "closed": null,
+  "closed": "2026-09-27",
   "commits": [
     {
       "sha": "1f43b36",

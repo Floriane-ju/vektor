@@ -1,0 +1,124 @@
+import { createScene, MAX_NAME_LENGTH, reserveIds } from '../scene.js';
+import { drawingName, loadLocal, removeLocal, saveDrawings, sceneKey } from '../persistence.js';
+import { icon, ICON_SIZE } from './icons.js';
+import { inlineRename } from './list.js';
+
+const hasShapes = (scene) => scene?.layers.some((layer) => layer.elements.length > 0) ?? false;
+
+/**
+ * Onglets de dessins : chaque onglet est un document à part entière — sa
+ * scène, son historique d'annulation, sa clé de sauvegarde locale. Un seul
+ * store : changer d'onglet échange sa scène et son historique (`store.swap`).
+ *
+ * `beforeSwitch(scene)` est appelé avant l'échange (vider l'autosave du
+ * dessin quitté, recaler sa référence) ; `afterSwitch()` après (recadrer).
+ *
+ * @returns {{ activeKey: () => string }} clé de sauvegarde du dessin affiché.
+ */
+export const mountDrawingTabs = ({ store, container, status, drawings: initial, beforeSwitch, afterSwitch }) => {
+  let drawings = initial;
+  /* Documents ouverts puis quittés pendant la session, avec leur historique.
+     ponytail: tous gardés en mémoire, libérer les plus anciens si beaucoup d'onglets pèsent. */
+  const parked = new Map();
+
+  const update = (next) => {
+    drawings = next;
+    saveDrawings(drawings);
+    draw();
+  };
+
+  const open = (id) => {
+    if (parked.has(id)) return parked.get(id);
+    const restored = loadLocal(sceneKey(id));
+    if (restored.error) status.show(`Sauvegarde de ce dessin illisible, dessin vierge — ${restored.error}`, 'error');
+    const scene = restored.scene ?? createScene();
+    reserveIds(scene.layers);
+    return { state: scene };
+  };
+
+  const activate = (id, doc = open(id)) => {
+    if (id === drawings.active) return;
+    beforeSwitch(doc.state);
+    parked.delete(id);
+    const left = drawings.active;
+    update({ ...drawings, active: id });
+    parked.set(left, store.swap(doc));
+    afterSwitch();
+  };
+
+  const create = () => {
+    const number = Math.max(0, ...drawings.tabs.map((tab) => Number(tab.id.slice(1)))) + 1;
+    const id = `D${number}`;
+    update({ ...drawings, tabs: [...drawings.tabs, { id, name: drawingName(id) }] });
+    activate(id, { state: createScene() });
+  };
+
+  const close = (id) => {
+    const { tabs } = drawings;
+    if (tabs.length < 2) return;
+    const scene = id === drawings.active ? store.get() : (parked.get(id)?.state ?? loadLocal(sceneKey(id)).scene);
+    const { name } = tabs.find((tab) => tab.id === id);
+    if (hasShapes(scene) && !window.confirm(`Fermer « ${name} » ? Le dessin sera supprimé.`)) return;
+    if (id === drawings.active) {
+      const index = tabs.findIndex((tab) => tab.id === id);
+      activate(tabs[index + 1]?.id ?? tabs[index - 1].id);
+    }
+    parked.delete(id);
+    removeLocal(sceneKey(id));
+    update({ ...drawings, tabs: drawings.tabs.filter((tab) => tab.id !== id) });
+  };
+
+  const rename = (id, text) => {
+    const name = text.slice(0, MAX_NAME_LENGTH);
+    if (!name) return;
+    update({ ...drawings, tabs: drawings.tabs.map((tab) => (tab.id === id ? { ...tab, name } : tab)) });
+  };
+
+  const tabNode = (tab) => {
+    const isActive = tab.id === drawings.active;
+    const wrap = document.createElement('div');
+    wrap.className = 'drawing-tab';
+    wrap.setAttribute('role', 'presentation');
+    wrap.dataset.active = String(isActive);
+
+    const name = document.createElement('button');
+    name.type = 'button';
+    name.className = 'drawing-tab-name';
+    name.setAttribute('role', 'tab');
+    name.setAttribute('aria-selected', String(isActive));
+    name.dataset.focusKey = `drawing-${tab.id}`;
+    name.textContent = tab.name;
+    name.addEventListener('click', () => activate(tab.id));
+    inlineRename(name, { label: `Nom de ${tab.name}`, rename: (text) => rename(tab.id, text) });
+    wrap.append(name);
+
+    if (drawings.tabs.length > 1) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'icon-btn drawing-tab-close';
+      remove.setAttribute('aria-label', `Fermer ${tab.name}`);
+      remove.title = 'Fermer le dessin';
+      remove.append(icon('close', ICON_SIZE.xs));
+      remove.addEventListener('click', () => close(tab.id));
+      wrap.append(remove);
+    }
+    return wrap;
+  };
+
+  const draw = () => {
+    const focused = document.activeElement?.dataset?.focusKey;
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'pill-btn drawing-new';
+    add.dataset.focusKey = 'drawing-new';
+    add.append(icon('plus', ICON_SIZE.sm), 'Nouveau');
+    add.addEventListener('click', create);
+    container.replaceChildren(...drawings.tabs.map(tabNode), add);
+    if (focused) container.querySelector(`[data-focus-key="${focused}"]`)?.focus();
+  };
+
+  container.setAttribute('role', 'tablist');
+  container.setAttribute('aria-label', 'Dessins');
+  draw();
+  return { activeKey: () => sceneKey(drawings.active) };
+};
