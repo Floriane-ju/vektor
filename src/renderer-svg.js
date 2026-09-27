@@ -857,19 +857,30 @@ const exportFrame = (svgRoot) => {
   return { x, y, width: Math.max(1, Math.ceil(box.maxX) - x), height: Math.max(1, Math.ceil(box.maxY) - y) };
 };
 
+/* Cadre d'une forme sélectionnée, saisissable dans toute sa surface
+   (`data-grab`) : un point ou une forme fine se déplace sans viser son trait. */
+const grabFrame = (box, id) => {
+  const node = frame(box, 'selection');
+  node.dataset.grab = id;
+  node.setAttribute('pointer-events', 'all');
+  return node;
+};
+
 const createSelection = (scene, svgRoot, entries) => {
   const ids = selectedIds(scene);
   if (ids.length === 1) {
     const box = sourceBounds.get(svgRoot)?.get(ids[0]);
-    return box ? frame(box, 'selection') : null;
+    return box ? grabFrame(box, ids[0]) : null;
   }
   /* Plusieurs formes : un cadre chacune, regroupés pour que survol et export
      les traitent comme un seul `[data-selection]`. */
   if (ids.length > 1) {
     const group = document.createElementNS(SVG_NS, 'g');
     group.dataset.selection = 'selection';
-    const boxes = ids.map((id) => sourceBounds.get(svgRoot)?.get(id)).filter(Boolean);
-    group.append(...boxes.map((box) => frame(box, 'selection')));
+    for (const id of ids) {
+      const box = sourceBounds.get(svgRoot)?.get(id);
+      if (box) group.append(grabFrame(box, id));
+    }
     return group;
   }
   /* Calque sans forme sélectionnée : le cadre entoure toutes ses copies. */

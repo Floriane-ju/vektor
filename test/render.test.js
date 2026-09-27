@@ -1500,6 +1500,17 @@ describe('tracé', () => {
     ]);
   });
 
+  it('au curseur, glisser dans le cadre de sélection d’un point le déplace', () => {
+    const { store, svg, pick } = mountTrace([createElement('point', 50, 50)]);
+    pick('cursor');
+    const frame = svg.querySelector('[data-grab]');
+    on(frame, 'pointerdown', 55, 55);
+    on(svg, 'pointermove', 95, 75);
+    on(svg, 'pointerup', 95, 75);
+    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 90, y: 70 });
+    expect(toSvgDocument(svg)).not.toContain('data-grab');
+  });
+
   it('les poignées ne partent pas à l’export', () => {
     const trace = createElement('polyline', 0, 0);
     const { svg } = mountTrace([trace]);

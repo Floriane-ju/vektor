@@ -119,7 +119,8 @@ input[type="range"] {
 
 /* Une forme se saisit pour la déplacer ; le vide trace un lasso. */
 #stage[data-tool="cursor"] { cursor: crosshair; }
-#stage[data-tool="cursor"] [data-element-id] { cursor: grab; }
+#stage[data-tool="cursor"] [data-element-id],
+#stage[data-tool="cursor"] [data-grab] { cursor: grab; }
 
 /* Le repère d'un pivot se saisit pour le déplacer. */
 #stage[data-tool="cursor"] [data-pivot] [data-grip] { cursor: move; }

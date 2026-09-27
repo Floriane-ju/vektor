@@ -182,9 +182,8 @@ const transformGesture = (ctx, event, knob, origin) => {
 /* Déplacement de la sélection, depuis une de ses formes. Hors sélection, la
    forme est d'abord sélectionnée seule ; déjà sélectionnée, tout le groupe
    bouge avec elle, et un clic sans glisser la sélectionne seule. */
-const moveGesture = (ctx, event, node) => {
+const moveGesture = (ctx, event, id) => {
   const { store, snap, planePoint } = ctx;
-  const id = node.dataset.elementId;
   const grouped = selectedIds(store.get()).includes(id);
   /* La forme saisie devient l'active : c'est elle que montre le panneau. */
   const others = grouped ? selectedIds(store.get()).filter((other) => other !== id) : [];
@@ -273,7 +272,8 @@ const lassoGesture = (ctx, event) => {
 };
 
 /**
- * Geste du curseur : un pivot, un sommet, la forme sous le pointeur (Maj :
+ * Geste du curseur : un pivot, un sommet, la forme sous le pointeur ou dont
+ * le cadre de sélection le contient (Maj :
  * l'ajoute ou la retire de la sélection), sinon un lasso.
  */
 export const selectGesture = (ctx, event) => {
@@ -292,11 +292,13 @@ export const selectGesture = (ctx, event) => {
   }
   /* Toutes les copies d'un modificateur portent l'id de leur forme source :
      cliquer n'importe laquelle désigne cette forme. */
-  const node = event.target.closest?.('[data-element-id]');
-  if (!node) return lassoGesture(ctx, event);
-  if (isLockedElement(scene, node.dataset.elementId)) return null;
-  if (!event.shiftKey) return moveGesture(ctx, event, node);
-  ctx.store.apply(toggleSelected, node.dataset.elementId);
+  /* Le cadre d'une forme sélectionnée la saisit dans toute sa surface. */
+  const id = event.target.closest?.('[data-element-id]')?.dataset.elementId
+    ?? event.target.closest?.('[data-grab]')?.dataset.grab;
+  if (!id) return lassoGesture(ctx, event);
+  if (isLockedElement(scene, id)) return null;
+  if (!event.shiftKey) return moveGesture(ctx, event, id);
+  ctx.store.apply(toggleSelected, id);
   return null;
 };
 
