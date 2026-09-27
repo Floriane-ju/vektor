@@ -6,6 +6,7 @@ import {
   clampHeight,
   clampInner,
   clampSides,
+  isBooleanTool,
   SHAPES,
   updateElement,
 } from '../scene.js';
@@ -143,8 +144,8 @@ export const shapeFields = ({ store, bind }) => {
     types.sync(element);
     /* Un point tourné reste identique : rien à régler. */
     rotationField.hidden = SHAPES[element.type].geometry === 'dot';
-    /* ponytail: une forme à booléens ne s'extrude pas (voir `createExtrusion`). */
-    depthField.hidden = !activePlane(layer) || element.booleans.length > 0;
+    /* Un outil booléen n'est pas dessiné : seule la forme résultante s'extrude. */
+    depthField.hidden = !activePlane(layer) || isBooleanTool(layer, element);
     opaqueField.hidden = depthField.hidden || !(element.height > 0);
   };
   return { nodes: [size.root, rotationField, depthField, opaqueField, ...types.nodes], sync };

@@ -1,4 +1,4 @@
-import { getActiveElement, getActiveLayer, setLayerEvenOdd, SHAPES } from '../scene.js';
+import { getActiveElement, getActiveLayer, isBooleanTool, setLayerEvenOdd, SHAPES } from '../scene.js';
 import { shapeName } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
 import { modifierSection } from './modifier-section.js';
@@ -99,6 +99,12 @@ const shapeDetail = (store, binder) => {
     booleans.sync(layer, element);
     inside.sync(layer, element);
     interpolations.sync(element);
+    /* Outil booléen : ni trait, ni remplissage, ni logement ne se voient —
+       seule sa géométrie compte. Ses propres booléens restent s'il en a,
+       pour pouvoir les retirer. */
+    const tool = isBooleanTool(layer, element);
+    for (const node of [...stroke.nodes, inside.root]) node.hidden ||= tool;
+    booleans.root.hidden = tool && element.booleans.length === 0;
   };
   return { root, sync };
 };

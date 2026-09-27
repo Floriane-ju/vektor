@@ -2339,6 +2339,20 @@ describe('plan 3D : occlusion', () => {
     expect(svg.querySelector('mask')).not.toBeNull();
   });
 
+  it('un booléen à profondeur extrude la forme résultante', () => {
+    const tool = createElement('ellipse', 500, 450, { rx: 60, ry: 60 });
+    const shape = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, booleans: [{ with: tool.id, op: 'subtract' }] });
+    const svg = draw([tool, shape]);
+    const node = svg.querySelector(`[data-element-id="${shape.id}"]`);
+    /* Face avant + parois : le groupe d'extrusion, pas les masques du booléen à plat. */
+    expect(node.querySelectorAll('path').length).toBeGreaterThan(1);
+    expect(svg.querySelector('mask[id^="bool-"]')).toBeNull();
+    /* Trou (disque intérieur) : rendu à plat par masques. */
+    const inner = createElement('ellipse', 450, 450, { rx: 20, ry: 20 });
+    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, booleans: [{ with: inner.id, op: 'subtract' }] });
+    expect(draw([inner, ring]).querySelector('mask[id^="bool-"]')).not.toBeNull();
+  });
+
   it('un anneau laisse voir par son trou', () => {
     const axis = createElement('point', 450, 450, { height: 300 });
     const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
@@ -2480,6 +2494,30 @@ describe('forme logée : rendu, panneau, arbre', () => {
     box.checked = false;
     box.dispatchEvent(new Event('change'));
     expect(store.get().layers[0].elements[0].opaque).toBe(false);
+    inspector.remove();
+  });
+
+  it('outil booléen : ni profondeur, ni remplissage, ni style de trait', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const tool = createElement('ellipse', 40, 0);
+    const shape = createElement('ellipse', 0, 0, { height: 20, booleans: [{ with: tool.id, op: 'subtract' }] });
+    const layer = createLayer({ plane: { enabled: true, tilt: 45, heading: 45, sides: 'transparent' }, elements: [tool, shape] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: shape.id });
+    const inspector = document.createElement('div');
+    document.body.append(inspector);
+    const { shapeDetail } = mountPropertyPanel({ store, container: inspector });
+    const depthField = () => [...shapeDetail.querySelectorAll('.field')].find((node) => node.querySelector('label')?.textContent === 'Profondeur');
+    expect(depthField().hidden).toBe(false);
+    const { setActiveElement } = await import('../src/scene.js');
+    const fill = () => [...shapeDetail.querySelectorAll('.switch-field')].find((node) => node.textContent === 'Remplir');
+    expect(fill().hidden).toBe(false);
+    store.apply(setActiveElement, tool.id);
+    expect(depthField().hidden).toBe(true);
+    /* L'outil n'est pas dessiné : ni remplissage, ni style de trait. */
+    expect(fill().hidden).toBe(true);
+    expect(shapeDetail.querySelector('.group').hidden).toBe(true);
+    store.apply(setActiveElement, shape.id);
+    expect(fill().hidden).toBe(false);
     inspector.remove();
   });
 

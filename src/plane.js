@@ -1,3 +1,4 @@
+import polygonClipping from 'polygon-clipping';
 import { clampExtent, SHAPES, STAGE } from './scene.js';
 
 /**
@@ -117,7 +118,7 @@ export const outlinePath = (child) => {
       const points = child.points.map((p) => place({ x: x + p.x * scale, y: y + p.y * scale }));
       /* Chaîne lissée : une courbe, seuls ses bouts sont anguleux. */
       const ends = child.closed ? [] : [0, points.length - 1];
-      return { points, closed: Boolean(child.closed), corners: child.smooth ? ends : every(points) };
+      return { points, closed: Boolean(child.closed), corners: child.corners ?? (child.smooth ? ends : every(points)) };
     }
     case 'arc': {
       const span = child.end - child.start;
@@ -134,6 +135,56 @@ export const outlinePath = (child) => {
     default:
       return { points: around(0, 360, rx, ry, CURVE_SAMPLES).map(place), closed: true, corners: [] };
   }
+};
+
+const CLIP = { union: 'union', subtract: 'difference', intersect: 'intersection' };
+const pointKey = (p) => `${p.x.toFixed(6)},${p.y.toFixed(6)}`;
+
+/**
+ * Contour réel d'une forme booléenne, dans le repère du plan, pour l'extruder :
+ * un tracé fermé par morceau du résultat, à dessiner comme la forme (même
+ * style, échelle cuite). Ses coins = ceux des formes d'origine et les
+ * jonctions entre elles ; les sommets d'une courbe échantillonnée n'en sont
+ * pas. `null` si un contour est ouvert ou si le résultat a un trou : le rendu
+ * à plat par masques reprend.
+ *
+ * ponytail: pas de trou extrudé (disque moins disque intérieur) ; passer le
+ * trou comme bord intérieur d'un anneau (`planeDouble`) si le besoin vient.
+ */
+export const booleanPieces = (child, steps) => {
+  const outlines = [child, ...steps.map((step) => step.shape)].map(outlinePath);
+  if (outlines.some((outline) => !outline.closed || outline.points.length < 3)) return null;
+  const smooth = new Set(
+    outlines.flatMap(({ points, corners }) => {
+      const sharp = new Set(corners);
+      return points.filter((_, i) => !sharp.has(i)).map(pointKey);
+    }),
+  );
+  const ring = ({ points }) => [points.map((p) => [p.x, p.y])];
+  const result = steps.reduce(
+    (region, step, i) => polygonClipping[CLIP[step.op]](region, ring(outlines[i + 1])),
+    [ring(outlines[0])],
+  );
+  if (result.some((polygon) => polygon.length > 1)) return null;
+  const scale = child.scale ?? 1;
+  return result.map(([outer]) => {
+    const points = outer.slice(0, -1).map(([x, y]) => ({ x, y }));
+    return {
+      ...child,
+      type: 'polyline',
+      points: points.map((p) => ({ x: p.x - child.x, y: p.y - child.y })),
+      closed: true,
+      corners: points.flatMap((p, i) => (smooth.has(pointKey(p)) ? [] : [i])),
+      rotation: 0,
+      flip: false,
+      scale: 1,
+      height: child.height * scale,
+      outlined: false,
+      booleans: [],
+      dash: (child.dash ?? []).map((value) => value * scale),
+      dashOffset: (child.dashOffset ?? 0) * scale,
+    };
+  });
 };
 
 const EPSILON = 1e-9;

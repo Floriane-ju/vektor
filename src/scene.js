@@ -1028,6 +1028,10 @@ export const removeBoolean = (scene, elementId, index) =>
 
 /* ---- Forme logée dans une autre ---- */
 
+/* Outil d'un booléen du calque : jamais dessiné, seule sa géométrie compte. */
+export const isBooleanTool = (layer, element) =>
+  layer.elements.some((other) => other.booleans.some((step) => step.with === element.id));
+
 /**
  * Contour fermé : ce qui peut en accueillir une autre. Ni point, ni ligne, ni
  * tracé ou arc ouvert — sans intérieur, rien à loger. Exception : le point

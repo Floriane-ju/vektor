@@ -11,7 +11,7 @@ import {
   STAGE,
 } from './scene.js';
 import { axisDirection } from './modifiers.js';
-import { extrusion, outlinePath, planeBand, planeDouble, planeMatrix, polygonVertices, project, shifted } from './plane.js';
+import { booleanPieces, extrusion, outlinePath, planeBand, planeDouble, planeMatrix, polygonVertices, project, shifted } from './plane.js';
 import { createInside, createPlaneDouble, createShape, occlude, shapeOccluder, wallNeighbours } from './renderer-plane.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -83,7 +83,10 @@ const drawLayer = (layer) => {
       .map((step) => ({ shape: partner(step.with, child), op: step.op }))
       .filter((step) => step.shape);
     if (steps.length > 0) {
-      group.append(createBoolean(child, steps));
+      /* En 3D avec profondeur, c'est la forme résultante qui s'extrude. */
+      const pieces = child.matrix && child.height ? booleanPieces(child, steps) : null;
+      if (pieces) for (const piece of pieces) group.append(shape(piece, []));
+      else group.append(createBoolean(child, steps));
       continue;
     }
     const hosts = hostChain(child)
