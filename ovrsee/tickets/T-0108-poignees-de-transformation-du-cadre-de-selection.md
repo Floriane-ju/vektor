@@ -2,7 +2,7 @@
 {
   "id": "T-0108",
   "titre": "Poignées de transformation du cadre de sélection",
-  "colonne": "pret",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "ui"
@@ -21,6 +21,6 @@ de poignées : taille et rotation ne se règlent qu'au panneau.
 
 ## Critères d'acceptation
 
-- [ ] **À trancher** : poignées sur la copie source seulement, ou sur le calque entier ?
-- [ ] **À trancher** : sur une multi-sélection, transformer le groupe autour de sa boîte commune ?
-- [ ] Glisser une poignée d'angle/bord redimensionne (`rx`/`ry`), une poignée dédiée tourne ; un seul pas d'historique.
+- [x] Tranché : poignées sur la copie source de la forme active seulement.
+- [x] Tranché : pas de poignées sur une multi-sélection (cadres seuls).
+- [x] Glisser une poignée d'angle/bord redimensionne (`rx`/`ry`), une poignée dédiée tourne ; un seul pas d'historique.

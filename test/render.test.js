@@ -556,6 +556,29 @@ describe('outil curseur', () => {
     expect(store.get().layers[0].elements[0]).toMatchObject({ x: 100, y: 100 });
   });
 
+  it('les poignées du cadre étirent, mettent à l’échelle et tournent la forme sélectionnée', () => {
+    const { store, svg } = mountWithShape();
+    on(svg.querySelector('ellipse'), 'pointerdown', 100, 100);
+    on(svg, 'pointerup', 100, 100);
+    expect(svg.querySelectorAll('[data-transform] [data-resize]')).toHaveLength(8);
+
+    /* Côté droit : départ à 90 du centre, arrivée à 180 → largeur doublée. */
+    on(svg.querySelector('[data-resize="e"]'), 'pointerdown', 190, 100);
+    on(svg, 'pointerup', 280, 100);
+    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 100, y: 100, rx: 160, ry: 45 });
+
+    /* Coin : même facteur sur les deux axes. */
+    on(svg.querySelector('[data-resize="se"]'), 'pointerdown', 130, 140);
+    on(svg, 'pointerup', 160, 180);
+    expect(store.get().layers[0].elements[0]).toMatchObject({ rx: 320, ry: 90 });
+
+    /* Rotation : un quart de tour autour du centre. */
+    on(svg.querySelector('[data-rotate]'), 'pointerdown', 100, 50);
+    on(svg, 'pointerup', 150, 100);
+    expect(store.get().layers[0].elements[0].rotation).toBe(90);
+    expect(toSvgDocument(svg)).not.toContain('data-transform');
+  });
+
   const twoShapes = () =>
     mountWithShape({
       elements: [createElement('ellipse', 100, 100, { filled: true }), createElement('rect', 400, 100, { filled: true })],

@@ -123,6 +123,13 @@ input[type="range"] {
 
 /* Le repère d'un pivot se saisit pour le déplacer. */
 #stage[data-tool="cursor"] [data-pivot] [data-grip] { cursor: move; }
+/* Poignées du cadre : au curseur seulement, sinon le clic dessine. */
+#stage:not([data-tool="cursor"]) [data-transform] { display: none; }
+#stage [data-resize="n"], #stage [data-resize="s"] { cursor: ns-resize; }
+#stage [data-resize="e"], #stage [data-resize="w"] { cursor: ew-resize; }
+#stage [data-resize="nw"], #stage [data-resize="se"] { cursor: nwse-resize; }
+#stage [data-resize="ne"], #stage [data-resize="sw"] { cursor: nesw-resize; }
+#stage [data-rotate] { cursor: grab; }
 
 #stage[data-tool="cursor"][data-dragging],
 #stage[data-tool="cursor"][data-dragging] * { cursor: grabbing; }

@@ -9,6 +9,7 @@ import {
   recenterTrace,
   removeElement,
   rotateVector,
+  scaledPatch,
   selectedIds,
   selectElements,
   setLayerCenter,
@@ -119,6 +120,53 @@ const vertexGesture = (ctx, event, handle, element) => {
   };
 };
 
+/* Rapport de mise à l'échelle le long d'un axe ; départ trop près du centre
+   (poignée de côté d'une forme très tournée) : l'axe ne bouge pas. */
+const ratio = (now, from) => (Math.abs(from) < 1 ? 1 : Math.max(0, now / from));
+
+/* Pas de la rotation aimantée (Maj), en degrés. */
+const ROTATE_STEP = 15;
+
+/**
+ * Poignée du cadre de sélection : un côté étire la forme le long de son axe,
+ * un coin la met à l'échelle sans la déformer, autour de son centre ; le
+ * bouton du haut la tourne (Maj : par pas de 15°). Tout se lit dans le repère
+ * de la forme, depuis la forme d'origine : un pas d'historique par geste.
+ */
+const transformGesture = (ctx, event, knob, origin) => {
+  const { store, planePoint } = ctx;
+  const center = { x: origin.x, y: origin.y };
+  const rotation = origin.rotation ?? 0;
+  const local = (point) => rotateVector({ x: point.x - center.x, y: point.y - center.y }, -rotation);
+  const from = local(planePoint(event));
+  const side = knob.dataset.resize ?? '';
+  const move = (next) => {
+    const now = local(planePoint(next));
+    if (!side) {
+      const turn = ((Math.atan2(now.y, now.x) - Math.atan2(from.y, from.x)) * 180) / Math.PI;
+      const angle = rotation + turn;
+      const snapped = next.shiftKey ? Math.round(angle / ROTATE_STEP) * ROTATE_STEP : angle;
+      store.apply(updateElement, origin.id, { rotation: Math.round(snapped * 10) / 10 % 360 });
+      return;
+    }
+    const corner = side.length === 2;
+    const uniform = Math.hypot(now.x, now.y) / (Math.hypot(from.x, from.y) || 1);
+    const fx = corner ? uniform : /[ew]/.test(side) ? ratio(now.x, from.x) : 1;
+    const fy = corner ? uniform : /[ns]/.test(side) ? ratio(now.y, from.y) : 1;
+    store.apply(updateElement, origin.id, scaledPatch(origin, fx, fy));
+  };
+  capture(ctx, event, true);
+  return {
+    move,
+    end: (next) => {
+      move(next);
+      if (origin.points) store.apply(recenterTrace, origin.id);
+      release(ctx, next);
+    },
+    cancel: () => {},
+  };
+};
+
 /* Déplacement de la sélection, depuis une de ses formes. Hors sélection, la
    forme est d'abord sélectionnée seule ; déjà sélectionnée, tout le groupe
    bouge avec elle, et un clic sans glisser la sélectionne seule. */
@@ -220,6 +268,9 @@ export const selectGesture = (ctx, event) => {
   const scene = ctx.store.get();
   /* Calque verrouillé : ni pivot, ni sommet, ni forme ne se saisissent. */
   if (!getActiveLayer(scene)?.locked) {
+    const knob = event.target.closest?.('[data-resize], [data-rotate]');
+    const active = getActiveElement(scene);
+    if (knob && active) return transformGesture(ctx, event, knob, active);
     const grip = event.target.closest?.('[data-pivot]');
     const pivot = grip && pivotGesture(ctx, event, grip);
     if (pivot) return pivot;

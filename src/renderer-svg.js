@@ -166,6 +166,7 @@ export const render = (scene, svgRoot) => {
     createSelection(scene, svgRoot, state.entries),
     createGuides(layer, layer?.elements.includes(element) ? element : null),
     createHandles(scene),
+    createTransformHandles(scene, svgRoot),
   ].filter(Boolean);
   svgRoot.append(...state.overlay);
   renders.set(svgRoot, state);
@@ -876,6 +877,49 @@ const createSelection = (scene, svgRoot, entries) => {
   return box ? frame(box, 'layer') : null;
 };
 
+/* Poignées du cadre, en unités du dessin : demi-côté d'un carré, écart du bouton de rotation. */
+const KNOB = 5;
+const ROTATE_OFFSET = 24;
+/* Rang de chaque poignée sur la boîte : 0 = min, 1 = milieu, 2 = max. */
+const RESIZE_KNOBS = { nw: [0, 0], n: [1, 0], ne: [2, 0], e: [2, 1], se: [2, 2], s: [1, 2], sw: [0, 2], w: [0, 1] };
+
+/**
+ * Poignées de transformation de la forme active, seule sélectionnée, sur le
+ * cadre de sa copie source : `data-resize` = côté ou coin (redimensionne),
+ * `data-rotate` (tourne) — la toolbar les saisit (`transformGesture`). Ni sur un
+ * point, ni sur un calque masqué ou verrouillé ; l'export les retire.
+ */
+const createTransformHandles = (scene, svgRoot) => {
+  const element = getActiveElement(scene);
+  const layer = getActiveLayer(scene);
+  const box = element && sourceBounds.get(svgRoot)?.get(element.id);
+  if (!box || selectedIds(scene).length !== 1 || SHAPES[element.type].geometry === 'dot') return null;
+  if (!layer?.visible || layer.locked || !layer.elements.includes(element)) return null;
+  const [x0, y0] = [box.minX - SELECTION_GAP, box.minY - SELECTION_GAP];
+  const [x2, y2] = [box.maxX + SELECTION_GAP, box.maxY + SELECTION_GAP];
+  const at = (rank, low, high) => low + ((high - low) * rank) / 2;
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.dataset.transform = element.id;
+  group.setAttribute('fill', '#1b1b1b');
+  group.setAttribute('stroke', 'var(--accent, #ee4722)');
+  group.setAttribute('stroke-width', '1.5');
+  group.setAttribute('vector-effect', 'non-scaling-stroke');
+  const top = { x: (x0 + x2) / 2, y: y0 };
+  const stem = guideLine(top.x, top.y, top.x, top.y - ROTATE_OFFSET);
+  stem.setAttribute('pointer-events', 'none');
+  const rotate = guideNode('circle', { cx: top.x, cy: top.y - ROTATE_OFFSET, r: KNOB });
+  rotate.dataset.rotate = '';
+  group.append(stem, rotate);
+  for (const [side, [i, j]] of Object.entries(RESIZE_KNOBS)) {
+    const x = at(i, x0, x2);
+    const y = at(j, y0, y2);
+    const knob = guideNode('rect', { x: x - KNOB, y: y - KNOB, width: KNOB * 2, height: KNOB * 2 });
+    knob.dataset.resize = side;
+    group.append(knob);
+  }
+  return group;
+};
+
 /** Formes du calque actif dont la copie source touche `box` (repère de l'écran) : le lasso. */
 export const elementsInBox = (svgRoot, layer, box) => {
   const bounds = sourceBounds.get(svgRoot);
@@ -942,6 +986,7 @@ export const toSvgDocument = (svgRoot) => {
   const clone = svgRoot.cloneNode(true);
   clone.querySelector('[data-guides]')?.remove();
   clone.querySelector('[data-handles]')?.remove();
+  clone.querySelector('[data-transform]')?.remove();
   clone.querySelector('[data-selection]')?.remove();
   clearHover(clone);
   clone.removeAttribute('id');

@@ -216,6 +216,22 @@ export const centerPoints = (absolute) => {
 };
 
 /** Tourne un vecteur de `degrees` : le repère d'une forme vers celui de l'écran. */
+/**
+ * Patch d'une mise à l'échelle dans le repère de la forme (poignées du cadre),
+ * autour de son centre. Forme uniforme : un seul facteur, celui qui a bougé ;
+ * point : rien, l'épaisseur le dimensionne.
+ */
+export const scaledPatch = (element, fx, fy) => {
+  const { geometry, uniform } = SHAPES[element.type];
+  if (geometry === 'dot') return {};
+  if (uniform) {
+    const f = fx !== 1 ? fx : fy;
+    return { rx: element.rx * f, ry: element.ry * f };
+  }
+  if (element.points) return { points: element.points.map((p) => ({ x: p.x * fx, y: p.y * fy })) };
+  return { rx: element.rx * fx, ry: element.ry * fy };
+};
+
 export const rotateVector = ({ x, y }, degrees) => {
   const angle = (degrees * Math.PI) / 180;
   const cos = Math.cos(angle);

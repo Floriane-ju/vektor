@@ -50,6 +50,7 @@ import {
   updateInterpolation,
   updateInterpolationRange,
   isLockedElement,
+  scaledPatch,
   toggleLock,
 } from '../src/scene.js';
 import { deserialize, FORMAT, serialize } from '../src/persistence.js';
@@ -2520,6 +2521,14 @@ describe('formes nommables', () => {
     const raw = JSON.parse(serialize(withShapes()));
     raw.format = 'vektor/scene@29';
     expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);
+  });
+
+  it('scaledPatch étire dans le repère de la forme ; uniforme : un seul facteur ; point : rien', () => {
+    expect(scaledPatch(createElement('rect', 0, 0, { rx: 10, ry: 20 }), 2, 1)).toEqual({ rx: 20, ry: 20 });
+    expect(scaledPatch(createElement('polygon', 0, 0, { rx: 10, ry: 10 }), 1, 3)).toEqual({ rx: 30, ry: 30 });
+    expect(scaledPatch(createElement('point', 0, 0), 2, 2)).toEqual({});
+    const trace = createElement('polyline', 0, 0, { points: [{ x: 1, y: 2 }, { x: -1, y: -2 }] });
+    expect(scaledPatch(trace, 2, 0.5).points).toEqual([{ x: 2, y: 1 }, { x: -2, y: -1 }]);
   });
 
   it('le verrou d’un calque bascule et se relit ; toute autre valeur est ignorée', () => {

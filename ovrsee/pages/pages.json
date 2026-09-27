@@ -1,6 +1,6 @@
 {
   "date": "2026-09-27",
-  "commit": "5a081d9",
+  "commit": "d7c2db6",
   "pages": [
     {
       "route": "/",
@@ -9,7 +9,7 @@
       "sample": "/",
       "excerpt": "Vektor\nAnnuler\nRétablir\n?\nExporter\nCalques\nExemple\n⧉\n×\nAround\n⧉\n×\nLine\n⧉\n×\nCylinder\n⧉\n×\n+ Ajouter une forme\n+ Ajouter un calque\nForme\nCylinder\nLargeur\nHauteur\nX\nY\nRotation (°)\nProfondeur\nOpaque\nRemplir\nTrait\nPlein\nTirets\nPoints\nBout\nNet\nRond\nCarré\nContour double\nRépéter\n+ Ajouter\nFaire varier les itérations\n+ Ajouter\nBooléen\n+ Ajouter\nOutil\nCurseur\nArc\nEllipse\nPolygone\nTracé\nPoint\nRectangle\nLigne\n",
       "links": [],
-      "shot": "shots/accueil/2026-09-27-5a081d9.png",
+      "shot": "shots/accueil/2026-09-27-d7c2db6.png",
       "shotDate": "2026-09-27",
       "shotSize": {
         "width": 1280,
