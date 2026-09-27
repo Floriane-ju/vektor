@@ -2219,8 +2219,8 @@ describe('plan 3D : occlusion entre calques', () => {
     const shape = createElement('rect', 460, 450, { booleans: [{ with: tool.id, op: 'subtract' }] });
     const svg = draw([hidden, tool, shape]);
     expect(svg.querySelector(`[data-element-id="${hidden.id}"]`)).toBeNull();
-    expect(svg.querySelector(`[data-element-id="${shape.id}"]`)).not.toBeNull();
-    expect(svg.querySelector('mask')).not.toBeNull();
+    /* Résultat du booléen en vrai contour, dans la profondeur du calque. */
+    expect(svg.querySelector(`[data-plane] > [data-element-id="${shape.id}"]`)).not.toBeNull();
   });
 
   it('un booléen à profondeur extrude la forme résultante', () => {
@@ -2233,6 +2233,24 @@ describe('plan 3D : occlusion entre calques', () => {
     const inner = createElement('ellipse', 450, 450, { rx: 20, ry: 20 });
     const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, booleans: [{ with: inner.id, op: 'subtract' }] });
     expect(draw([inner, ring]).querySelector('mask[id^="bool-"]')).not.toBeNull();
+  });
+
+  it('un booléen à contour double : un seul contour autour du résultat, en 3D comme à plat', () => {
+    const tool = createElement('ellipse', 500, 450, { rx: 60, ry: 60 });
+    const shape = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 10, booleans: [{ with: tool.id, op: 'union' }] });
+    /* 3D : anneau extrudé, en profondeur réelle. */
+    const svg = draw([tool, shape]);
+    expect(svg.querySelector('mask[id^="bool-"]')).toBeNull();
+    const moves = (root) =>
+      [...root.querySelectorAll(`[data-plane] > [data-element-id="${shape.id}"] path`)].reduce((sum, node) => sum + node.getAttribute('d').split('M').length - 1, 0);
+    /* Deux bords par face : plus de tracés que le contour simple. */
+    expect(moves(svg)).toBeGreaterThan(moves(draw([tool, { ...shape, outlined: false }])));
+    /* 2D : un seul tracé évidé, pas les bords coupés de chaque forme. */
+    const flat = stage();
+    const layer = createLayer({ elements: [tool, { ...shape, height: 0 }] });
+    render({ layers: [layer], activeLayerId: null, activeElementId: null }, flat);
+    expect(flat.querySelector('mask[id^="bool-"]')).toBeNull();
+    expect(flat.querySelector('mask[id^="outline-"]')).not.toBeNull();
   });
 
   it('sans volume, aucun masque d’occlusion', () => {

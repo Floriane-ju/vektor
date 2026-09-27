@@ -108,7 +108,7 @@ export const meshOf = (child) => {
   }
 
   const rings = double
-    ? double.map((points) => ({ points, closed: true, corners: outline.corners }))
+    ? double.map((points, r) => ({ points, closed: true, corners: child.rims?.[r].corners ?? outline.corners }))
     : band
       ? [{ points: [...band[0], ...[...band[1]].reverse()], closed: true, corners: bandCorners(outline.points.length, outline.corners) }]
       : [outline];

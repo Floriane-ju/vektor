@@ -138,11 +138,12 @@ export const outlinePath = (child) => {
 };
 
 const CLIP = { union: 'union', subtract: 'difference', intersect: 'intersection' };
-const pointKey = (p) => `${p.x.toFixed(6)},${p.y.toFixed(6)}`;
+/* `+ 0` : -0 et 0 ont la même clé. */
+const pointKey = (p) => `${Math.round(p.x * 1e6) + 0},${Math.round(p.y * 1e6) + 0}`;
 
 /**
- * Contour réel d'une forme booléenne, dans le repère du plan, pour l'extruder :
- * un tracé fermé par morceau du résultat, à dessiner comme la forme (même
+ * Contour réel d'une forme booléenne, dans le repère du plan, pour l'extruder
+ * ou lui tracer un contour double continu : un tracé fermé par morceau du résultat, à dessiner comme la forme (même
  * style, échelle cuite). Ses coins = ceux des formes d'origine et les
  * jonctions entre elles ; les sommets d'une courbe échantillonnée n'en sont
  * pas. `null` si un contour est ouvert ou si le résultat a un trou : le rendu
@@ -154,32 +155,52 @@ const pointKey = (p) => `${p.x.toFixed(6)},${p.y.toFixed(6)}`;
 export const booleanPieces = (child, steps) => {
   const outlines = [child, ...steps.map((step) => step.shape)].map(outlinePath);
   if (outlines.some((outline) => !outline.closed || outline.points.length < 3)) return null;
+  const scale = child.scale ?? 1;
+  const gap = (child.gap ?? 0) * scale;
+  /* Bords du contour double : chaque forme décalée, puis le même booléen —
+     l'outil d'une soustraction à rebours. Décaler le contour fusionné
+     ferait une boucle ou une pointe d'onglet au creux des jonctions. */
+  const reach = child.outlined && child.strokeWidth > 0 && gap > 0 ? (child.strokeWidth + gap) / 2 : 0;
+  const grown = (distance) =>
+    outlines.map((outline, i) => ({
+      ...outline,
+      points: offsetPolygon(outline.points, i > 0 && steps[i - 1].op === 'subtract' ? -distance : distance),
+    }));
+  const levels = reach ? [outlines, grown(reach), grown(-reach)] : [outlines];
   const smooth = new Set(
-    outlines.flatMap(({ points, corners }) => {
+    levels.flat().flatMap(({ points, corners }) => {
       const sharp = new Set(corners);
       return points.filter((_, i) => !sharp.has(i)).map(pointKey);
     }),
   );
   const ring = ({ points }) => [points.map((p) => [p.x, p.y])];
-  const result = steps.reduce(
-    (region, step, i) => polygonClipping[CLIP[step.op]](region, ring(outlines[i + 1])),
-    [ring(outlines[0])],
-  );
+  const combine = (level) =>
+    steps.reduce((region, step, i) => polygonClipping[CLIP[step.op]](region, ring(level[i + 1])), [ring(level[0])]);
+  const [result, ...edges] = levels.map(combine);
   if (result.some((polygon) => polygon.length > 1)) return null;
-  const scale = child.scale ?? 1;
-  return result.map(([outer]) => {
+  const contour = ([outer]) => {
     const points = outer.slice(0, -1).map(([x, y]) => ({ x, y }));
+    return { points, corners: points.flatMap((p, i) => (smooth.has(pointKey(p)) ? [] : [i])) };
+  };
+  /* ponytail: bords d'un seul tenant seulement ; un résultat en plusieurs
+     morceaux, ou un bord qui se scinde, garde le décalage du contour fusionné. */
+  const rims = result.length === 1 && edges.length === 2 && edges.every((edge) => edge.length === 1 && edge[0].length === 1)
+    ? edges.map((edge) => contour(edge[0]))
+    : null;
+  return result.map((polygon) => {
+    const { points, corners } = contour(polygon);
     return {
       ...child,
       type: 'polyline',
       points: points.map((p) => ({ x: p.x - child.x, y: p.y - child.y })),
       closed: true,
-      corners: points.flatMap((p, i) => (smooth.has(pointKey(p)) ? [] : [i])),
+      corners,
+      rims,
       rotation: 0,
       flip: false,
       scale: 1,
-      height: child.height * scale,
-      outlined: false,
+      height: (child.height ?? 0) * scale,
+      gap,
       booleans: [],
       dash: (child.dash ?? []).map((value) => value * scale),
       dashOffset: (child.dashOffset ?? 0) * scale,
@@ -320,6 +341,8 @@ export const planeDouble = (child) => {
   const { points, closed } = outlinePath(child);
   const double = child.outlined && closed && points.length > 2 && child.stroke !== 'none' && child.strokeWidth > 0 && gap > 0;
   if (!double) return null;
+  /* Forme booléenne : bords calculés sur les formes d'origine (`booleanPieces`). */
+  if (child.rims) return child.rims.map((rim) => rim.points);
   const offset = (child.strokeWidth + gap) / 2;
   return [offset, -offset].map((distance) => offsetPolygon(points, distance));
 };

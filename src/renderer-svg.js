@@ -66,8 +66,9 @@ const drawLayer = (layer) => {
       .map((step) => ({ shape: partner(step.with, child), op: step.op }))
       .filter((step) => step.shape);
     if (steps.length > 0) {
-      /* En 3D avec profondeur, c'est la forme résultante qui s'extrude. */
-      const pieces = child.matrix && child.height ? booleanPieces(child, steps) : null;
+      /* La forme résultante, en vrai contour : en 3D elle prend la profondeur,
+         et son contour double fait le tour d'un seul trait. */
+      const pieces = planar || child.outlined ? booleanPieces(child, steps) : null;
       if (pieces) for (const piece of pieces) draw(piece);
       else group.append(createBoolean(child, steps));
       continue;

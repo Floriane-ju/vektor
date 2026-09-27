@@ -2496,3 +2496,23 @@ describe('formes nommables', () => {
     expect(deserialize(JSON.stringify(raw)).layers[0].modifiers[0]).not.toHaveProperty('evenSpacing');
   });
 });
+
+import { booleanPieces } from '../src/plane.js';
+
+describe('booleanPieces : contour double', () => {
+  it('bords calculés sur les formes d’origine : pas de boucle au creux de la jonction', () => {
+    const a = createElement('ellipse', 0, 0, { rx: 100, ry: 100, outlined: true, gap: 10, strokeWidth: 4 });
+    const b = createElement('ellipse', 150, 0, { rx: 100, ry: 100 });
+    const [piece, ...rest] = booleanPieces(a, [{ shape: b, op: 'union' }]);
+    expect(rest).toEqual([]);
+    const [outer, inner] = piece.rims.map((rim) => rim.points);
+    const reach = (4 + 10) / 2;
+    /* Tout le bord extérieur reste à `reach` au moins des deux cercles (à l'échantillonnage près). */
+    const gap = (p, c) => Math.hypot(p.x - c.x, p.y - c.y) - 100;
+    expect(Math.min(...outer.map((p) => Math.min(gap(p, a), gap(p, b))))).toBeGreaterThan(reach * 0.9);
+    /* Et tout le bord intérieur, dedans à `reach` au moins d'un bord. */
+    expect(Math.max(...inner.map((p) => Math.min(gap(p, a), gap(p, b))))).toBeLessThan(-reach * 0.9);
+    /* Jonctions = coins, pas les sommets des cercles échantillonnés. */
+    expect(piece.rims.map((rim) => rim.corners.length)).toEqual([2, 2]);
+  });
+});
