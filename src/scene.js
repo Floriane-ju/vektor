@@ -705,6 +705,19 @@ export const setActiveLayer = (scene, id) => ({ ...scene, activeLayerId: id });
 export const toggleVisibility = (scene, id) =>
   mapLayer(scene, id, (layer) => ({ ...layer, visible: !layer.visible }));
 
+/* Forme masquée : `hidden: true`, absent sinon. Elle ne se dessine plus mais
+   reste outil booléen ou hôte, comme le calque masqué garde ses formes. */
+export const toggleElementVisibility = (scene, elementId) => {
+  if (!scene.layers.some((layer) => layer.elements.some((element) => element.id === elementId))) return scene;
+  return mapElement(scene, elementId, (elements) =>
+    elements.map((element) => {
+      if (element.id !== elementId) return element;
+      const { hidden, ...rest } = element;
+      return hidden ? rest : { ...rest, hidden: true };
+    }),
+  );
+};
+
 export const renameLayer = (scene, id, name) =>
   mapLayer(scene, id, (layer) => ({ ...layer, name }));
 

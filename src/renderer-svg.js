@@ -48,8 +48,12 @@ const drawLayer = (layer) => {
     return node;
   };
 
-  /* Un outil booléen ne se dessine pas : il ne vit que dans le résultat. */
-  const tools = new Set(layer.elements.flatMap((element) => element.booleans.map((step) => step.with)));
+  /* Un outil booléen ne se dessine pas : il ne vit que dans le résultat. Une
+     forme masquée non plus, mais reste outil ou hôte. */
+  const tools = new Set([
+    ...layer.elements.flatMap((element) => element.booleans.map((step) => step.with)),
+    ...layer.elements.filter((element) => element.hidden).map((element) => element.id),
+  ]);
   const byCopy = new Map(children.map((child) => [copyKey(child.id, child), child]));
   /* Outil ou hôte de même copie ; répété moins que la forme, sa copie propre 0.
      ponytail: un outil répété sous une forme qui ne l'est pas n'agit que par

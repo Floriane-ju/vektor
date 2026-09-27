@@ -127,7 +127,7 @@ it('démarre et rend après un placement', async () => {
   const names = () => [...document.querySelectorAll('#shape-list .layer-name')];
   names()[0].click();
   names()[1].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
-  expect(document.querySelectorAll('#shape-list [aria-pressed="true"]')).toHaveLength(2);
+  expect(document.querySelectorAll('#shape-list .layer-name[aria-pressed="true"]')).toHaveLength(2);
   press({ key: 'd', metaKey: true });
   expect(circles()).toBe(4 * 2);
   press({ key: 'Delete' });

@@ -2329,6 +2329,16 @@ describe('plan 3D : occlusion', () => {
     expect(svg.querySelector(`[data-element-id="${ring.id}"]`).parentElement.getAttribute('mask')).toBeNull();
   });
 
+  it('une forme masquée ne se dessine pas, mais reste outil booléen', () => {
+    const hidden = createElement('ellipse', 450, 450, { hidden: true });
+    const tool = createElement('rect', 450, 450, { hidden: true });
+    const shape = createElement('rect', 460, 450, { booleans: [{ with: tool.id, op: 'subtract' }] });
+    const svg = draw([hidden, tool, shape]);
+    expect(svg.querySelector(`[data-element-id="${hidden.id}"]`)).toBeNull();
+    expect(svg.querySelector(`[data-element-id="${shape.id}"]`)).not.toBeNull();
+    expect(svg.querySelector('mask')).not.toBeNull();
+  });
+
   it('un anneau laisse voir par son trou', () => {
     const axis = createElement('point', 450, 450, { height: 300 });
     const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });

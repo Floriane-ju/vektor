@@ -1494,7 +1494,7 @@ describe('orientation des copies', () => {
   });
 });
 
-import { parseDash } from '../src/scene.js';
+import { parseDash, toggleElementVisibility } from '../src/scene.js';
 
 describe('style de trait de la forme', () => {
   it('lit la saisie libre, bornée', () => {
@@ -1592,6 +1592,19 @@ describe('rotation et épaisseur interpolées', () => {
     expect(deserialize(serialize(scene)).layers[0].elements[0].opaque).toBe(false);
     const old = JSON.stringify({ format: 'vektor/scene@30', layers: [{ id: 'L1', elements: [{ id: 'E1', type: 'rect' }] }] });
     expect(deserialize(old).layers[0].elements[0].opaque).toBe(true);
+  });
+
+  it('une forme masquée se sauvegarde ; absente (`@31`), la forme est visible', () => {
+    const element = createElement('rect', 0, 0);
+    const scene = { layers: [createLayer({ elements: [element] })] };
+    const hidden = toggleElementVisibility(scene, element.id);
+    expect(hidden.layers[0].elements[0].hidden).toBe(true);
+    expect(toggleElementVisibility(hidden, element.id).layers[0].elements[0].hidden).toBeUndefined();
+    expect(toggleElementVisibility(scene, 'E-absent')).toBe(scene);
+    expect(deserialize(serialize(hidden)).layers[0].elements[0].hidden).toBe(true);
+    expect(deserialize(serialize(scene)).layers[0].elements[0].hidden).toBeUndefined();
+    const old = JSON.stringify({ format: 'vektor/scene@31', layers: [{ id: 'L1', elements: [{ id: 'E1', type: 'rect', hidden: 'oui' }] }] });
+    expect(deserialize(old).layers[0].elements[0].hidden).toBeUndefined();
   });
 
   it('une scène `@19` recopie couleur et épaisseur du calque sur ses formes', () => {
@@ -2566,7 +2579,7 @@ describe('formes nommables', () => {
   });
 
   it('le format est bumpé, l’ancien reste lisible', () => {
-    expect(FORMAT).toBe('vektor/scene@31');
+    expect(FORMAT).toBe('vektor/scene@32');
     const raw = JSON.parse(serialize(withShapes()));
     raw.format = 'vektor/scene@29';
     expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);

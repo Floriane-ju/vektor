@@ -10,6 +10,7 @@ import {
   selectedIds,
   selectElements,
   SHAPES,
+  toggleElementVisibility,
   toggleSelected,
 } from '../scene.js';
 import { clearHover, shapePreview, showHover } from '../renderer-svg.js';
@@ -104,8 +105,7 @@ const hoverCard = (ctx, card, element) => {
 
 /* Nom, aperçu et actions d'une forme. */
 const shapeLine = ({ store, remove }, layer, element, isSelected) => {
-  /* Même ligne que l'arbre des calques, sans la bascule de visibilité : une
-     forme se masque en la supprimant ou en masquant son calque. */
+  /* Même ligne que l'arbre des calques. */
   const row = document.createElement('div');
   row.className = 'layer-row is-shape';
 
@@ -134,7 +134,16 @@ const shapeLine = ({ store, remove }, layer, element, isSelected) => {
   const glyph = icon(element.type, GLYPH_SIZE);
   glyph.classList.add('shape-glyph');
   row.append(dragHandle(), glyph, name, actions);
+  const eye = iconButton({
+    label: element.hidden ? `Afficher ${name.textContent}` : `Masquer ${name.textContent}`,
+    text: '',
+    focusKey: `visible-${element.id}`,
+    pressed: !element.hidden,
+    onClick: () => store.apply(toggleElementVisibility, element.id),
+  });
+  eye.append(icon(element.hidden ? 'eyeOff' : 'eye', ICON_SIZE.sm));
   actions.append(
+    eye,
     iconButton({
       label: `Dupliquer ${name.textContent}`,
       text: '⧉',
@@ -166,6 +175,7 @@ const shapeRow = (ctx, tree, element) => {
   /* Membre de la sélection sans être la forme active que montre le panneau. */
   if (!isActive && selected.includes(element.id)) card.dataset.selected = 'true';
   card.dataset.elementId = element.id;
+  card.dataset.visible = String(!element.hidden);
   hoverCard(ctx, card, element);
   const { row, label } = shapeLine(ctx, layer, element, selected.includes(element.id));
   card.append(row);
@@ -208,7 +218,7 @@ const signature = (scene) => {
     layer?.id ?? null,
     scene.activeElementId,
     selectedIds(scene),
-    layer?.elements.map((element) => [element.id, element.type, element.name, element.booleans.map((step) => step.with), element.inside]) ?? [],
+    layer?.elements.map((element) => [element.id, element.type, element.name, !element.hidden, element.booleans.map((step) => step.with), element.inside]) ?? [],
   ]);
 };
 
