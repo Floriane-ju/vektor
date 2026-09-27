@@ -121,6 +121,8 @@ input[type="range"] {
 #stage[data-tool="cursor"] { cursor: crosshair; }
 #stage[data-tool="cursor"] [data-element-id],
 #stage[data-tool="cursor"] [data-grab] { cursor: grab; }
+/* Pointeur dans un cadre de saisie : le reste du dessin s'efface un peu. */
+#stage[data-focus] > [data-layer-id] { opacity: 0.8; }
 
 /* Le repère d'un pivot se saisit pour le déplacer. */
 #stage[data-tool="cursor"] [data-pivot] [data-grip] { cursor: move; }

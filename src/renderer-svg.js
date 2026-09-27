@@ -32,7 +32,7 @@ const copyKey = (id, { copy, own = 0 }) => `${id}:${copy}:${own}`;
  */
 const drawLayer = (layer) => {
   const children = layerChildren(layer);
-  const entry = { layer, group: null, drawn: [], occluders: new Map(), bounds: new Map(), box: null, frame: null };
+  const entry = { layer, group: null, drawn: [], occluders: new Map(), bounds: new Map(), dots: new Map(), box: null, frame: null };
   if (children.length === 0) return entry;
 
   const group = document.createElementNS(SVG_NS, 'g');
@@ -56,9 +56,21 @@ const drawLayer = (layer) => {
      ne garde que son trait. */
   const holes = [];
   let holeFill;
-  for (const child of children) {
-    const box = childBounds(child);
-    if (!entry.bounds.has(child.id)) entry.bounds.set(child.id, box);
+  const points = new Set(layer.elements.filter((element) => element.type === 'point').map((element) => element.id));
+  for (const rendered of children) {
+    const box = childBounds(rendered);
+    /* Première copie d'une forme = son origine (`data-origin`), que la pile
+       laisse en place : sa boîte est le cadre de sélection. Un point relié
+       n'a pas de copie à lui — sa chaîne court sur toutes — : son origine
+       est le point au départ de la chaîne (`entry.dots`). */
+    const origin = !entry.bounds.has(rendered.id);
+    const linked = points.has(rendered.id) && rendered.type === 'polyline';
+    if (origin) {
+      const dot = linked ? { ...rendered, type: 'point' } : null;
+      entry.bounds.set(rendered.id, dot ? childBounds(dot) : box);
+      if (dot) entry.dots.set(rendered.id, dot);
+    }
+    const child = origin && !linked ? { ...rendered, origin: true } : rendered;
     entry.frame = entry.frame ? union(entry.frame, box) : box;
     if (tools.has(child.id)) continue;
     entry.box = entry.box ? union(entry.box, box) : box;
@@ -157,6 +169,7 @@ export const render = (scene, svgRoot) => {
   let state = renders.get(svgRoot);
   if (state?.layers === scene.layers) {
     for (const node of [...state.overlay, ...svgRoot.querySelectorAll('[data-hover]')]) node.remove();
+    delete svgRoot.dataset.focus;
   } else {
     state = drawScene(scene, svgRoot, state ?? { entries: new Map() });
   }
@@ -471,6 +484,7 @@ export const createNode = (child) => {
     : ({ dot: 'line', arc: 'path', polyline: child.closed ? 'polygon' : 'polyline' }[geometry] ?? geometry);
   const node = document.createElementNS(SVG_NS, tag);
   node.dataset.elementId = child.id;
+  if (child.origin) node.dataset.origin = '';
   let strokeWidth = child.strokeWidth;
   if (child.matrix) {
     const { points, closed } = outlinePath(child);
@@ -582,6 +596,7 @@ const hollowStroke = (node, id, strokeWidth, gap) => {
   mask.append(svgNode('rect', { ...MASK_REGION, fill: '#fff' }), hollow);
   const group = svgNode('g', { mask: `url(#${mask.id})` });
   if (node.dataset.elementId) group.dataset.elementId = node.dataset.elementId;
+  if (node.dataset.origin !== undefined) group.dataset.origin = '';
   delete node.dataset.elementId;
   group.append(mask, node);
   return group;
@@ -677,6 +692,7 @@ const wrap = (nodes, mask) => {
 const createBoolean = (child, steps) => {
   const group = svgNode('g', { opacity: round(child.opacity ?? 1) });
   group.dataset.elementId = child.id;
+  if (child.origin) group.dataset.origin = '';
   const masks = [];
   let serial = 0;
 
@@ -945,6 +961,7 @@ export const elementsInBox = (svgRoot, layer, box) => {
 /** Retire le cadre de survol, où qu'il ait été posé, et rend la sélection. */
 export const clearHover = (svgRoot) => {
   for (const node of svgRoot.querySelectorAll('[data-hover]')) node.remove();
+  delete svgRoot.dataset.focus;
   svgRoot.querySelector('[data-selection]')?.removeAttribute('visibility');
 };
 
@@ -962,6 +979,32 @@ export const showHover = (svgRoot, elementId) => {
   /* Un seul cadre à la fois : la forme survolée, pas celle sélectionnée. */
   svgRoot.querySelector('[data-selection]')?.setAttribute('visibility', 'hidden');
   svgRoot.append(frame(box, 'hover'));
+};
+
+/**
+ * Pointeur dans le cadre de saisie d'une forme : le dessin passe à 80 %
+ * (`data-focus`, voir style.css), sa copie d'origine reprise par-dessus à
+ * pleine opacité — pour un point relié, le point au départ de sa chaîne, la
+ * chaîne restant atténuée. État d'écran comme le survol : le prochain rendu
+ * l'efface.
+ *
+ * ponytail: la copie reprise passe devant ce qui la cachait (calque du dessus,
+ * volumes du même bloc 3D) le temps du survol.
+ */
+export const showOrigin = (svgRoot, elementId) => {
+  clearHover(svgRoot);
+  const nodes = [...svgRoot.querySelectorAll(`[data-layer-id] [data-element-id="${elementId}"][data-origin]`)].filter(
+    (node) => !node.closest('mask') && !node.parentElement.closest('[data-origin]'),
+  );
+  const dot = [...(renders.get(svgRoot)?.entries.values() ?? [])].find((entry) => entry.dots.has(elementId))?.dots.get(elementId);
+  if (dot) nodes.push(dot.matrix ? drawPlane([dot]).node : createNode(dot));
+  if (nodes.length === 0) return;
+  const group = svgNode('g', { 'pointer-events': 'none' });
+  group.dataset.hover = 'origin';
+  group.dataset.for = elementId;
+  group.append(...nodes.map((node) => (node.parentNode ? node.cloneNode(true) : node)));
+  svgRoot.dataset.focus = '';
+  svgRoot.append(group);
 };
 
 export const round = (value) => String(Math.round(value * 1000) / 1000);

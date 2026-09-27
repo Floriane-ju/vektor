@@ -1511,6 +1511,33 @@ describe('tracé', () => {
     expect(toSvgDocument(svg)).not.toContain('data-grab');
   });
 
+  it('un point relié : cadre sur le point seul, survol du cadre qui atténue le reste', () => {
+    const point = createElement('point', 50, 50, { strokeWidth: 10, modifiers: [createModifier({ n: 4, linear: true })] });
+    const { svg, pick } = mountTrace([point]);
+    pick('cursor');
+    const frame = svg.querySelector('[data-grab]');
+    /* Le point (10) et l'écart du cadre de part et d'autre, pas la chaîne. */
+    expect(Number(frame.getAttribute('width'))).toBe(26);
+    on(frame, 'pointermove', 50, 50);
+    expect(svg.hasAttribute('data-focus')).toBe(true);
+    const origin = svg.querySelector('[data-hover="origin"]');
+    expect(origin.querySelector('line').getAttribute('x1')).toBe('50');
+    /* Survol levé hors du cadre. */
+    on(svg, 'pointermove', 400, 400);
+    expect(svg.hasAttribute('data-focus')).toBe(false);
+    expect(svg.querySelector('[data-hover]')).toBeNull();
+  });
+
+  it('survol du cadre : la copie d’origine reprise seule, pas ses répétitions', () => {
+    const rect = createElement('rect', 50, 50, { modifiers: [createModifier({ n: 3 })] });
+    const { svg, pick } = mountTrace([rect]);
+    pick('cursor');
+    on(svg.querySelector('[data-grab]'), 'pointermove', 50, 50);
+    expect(svg.querySelectorAll('[data-layer-id] rect')).toHaveLength(3);
+    expect(svg.querySelectorAll('[data-hover="origin"] rect')).toHaveLength(1);
+    expect(toSvgDocument(svg)).not.toContain('origin');
+  });
+
   it('les poignées ne partent pas à l’export', () => {
     const trace = createElement('polyline', 0, 0);
     const { svg } = mountTrace([trace]);

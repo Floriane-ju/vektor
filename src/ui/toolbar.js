@@ -6,7 +6,7 @@ import {
   SHAPES,
   toggleVisibility,
 } from '../scene.js';
-import { clearHover } from '../renderer-svg.js';
+import { clearHover, showOrigin } from '../renderer-svg.js';
 import { planeMatrix, unproject } from '../plane.js';
 import { icon } from './icons.js';
 import { TOOL_KEYS } from './shortcuts.js';
@@ -142,9 +142,20 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
     else gesture = drawGesture(ctx, event, layer, tool);
   });
 
+  /* Forme dont le cadre de saisie est sous le pointeur ; tenue le temps du
+     geste, dont chaque rendu efface l'atténuation. */
+  let focus = null;
+  const focusOrigin = (event) => {
+    if (!gesture) focus = event.target.closest?.('[data-grab]')?.dataset.grab ?? null;
+    const shown = svgRoot.querySelector('[data-hover="origin"]');
+    if (focus && shown?.dataset.for !== focus) showOrigin(svgRoot, focus);
+    else if (!focus && shown) clearHover(svgRoot);
+  };
+
   svgRoot.addEventListener('pointermove', (event) => {
     if (tracer.active()) tracer.preview(event);
     gesture?.move(event);
+    if (selecting) focusOrigin(event);
   });
 
   svgRoot.addEventListener('pointerup', (event) => {

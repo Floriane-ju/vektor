@@ -32,6 +32,7 @@ export const createPlaneDouble = (child, [outer, inner], closed = true) => {
     });
   const group = svgNode('g');
   group.dataset.elementId = child.id;
+  if (child.origin) group.dataset.origin = '';
   const nodes = closed
     ? [edge(outer, 'none'), edge(inner, child.fill)]
     : [...(child.fill === 'none' ? [] : [createNode({ ...child, outlined: false, stroke: 'none' })]), edge(outer, 'none'), edge(inner, 'none')];
@@ -82,6 +83,7 @@ export const drawPlane = (children) => {
       ...fills.map(({ child, rings, fill }) => {
         const node = svgNode('path', { d: rings.map((ring) => screenPath(ring, true)).join(' '), fill, 'fill-rule': 'evenodd', opacity: round(child.opacity ?? 1) });
         node.dataset.elementId = child.id;
+        if (child.origin) node.dataset.origin = '';
         return node;
       }),
     );
@@ -90,6 +92,7 @@ export const drawPlane = (children) => {
   for (const { child, outlines, flanks, axis } of shapes) {
     const group = svgNode('g');
     group.dataset.elementId = child.id;
+    if (child.origin) group.dataset.origin = '';
     const dot = SHAPES[child.type].geometry === 'dot';
     const width = child.strokeWidth * (dot ? (child.scale ?? 1) : 1);
     const stroked = (runs, extra) => {
