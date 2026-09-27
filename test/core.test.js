@@ -3,6 +3,7 @@ import { clampCount, CURVES, lerpColor, ramp as curveRamp, stackValues, t } from
 import { copyCount, createModifier, MAX_COPIES, MODIFIERS, orients } from '../src/modifiers.js';
 import {
   addBoolean,
+  isClosedShape,
   updateModifier,
   closesLoop,
   currentStyle,
@@ -1687,6 +1688,38 @@ describe('booléens', () => {
     const alone = createElement('rect', 0, 0);
     const lonely = { layers: [createLayer({ elements: [alone] })] };
     expect(addBoolean(lonely, alone.id)).toBe(lonely);
+  });
+
+  it('point, ligne, tracé et arc ouverts restent hors des booléens', () => {
+    const { disque, forme, scene } = trio();
+    const withShape = (type, props) => {
+      const open = createElement(type, 0, 0, props);
+      const layer = { ...scene.layers[0], elements: [...scene.layers[0].elements, open] };
+      return { open, scene: { ...scene, layers: [layer] } };
+    };
+    for (const [type, props] of [['point'], ['line'], ['polyline', { closed: false }], ['arc', { closure: 'open' }]]) {
+      const { open, scene: next } = withShape(type, props);
+      expect(addBoolean(next, open.id)).toBe(next);
+      expect(updateBoolean(next, forme.id, 0, { with: open.id })).toBe(next);
+    }
+    /* Ouvrir un outil le retire des piles, ouvrir un hôte vide la sienne. */
+    const { open: trace, scene: traced } = withShape('polyline', { closed: true });
+    const used = updateBoolean(traced, forme.id, 0, { with: trace.id });
+    expect(shape(used, 2).booleans[0].with).toBe(trace.id);
+    expect(shape(updateElement(used, trace.id, { closed: false }), 2).booleans.map((step) => step.with)).not.toContain(
+      trace.id,
+    );
+    const arced = updateElement(scene, forme.id, { type: 'arc', closure: 'open' });
+    expect(shape(arced, 2).booleans).toEqual([]);
+    expect(isClosedShape(disque)).toBe(true);
+    /* Relu, un fichier perd les étapes qui impliquent une forme ouverte. */
+    const saved = JSON.parse(serialize(traced));
+    saved.layers[0].elements[2].booleans = [{ with: trace.id, op: 'union' }];
+    saved.layers[0].elements[3].closed = false;
+    saved.layers[0].elements[3].booleans = [{ with: disque.id, op: 'union' }];
+    const read = deserialize(JSON.stringify(saved)).layers[0].elements;
+    expect(read[2].booleans).toEqual([]);
+    expect(read[3].booleans).toEqual([]);
   });
 
   it('chaque étape se règle et se retire à son rang', () => {

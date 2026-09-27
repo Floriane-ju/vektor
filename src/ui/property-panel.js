@@ -1,4 +1,4 @@
-import { getActiveElement, getActiveLayer, isBooleanTool, setLayerEvenOdd, SHAPES } from '../scene.js';
+import { getActiveElement, getActiveLayer, isBooleanTool, isClosedShape, setLayerEvenOdd, SHAPES } from '../scene.js';
 import { shapeName } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
 import { modifierSection } from './modifier-section.js';
@@ -6,7 +6,7 @@ import { booleanSection } from './boolean-section.js';
 import { shapeFields } from './shape-fields.js';
 import { strokeFields } from './stroke-fields.js';
 import { planeFields } from './plane-fields.js';
-import { bindControl, el, input, separator, showValue, slider as sliderOf, switchField } from './fields.js';
+import { bindControl, el, input, section, showValue, slider as sliderOf, switchField } from './fields.js';
 
 /**
  * Panneau de droite : les réglages du calque actif, ou ceux de la forme
@@ -73,16 +73,12 @@ const shapeDetail = (store, binder) => {
   root.dataset.kind = 'shape';
   root.setAttribute('aria-label', 'Réglages de la forme');
   root.append(
-    head.head,
-    separator(),
-    ...shape.nodes,
-    ...stroke.nodes,
-    separator(),
-    modifiers.root,
-    separator(),
-    interpolations.root,
-    separator(),
-    booleans.root,
+    section(head.head),
+    section(...shape.nodes),
+    section(...stroke.nodes),
+    section(modifiers.root),
+    section(interpolations.root),
+    section(booleans.root),
   );
 
   const sync = (scene, element) => {
@@ -100,7 +96,7 @@ const shapeDetail = (store, binder) => {
        pour pouvoir les retirer. */
     const tool = isBooleanTool(layer, element);
     for (const node of stroke.nodes) node.hidden ||= tool;
-    booleans.root.hidden = tool && element.booleans.length === 0;
+    booleans.root.hidden = !isClosedShape(element) || (tool && element.booleans.length === 0);
   };
   return { root, sync };
 };
@@ -133,15 +129,11 @@ const layerDetail = (store, binder) => {
   root.dataset.kind = 'layer';
   root.setAttribute('aria-label', 'Réglages du calque');
   root.append(
-    head.head,
-    separator(),
-    evenOddField,
-    separator(),
-    modifiers.root,
-    separator(),
-    interpolations.root,
-    separator(),
-    plane.root,
+    section(head.head),
+    section(evenOddField),
+    section(modifiers.root),
+    section(interpolations.root),
+    section(plane.root),
   );
 
   const sync = (scene, layer, element) => {

@@ -5,6 +5,7 @@ import {
   clampAngle,
   clampBooleanOp,
   closesLoop,
+  isClosedShape,
   clampDash,
   clampExtent,
   clampGap,
@@ -370,15 +371,18 @@ const rawElements = (raw) => {
   return raw.baseElement == null ? [] : [raw.baseElement];
 };
 
-/* Un outil ne se cherche que parmi les autres formes du calque : absente,
-   l'opération tombe plutôt que de rendre une forme invisible. */
+/* Un outil ne se cherche que parmi les autres formes fermées du calque :
+   absente, l'opération tombe plutôt que de rendre une forme invisible. Une
+   forme ouverte perd sa pile. */
 const readElements = (raw) => {
   const style = { strokeWidth: readStrokeWidth(raw), stroke: readStroke(raw) };
   const elements = rawElements(raw).map((element) => readElement(element, style));
-  const ids = new Set(elements.map((element) => element.id));
+  const ids = new Set(elements.filter(isClosedShape).map((element) => element.id));
   const kept = elements.map((element) => ({
     ...element,
-    booleans: element.booleans.filter((step) => step.with !== element.id && ids.has(step.with)),
+    booleans: isClosedShape(element)
+      ? element.booleans.filter((step) => step.with !== element.id && ids.has(step.with))
+      : [],
   }));
   const layer = { elements: kept };
   if (kept.some((element) => element.booleans.some((step) => closesLoop(layer, element.id, step.with)))) {

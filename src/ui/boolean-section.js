@@ -4,6 +4,7 @@ import {
   clampBooleanOp,
   closesLoop,
   getActiveElement,
+  isClosedShape,
   removeBoolean,
   SHAPES,
   updateBoolean,
@@ -18,7 +19,10 @@ const toolSelect = (apply, layer, element, step, index) => {
   node.setAttribute('aria-label', `Outil de l'opération ${index + 1}`);
   node.dataset.focusKey = `boolean-tool${index}`;
   const tools = layer.elements.filter(
-    (candidate) => candidate !== element && (candidate.id === step.with || !closesLoop(layer, element.id, candidate.id)),
+    (candidate) =>
+      candidate !== element &&
+      isClosedShape(candidate) &&
+      (candidate.id === step.with || !closesLoop(layer, element.id, candidate.id)),
   );
   node.append(...tools.map((other) => option(other.id, shapeName(layer, other, SHAPES))));
   node.value = step.with;
@@ -56,7 +60,7 @@ const signature = (layer, element) =>
   JSON.stringify([
     element.id,
     element.booleans,
-    layer.elements.map((candidate) => [candidate.id, candidate.type, candidate.name, candidate.booleans]),
+    layer.elements.map((candidate) => [candidate.id, candidate.type, candidate.name, candidate.booleans, isClosedShape(candidate)]),
   ]);
 
 /**

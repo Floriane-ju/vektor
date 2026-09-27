@@ -1,5 +1,5 @@
 import { clampDash, clampGap, clampLinecap, DASH_PRESETS, getActiveElement, LINECAPS, SHAPES, updateElement } from '../scene.js';
-import { el, field, input, row, segmented, separator, switchField } from './fields.js';
+import { el, field, input, row, segmented, switchField } from './fields.js';
 
 /* Bornes du curseur de tirets. Le champ numérique voisin accepte au-delà : le
    curseur couvre l'usage courant sans plafonner le modèle. */
@@ -81,7 +81,6 @@ export const strokeFields = ({ store, bind, slider }) => {
   );
   const group = el('div', 'group');
   group.append(kind.root, ...dash.nodes, linecap.root, switchField('Contour double', toggle('outlined')), gapField);
-  const line = separator();
 
   const sync = (element) => {
     const dot = SHAPES[element.type].geometry === 'dot';
@@ -89,11 +88,10 @@ export const strokeFields = ({ store, bind, slider }) => {
        prend le style de trait. */
     filledField.hidden = dot;
     group.hidden = dot && !element.modifiers.some((modifier) => modifier.linear && modifier.type !== 'none');
-    line.hidden = group.hidden;
     kind.check(dashKind(element.dash));
     linecap.check(element.linecap);
     dash.sync(element);
     gapField.hidden = !element.outlined;
   };
-  return { nodes: [line, filledField, group], sync };
+  return { nodes: [filledField, group], sync };
 };

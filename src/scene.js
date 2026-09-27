@@ -941,10 +941,14 @@ const mapElement = (scene, elementId, fn) => ({
   ),
 });
 
+/* Une forme ouverte (tracé ou arc) quitte les booléens qui l'employaient. */
 export const updateElement = (scene, elementId, patch) =>
-  mapElement(scene, elementId, (elements) =>
-    elements.map((element) => (element.id === elementId ? { ...element, ...patch } : element)),
-  );
+  mapElement(scene, elementId, (elements) => {
+    const next = elements.map((element) => (element.id === elementId ? { ...element, ...patch } : element));
+    const element = next.find((el) => el.id === elementId);
+    if (!element || isClosedShape(element)) return next;
+    return withoutTool(next, elementId).map((el) => (el.id === elementId ? { ...el, booleans: [] } : el));
+  });
 
 /* Les formes qui employaient `toolId` comme outil booléen le perdent. */
 const withoutTool = (elements, toolId) =>
@@ -967,6 +971,14 @@ export const removeElement = (scene, elementId) => {
 export const removeElements = (scene, ids) => ids.reduce(removeElement, scene);
 
 /* ---- Pile booléenne d'une forme ---- */
+
+/* Sans intérieur — point, ligne, tracé ou arc ouverts — une forme ne reçoit
+   pas de booléen et n'en est pas l'outil. */
+export const isClosedShape = (element) =>
+  element.type !== 'point' &&
+  element.type !== 'line' &&
+  !(element.type === 'polyline' && !element.closed) &&
+  !(element.type === 'arc' && element.closure === 'open');
 
 const mapBooleans = (scene, elementId, fn) =>
   mapElement(scene, elementId, (elements) =>
@@ -1003,8 +1015,10 @@ const layerOfElement = (scene, elementId) =>
 export const addBoolean = (scene, elementId) => {
   const layer = layerOfElement(scene, elementId);
   const element = layer?.elements.find((el) => el.id === elementId);
-  if (!element) return scene;
-  const others = layer.elements.filter((el) => el.id !== elementId && !closesLoop(layer, elementId, el.id));
+  if (!element || !isClosedShape(element)) return scene;
+  const others = layer.elements.filter(
+    (el) => el.id !== elementId && isClosedShape(el) && !closesLoop(layer, elementId, el.id),
+  );
   const used = new Set(element.booleans.map((step) => step.with));
   const tool = others.find((el) => !used.has(el.id)) ?? others[0];
   if (!tool) return scene;
@@ -1013,7 +1027,8 @@ export const addBoolean = (scene, elementId) => {
 
 export const updateBoolean = (scene, elementId, index, patch) => {
   const layer = layerOfElement(scene, elementId);
-  if (patch.with !== undefined && (!layer || closesLoop(layer, elementId, patch.with))) return scene;
+  const tool = layer?.elements.find((el) => el.id === patch.with);
+  if (patch.with !== undefined && (!tool || !isClosedShape(tool) || closesLoop(layer, elementId, patch.with))) return scene;
   return mapBooleans(scene, elementId, (steps) => steps.map((step, i) => (i === index ? { ...step, ...patch } : step)));
 };
 

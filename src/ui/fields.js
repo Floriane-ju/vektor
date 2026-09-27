@@ -28,7 +28,13 @@ export const row = (...children) => {
   return node;
 };
 
-export const separator = () => el('hr', 'separator');
+/* Bloc du panneau : le trait qui les sépare vient du CSS, seulement entre
+   deux blocs visibles — un bloc dont tout est masqué disparaît. */
+export const section = (...children) => {
+  const node = el('div', 'inspector-section');
+  node.append(...children);
+  return node;
+};
 
 export const option = (value, label) => {
   const node = el('option', null, label);
