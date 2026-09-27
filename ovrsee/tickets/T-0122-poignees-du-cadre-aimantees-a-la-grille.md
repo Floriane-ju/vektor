@@ -2,7 +2,7 @@
 {
   "id": "T-0122",
   "titre": "Poignées du cadre aimantées à la grille",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui"],
   "cree": "2026-09-27",
