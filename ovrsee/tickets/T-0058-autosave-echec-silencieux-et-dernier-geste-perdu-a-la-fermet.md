@@ -2,14 +2,14 @@
 {
   "id": "T-0058",
   "titre": "Autosave : échec silencieux et dernier geste perdu à la fermeture",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "s",
   "tags": [
     "persistance"
   ],
   "cree": "2026-09-24",
-  "maj": "2026-09-24",
+  "maj": "2026-09-27",
   "plan": null,
   "epic": "T-0056"
 }
@@ -26,7 +26,7 @@ en JSON indenté, ce qui rapproche du quota.
 
 ## Critères d'acceptation
 
-- [ ] Un échec d'écriture s'affiche dans la barre d'état (ton erreur) et propose d'exporter.
-- [ ] Fermer ou recharger l'onglet juste après un geste le conserve (`flush` sur `pagehide`).
-- [ ] Un changement de sélection seule n'écrit pas (`next.layers === previous.layers`).
-- [ ] L'autosave écrit un JSON compact ; l'export fichier reste indenté.
+- [x] Un échec d'écriture s'affiche dans la barre d'état (ton erreur) et propose d'exporter.
+- [x] Fermer ou recharger l'onglet juste après un geste le conserve (`flush` sur `pagehide`).
+- [x] Un changement de sélection seule n'écrit pas (`next.layers === previous.layers`).
+- [x] L'autosave écrit un JSON compact ; l'export fichier reste indenté.

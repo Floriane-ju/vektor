@@ -127,7 +127,9 @@ const READABLE_FORMATS = new Set([
   FORMAT,
 ]);
 
-export const serialize = (scene) =>
+/* `space` : indenté pour l'export fichier (lisible), 0 pour l'autosave
+   (compact, loin du quota). */
+export const serialize = (scene, space = 2) =>
   JSON.stringify(
     {
       format: FORMAT,
@@ -136,7 +138,7 @@ export const serialize = (scene) =>
       activeElementId: scene.activeElementId,
     },
     null,
-    2,
+    space,
   );
 
 /* ---- Validation ---- */
@@ -500,12 +502,13 @@ export const deserialize = (text) => {
 
 /* ---- Supports ---- */
 
+/** @returns {boolean} faux si l'écriture a échoué (quota plein, stockage refusé). */
 export const saveLocal = (scene) => {
   try {
-    localStorage.setItem(STORAGE_KEY, serialize(scene));
+    localStorage.setItem(STORAGE_KEY, serialize(scene, 0));
+    return true;
   } catch {
-    /* Quota plein ou stockage refusé : l'autosave est un confort, pas le
-       support principal — l'export fichier reste disponible. */
+    return false;
   }
 };
 
@@ -540,11 +543,24 @@ export const download = (contents, filename, mime) => {
   URL.revokeObjectURL(url);
 };
 
-/** Repousse les écritures tant que les changements s'enchaînent (sliders). */
+/**
+ * Repousse les écritures tant que les changements s'enchaînent (sliders).
+ * `flush()` exécute tout de suite l'appel en attente (fermeture de l'onglet).
+ */
 export const debounce = (fn, delay = 400) => {
   let timer;
-  return (...args) => {
+  let pending = null;
+  const run = () => {
     clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
+    const args = pending;
+    pending = null;
+    if (args) fn(...args);
   };
+  const debounced = (...args) => {
+    pending = args;
+    clearTimeout(timer);
+    timer = setTimeout(run, delay);
+  };
+  debounced.flush = run;
+  return debounced;
 };

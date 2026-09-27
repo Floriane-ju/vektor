@@ -32,8 +32,23 @@ const store = createStore(scene);
 store.subscribe((next) => render(next, svgRoot));
 
 /* L'autosave est repoussée : un glissement de slider produit des dizaines de
-   notifications, une seule écriture suffit. */
-store.subscribe(debounce(saveLocal));
+   notifications, une seule écriture suffit. Une sélection seule (mêmes
+   `layers`) n'écrit pas ; la fermeture de l'onglet vide l'attente. */
+let savedLayers = scene.layers;
+let saveFailed = false;
+const autosave = debounce((next) => {
+  const ok = saveLocal(next);
+  if (ok === !saveFailed) return;
+  saveFailed = !ok;
+  if (ok) status.show('Sauvegarde locale rétablie.');
+  else status.show('Sauvegarde locale impossible (stockage plein ou refusé) — exporter le projet (Exporter → JSON) pour ne rien perdre.', 'error');
+});
+store.subscribe((next) => {
+  if (next.layers === savedLayers) return;
+  savedLayers = next.layers;
+  autosave(next);
+});
+window.addEventListener('pagehide', autosave.flush);
 
 const actions = document.getElementById('toolbar-actions');
 const viewControls = document.getElementById('view-controls');
