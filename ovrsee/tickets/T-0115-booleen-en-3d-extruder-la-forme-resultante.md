@@ -2,7 +2,7 @@
 {
   "id": "T-0115",
   "titre": "Booléen en 3D : extruder la forme résultante",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": ["3d", "booleens"],
   "cree": "2026-09-27",
