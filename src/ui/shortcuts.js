@@ -108,6 +108,8 @@ export const mountShortcuts = ({ store, container, status }) => {
     if (target.closest?.('dialog, ' + TEXT_ENTRY)) return;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
+    /* Calque verrouillé : ni suppression, ni déplacement au clavier. */
+    const locked = getActiveLayer(store.get())?.locked === true;
     const element = getActiveElement(store.get());
     const ids = selectedIds(store.get());
 
@@ -122,6 +124,7 @@ export const mountShortcuts = ({ store, container, status }) => {
     if (event.key === '?') showHelp();
     else if (TOOL_KEYS[key] && !event.shiftKey) selectTool(TOOL_KEYS[key]);
     else if (event.key === 'Escape') store.apply(selectElements, []);
+    else if ((event.key === 'Delete' || event.key === 'Backspace' || ARROWS[event.key]) && locked) return;
     else if ((event.key === 'Delete' || event.key === 'Backspace') && element) {
       store.apply(removeElements, ids);
       status.show(ids.length > 1 ? `${ids.length} formes supprimées.` : `${SHAPES[element.type].label} supprimé.`);

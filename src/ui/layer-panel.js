@@ -14,6 +14,7 @@ import {
   copyTotal,
   isSuspended,
   togglePlane,
+  toggleLock,
   toggleVisibility,
 } from '../scene.js';
 
@@ -30,6 +31,20 @@ const visibilityButton = (store, layer) => {
     onClick: () => store.apply(toggleVisibility, layer.id),
   });
   button.append(icon(layer.visible ? 'eye' : 'eyeOff', ICON_SIZE.sm));
+  return button;
+};
+
+/* Calque verrouillé : ses formes ne se saisissent plus sur le plan. */
+const lockButton = (store, layer) => {
+  const locked = layer.locked === true;
+  const button = iconButton({
+    label: locked ? `Déverrouiller ${layer.name}` : `Verrouiller ${layer.name}`,
+    text: '',
+    focusKey: `lock-${layer.id}`,
+    pressed: locked,
+    onClick: () => store.apply(toggleLock, layer.id),
+  });
+  button.append(icon(locked ? 'lock' : 'lockOff', ICON_SIZE.sm));
   return button;
 };
 
@@ -66,6 +81,7 @@ const layerActions = ({ store, remove }, layer) => {
   actions.append(
     planeButton(store, layer),
     visibilityButton(store, layer),
+    lockButton(store, layer),
     iconButton({
       label: `Dupliquer ${layer.name}`,
       text: '⧉',
@@ -151,6 +167,7 @@ const layerRow = (ctx, scene, layer) => {
   if (isActive) card.dataset.selected = scene.activeElementId === null ? 'layer' : 'parent';
   card.dataset.layerId = layer.id;
   card.dataset.visible = String(layer.visible);
+  card.dataset.locked = String(layer.locked === true);
   card.dataset.plane = String(activePlane(layer) !== null);
   const row = document.createElement('div');
   row.className = 'layer-row';
@@ -173,7 +190,7 @@ const signature = (scene, collapsedId) =>
     scene.activeLayerId,
     scene.activeElementId !== null,
     collapsedId,
-    scene.layers.map((layer) => [layer.id, layer.name, layer.visible, activePlane(layer) !== null, isSuspended(layer) && copyTotal(layer)]),
+    scene.layers.map((layer) => [layer.id, layer.name, layer.visible, layer.locked === true, activePlane(layer) !== null, isSuspended(layer) && copyTotal(layer)]),
   ]);
 
 /**

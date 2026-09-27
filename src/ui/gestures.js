@@ -4,6 +4,7 @@ import {
   dragPatch,
   getActiveElement,
   getActiveLayer,
+  isLockedElement,
   pivotOf,
   recenterTrace,
   removeElement,
@@ -193,7 +194,8 @@ const lassoGesture = (ctx, event) => {
       maxX: Math.max(start.x, point.x),
       maxY: Math.max(start.y, point.y),
     };
-    const hits = elementsInBox(svgRoot, getActiveLayer(store.get()), box);
+    const layer = getActiveLayer(store.get());
+    const hits = layer?.locked ? [] : elementsInBox(svgRoot, layer, box);
     store.apply(selectElements, [...base, ...hits.filter((id) => !base.includes(id))]);
     lassoFrame(svgRoot, box);
   };
@@ -215,16 +217,21 @@ const lassoGesture = (ctx, event) => {
  * l'ajoute ou la retire de la sélection), sinon un lasso.
  */
 export const selectGesture = (ctx, event) => {
-  const grip = event.target.closest?.('[data-pivot]');
-  const pivot = grip && pivotGesture(ctx, event, grip);
-  if (pivot) return pivot;
-  const handle = event.target.closest?.('[data-vertex]');
-  const selected = getActiveElement(ctx.store.get());
-  if (handle && selected?.points) return vertexGesture(ctx, event, handle, selected);
+  const scene = ctx.store.get();
+  /* Calque verrouillé : ni pivot, ni sommet, ni forme ne se saisissent. */
+  if (!getActiveLayer(scene)?.locked) {
+    const grip = event.target.closest?.('[data-pivot]');
+    const pivot = grip && pivotGesture(ctx, event, grip);
+    if (pivot) return pivot;
+    const handle = event.target.closest?.('[data-vertex]');
+    const selected = getActiveElement(scene);
+    if (handle && selected?.points) return vertexGesture(ctx, event, handle, selected);
+  }
   /* Toutes les copies d'un modificateur portent l'id de leur forme source :
      cliquer n'importe laquelle désigne cette forme. */
   const node = event.target.closest?.('[data-element-id]');
   if (!node) return lassoGesture(ctx, event);
+  if (isLockedElement(scene, node.dataset.elementId)) return null;
   if (!event.shiftKey) return moveGesture(ctx, event, node);
   ctx.store.apply(toggleSelected, node.dataset.elementId);
   return null;

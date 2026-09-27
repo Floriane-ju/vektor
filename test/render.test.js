@@ -546,6 +546,16 @@ describe('outil curseur', () => {
     expect(store.get().layers[0].elements[0]).toMatchObject({ x: 150, y: 80, rx: 80 });
   });
 
+  it('une forme d’un calque verrouillé ne se sélectionne ni ne bouge', () => {
+    const { store, svg } = mountWithShape({ locked: true });
+    const before = store.get();
+    on(svg.querySelector('ellipse'), 'pointerdown', 100, 100);
+    on(svg, 'pointermove', 130, 90);
+    on(svg, 'pointerup', 150, 80);
+    expect(store.get().activeElementId).toBe(before.activeElementId);
+    expect(store.get().layers[0].elements[0]).toMatchObject({ x: 100, y: 100 });
+  });
+
   const twoShapes = () =>
     mountWithShape({
       elements: [createElement('ellipse', 100, 100, { filled: true }), createElement('rect', 400, 100, { filled: true })],

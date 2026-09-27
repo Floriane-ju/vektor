@@ -69,7 +69,8 @@ const shapeDetail = (store, binder) => {
   });
   const booleans = booleanSection({ store });
 
-  const root = el('div', 'inspector-body');
+  /* `fieldset` : un calque verrouillé fige les réglages de ses formes. */
+  const root = el('fieldset', 'inspector-body');
   root.dataset.kind = 'shape';
   root.setAttribute('aria-label', 'Réglages de la forme');
   root.append(
@@ -84,6 +85,7 @@ const shapeDetail = (store, binder) => {
   const sync = (scene, element) => {
     const layer = layerOf(scene, element);
     root.hidden = !element;
+    root.disabled = layer?.locked === true;
     head.title.textContent = layer ? shapeName(layer, element, SHAPES) : '';
     modifiers.sync(scene);
     if (!element) return;
@@ -124,7 +126,7 @@ const layerDetail = (store, binder) => {
   const interpolations = interpolationSection({ store, ownerOf: (scene) => getActiveLayer(scene) });
   const plane = planeFields({ store, bind: binder.bind, slider: binder.slider });
 
-  /* Un `fieldset` pour tout désactiver d'un coup quand il n'y a plus de calque. */
+  /* Un `fieldset` pour tout désactiver d'un coup : plus de calque, ou calque verrouillé. */
   const root = el('fieldset', 'inspector-body');
   root.dataset.kind = 'layer';
   root.setAttribute('aria-label', 'Réglages du calque');
@@ -138,8 +140,9 @@ const layerDetail = (store, binder) => {
 
   const sync = (scene, layer, element) => {
     root.hidden = Boolean(element);
-    root.disabled = !layer;
-    root.setAttribute('aria-disabled', String(!layer));
+    /* Sans calque, ou calque verrouillé : lisible, rien ne s'édite. */
+    root.disabled = !layer || layer.locked === true;
+    root.setAttribute('aria-disabled', String(root.disabled));
     head.title.textContent = layer?.name ?? 'Aucun calque';
     modifiers.sync(scene);
     plane.sync(layer);

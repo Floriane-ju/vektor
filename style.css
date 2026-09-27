@@ -367,6 +367,8 @@ input.layer-name-input {
 .layer-card[data-visible="false"] > .layer-row .row-actions { opacity: 1; }
 /* Un calque en 3D le montre sans survol, comme un calque masqué. */
 .layer-card[data-plane="true"] > .layer-row .row-actions { opacity: 1; }
+/* Verrouillé aussi : on voit le cadenas sans chercher. */
+.layer-card[data-locked="true"] > .layer-row .row-actions { opacity: 1; }
 
 .icon-btn {
   min-width: 24px;

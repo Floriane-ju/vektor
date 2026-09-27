@@ -49,6 +49,8 @@ import {
   updateElement,
   updateInterpolation,
   updateInterpolationRange,
+  isLockedElement,
+  toggleLock,
 } from '../src/scene.js';
 import { deserialize, FORMAT, serialize } from '../src/persistence.js';
 import { createStore, HISTORY_LIMIT } from '../src/store.js';
@@ -2514,10 +2516,23 @@ describe('formes nommables', () => {
   });
 
   it('le format est bumpé, l’ancien reste lisible', () => {
-    expect(FORMAT).toBe('vektor/scene@33');
+    expect(FORMAT).toBe('vektor/scene@34');
     const raw = JSON.parse(serialize(withShapes()));
     raw.format = 'vektor/scene@29';
     expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);
+  });
+
+  it('le verrou d’un calque bascule et se relit ; toute autre valeur est ignorée', () => {
+    const scene = withShapes();
+    const id = scene.layers[0].id;
+    const locked = toggleLock(scene, id);
+    expect(locked.layers[0].locked).toBe(true);
+    expect(isLockedElement(locked, locked.layers[0].elements[0].id)).toBe(true);
+    expect(toggleLock(locked, id).layers[0]).not.toHaveProperty('locked');
+    const raw = JSON.parse(serialize(locked));
+    expect(deserialize(JSON.stringify(raw)).layers[0].locked).toBe(true);
+    raw.layers[0].locked = 'oui';
+    expect(deserialize(JSON.stringify(raw)).layers[0]).not.toHaveProperty('locked');
   });
 
   it('l’espacement constant d’une spirale se relit ; tout autre valeur est ignorée', () => {

@@ -701,6 +701,20 @@ export const setActiveLayer = (scene, id) => ({ ...scene, activeLayerId: id });
 export const toggleVisibility = (scene, id) =>
   mapLayer(scene, id, (layer) => ({ ...layer, visible: !layer.visible }));
 
+/* Calque verrouillé : `locked: true`, absent sinon. Ses formes ne se
+   saisissent plus sur le plan et ses réglages se figent ; il reste dessiné. */
+export const toggleLock = (scene, id) =>
+  mapLayer(scene, id, (layer) => {
+    const { locked, ...rest } = layer;
+    return locked ? rest : { ...rest, locked: true };
+  });
+
+/** Forme d'un calque verrouillé (ou introuvable) : ni sélection au plan, ni geste. */
+export const isLockedElement = (scene, elementId) => {
+  const layer = layerOfElement(scene, elementId);
+  return !layer || layer.locked === true;
+};
+
 /* Forme masquée : `hidden: true`, absent sinon. Elle ne se dessine plus mais
    reste outil booléen ou hôte, comme le calque masqué garde ses formes. */
 export const toggleElementVisibility = (scene, elementId) => {

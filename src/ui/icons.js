@@ -16,6 +16,9 @@ const PATHS = {
   cube: '<path d="M10 2.5 L16.5 6.25 V13.75 L10 17.5 L3.5 13.75 V6.25 Z M3.5 6.25 L10 10 L16.5 6.25 M10 10 V17.5" stroke-linejoin="round"/>',
   cubeOff:
     '<path d="M10 2.5 L16.5 6.25 V13.75 L10 17.5 L3.5 13.75 V6.25 Z" stroke-linejoin="round"/><path d="M4 16 L16 4" stroke-linecap="round"/>',
+  /* Verrou du calque : cadenas fermé, ouvert quand le calque est libre. */
+  lock: '<rect x="4" y="9" width="12" height="8.5" rx="1.5"/><path d="M6.5 9 V6.5 A3.5 3.5 0 0 1 13.5 6.5 V9"/>',
+  lockOff: '<rect x="4" y="9" width="12" height="8.5" rx="1.5"/><path d="M6.5 9 V6.5 A3.5 3.5 0 0 1 13.2 5"/>',
   /* Calque suspendu (trop de copies) : triangle d'alerte. */
   warning: '<path d="M10 3 L18 17 H2 Z" stroke-linejoin="round"/><path d="M10 8 V12 M10 14.5 V14.6" stroke-linecap="round"/>',
   chevronDown: '<path d="M5 8 L10 13 L15 8" stroke-linecap="round" stroke-linejoin="round"/>',

@@ -2,7 +2,7 @@
 {
   "id": "T-0101",
   "titre": "Verrouiller un calque",
-  "colonne": "pret",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "s",
   "tags": [

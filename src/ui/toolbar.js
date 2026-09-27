@@ -133,6 +133,10 @@ export const mountToolbar = ({ store, svgRoot, container, shapeContainer, status
       gesture = selectGesture(ctx, event);
       return;
     }
+    if (getActiveLayer(store.get())?.locked) {
+      status.show('Calque verrouillé : le déverrouiller pour y dessiner.');
+      return;
+    }
     const layer = drawingLayer(store);
     if (tool === 'polyline') tracer.click(layer, event);
     else gesture = drawGesture(ctx, event, layer, tool);

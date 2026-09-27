@@ -37,7 +37,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@33';
+export const FORMAT = 'vektor/scene@34';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -92,7 +92,8 @@ export const FORMAT = 'vektor/scene@33';
      dessin — sauf une forme logée, qui ne cachait rien et cache désormais ;
    - `@1` à `@31` ne masquaient pas les formes : toutes visibles ;
    - `@1` à `@32` logeaient une forme dans une autre (`inside`) : le lien est
-     oublié, la profondeur réelle du calque 3D en tient lieu. */
+     oublié, la profondeur réelle du calque 3D en tient lieu ;
+   - `@1` à `@33` ne verrouillaient pas les calques : tous libres. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -127,6 +128,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@30',
   'vektor/scene@31',
   'vektor/scene@32',
+  'vektor/scene@33',
   FORMAT,
 ]);
 
@@ -441,6 +443,7 @@ const readLayer = (raw, index, legacy) => {
     id: raw.id,
     name: typeof raw.name === 'string' && raw.name !== '' ? raw.name : `Calque ${index + 1}`,
     visible: raw.visible === undefined ? true : Boolean(raw.visible),
+    ...(raw.locked === true ? { locked: true } : {}),
     center: {
       x: num(raw.center?.x, STAGE.width / 2),
       y: num(raw.center?.y, STAGE.height / 2),
