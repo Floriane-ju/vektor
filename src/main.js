@@ -1,7 +1,8 @@
 import { createStore } from './store.js';
 import { createScene, reserveIds } from './scene.js';
 import { render } from './renderer-svg.js';
-import { debounce, loadLocal, saveLocal } from './persistence.js';
+import { debounce, deserialize, loadLocal, saveLocal } from './persistence.js';
+import example from './example.json?raw';
 import { mountToolbar } from './ui/toolbar.js';
 import { mountLayerPanel } from './ui/layer-panel.js';
 import { mountPropertyPanel } from './ui/property-panel.js';
@@ -24,7 +25,11 @@ const status = {
 };
 
 const restored = loadLocal();
-const scene = restored.scene ?? createScene();
+/* Premier lancement (aucune sauvegarde) : dessin d'exemple. Une sauvegarde
+   illisible garde le projet vierge ; une scène vidée est sauvegardée, donc
+   reste vide. */
+const firstRun = !restored.scene && !restored.error;
+const scene = restored.scene ?? (firstRun ? deserialize(example) : createScene());
 reserveIds(scene.layers);
 
 const store = createStore(scene);

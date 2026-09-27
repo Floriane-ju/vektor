@@ -2549,3 +2549,8 @@ describe('booleanPieces : contour double', () => {
     expect(piece.rims.map((rim) => rim.corners.length)).toEqual([2, 2]);
   });
 });
+
+it('le dessin d’exemple du premier lancement se relit', async () => {
+  const { default: example } = await import('../src/example.json?raw');
+  expect(deserialize(example).layers[0].elements.length).toBeGreaterThan(0);
+});

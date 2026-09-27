@@ -1,0 +1,93 @@
+{
+  "format": "vektor/scene@33",
+  "layers": [
+    {
+      "id": "L4",
+      "name": "Exemple",
+      "visible": true,
+      "center": {
+        "x": 450,
+        "y": 450
+      },
+      "elements": [
+        {
+          "id": "E38",
+          "rotation": 0,
+          "strokeWidth": 1.5,
+          "stroke": "#7dd3c0",
+          "dash": [],
+          "linecap": "butt",
+          "outlined": false,
+          "gap": 1.5,
+          "booleans": [],
+          "height": 77,
+          "opaque": false,
+          "modifiers": [],
+          "interpolations": [],
+          "rx": 25.45584412271569,
+          "ry": 25.45584412271569,
+          "filled": false,
+          "type": "ellipse",
+          "x": 450,
+          "y": 450,
+          "name": "Cylinder"
+        },
+        {
+          "id": "E39",
+          "rotation": 0,
+          "strokeWidth": 1.5,
+          "stroke": "#7dd3c0",
+          "dash": [],
+          "linecap": "butt",
+          "outlined": false,
+          "gap": 1.5,
+          "booleans": [],
+          "height": 153,
+          "opaque": true,
+          "modifiers": [],
+          "interpolations": [],
+          "rx": 0,
+          "ry": 0,
+          "filled": false,
+          "type": "point",
+          "x": 450,
+          "y": 450,
+          "name": "Line"
+        },
+        {
+          "id": "E32",
+          "rotation": 0,
+          "strokeWidth": 1.5,
+          "stroke": "#7dd3c0",
+          "dash": [],
+          "linecap": "butt",
+          "outlined": true,
+          "gap": 8.5,
+          "booleans": [],
+          "height": 18,
+          "opaque": true,
+          "modifiers": [],
+          "interpolations": [],
+          "rx": 50.911688245431435,
+          "ry": 50.911688245431435,
+          "filled": false,
+          "type": "ellipse",
+          "x": 450,
+          "y": 450,
+          "name": "Around"
+        }
+      ],
+      "modifiers": [],
+      "interpolations": [],
+      "evenOdd": false,
+      "plane": {
+        "enabled": true,
+        "tilt": 64,
+        "heading": 31,
+        "sides": "transparent"
+      }
+    }
+  ],
+  "activeLayerId": "L4",
+  "activeElementId": "E38"
+}

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { expect, it } from 'vitest';
-import { SHAPES } from '../src/scene.js';
+import { createScene, SHAPES } from '../src/scene.js';
+import { serialize } from '../src/persistence.js';
 
 /**
  * Fumigation : monte l'application entière sur le DOM que sert `index.html` et
@@ -22,6 +23,8 @@ it('démarre et rend après un placement', async () => {
     <div id="shape-list"></div>
     <p id="status"></p>`;
 
+  /* Une sauvegarde vide évite le dessin d'exemple du premier lancement. */
+  localStorage.setItem('illu:scene:v1', serialize(createScene(), 0));
   await import('../src/main.js');
 
   const stage = document.getElementById('stage');
