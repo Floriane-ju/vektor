@@ -2,7 +2,7 @@
 {
   "id": "T-0117",
   "titre": "Retirer les formes logées (« à l'intérieur de »)",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "m",
   "tags": [

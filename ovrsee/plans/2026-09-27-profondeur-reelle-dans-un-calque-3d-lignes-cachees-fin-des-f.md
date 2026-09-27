@@ -40,6 +40,26 @@
         "src/persistence.js",
         "test/persistence.test.js"
       ]
+    },
+    {
+      "sha": "034e219",
+      "date": "2026-09-27",
+      "files": [
+        "CLAUDE.md",
+        "src/hidden.js",
+        "src/persistence.js",
+        "src/plane.js",
+        "src/renderer-plane.js",
+        "src/renderer-svg.js",
+        "src/scene.js",
+        "src/ui/inside-field.js",
+        "src/ui/property-panel.js",
+        "src/ui/shape-list.js",
+        "style.css",
+        "test/core.test.js",
+        "test/hidden.test.js",
+        "test/render.test.js"
+      ]
     }
   ]
 }

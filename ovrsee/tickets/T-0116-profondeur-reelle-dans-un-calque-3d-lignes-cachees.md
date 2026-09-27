@@ -2,7 +2,7 @@
 {
   "id": "T-0116",
   "titre": "Profondeur réelle dans un calque 3D (lignes cachées)",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "xl",
   "tags": [
