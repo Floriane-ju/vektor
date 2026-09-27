@@ -130,18 +130,30 @@ const ROTATE_STEP = 15;
 /**
  * Poignée du cadre de sélection : un côté étire la forme le long de son axe,
  * un coin la met à l'échelle sans la déformer, autour de son centre ; le
- * bouton du haut la tourne (Maj : par pas de 15°). Tout se lit dans le repère
+ * bouton du haut la tourne (Maj : par pas de 15°). Côtés et coins s'aimantent
+ * à la grille. Tout se lit dans le repère
  * de la forme, depuis la forme d'origine : un pas d'historique par geste.
  */
 const transformGesture = (ctx, event, knob, origin) => {
-  const { store, planePoint } = ctx;
+  const { store, snap, planePoint } = ctx;
   const center = { x: origin.x, y: origin.y };
   const rotation = origin.rotation ?? 0;
   const local = (point) => rotateVector({ x: point.x - center.x, y: point.y - center.y }, -rotation);
-  const from = local(planePoint(event));
   const side = knob.dataset.resize ?? '';
+  /* Redimensionner lit le pointeur aimanté, départ compris : la poignée, près
+     du bord, part du croisement de ce bord ; le rapport des deux croisements
+     garde sur la grille une forme qui y était posée. Départ aimanté au centre
+     (forme plus petite qu'une demi-maille) : on reprend le pointeur brut sur
+     cet axe, sinon l'axe ne bougerait plus. */
+  const read = (e) => local(side ? snap(planePoint(e)) : planePoint(e));
+  const raw = local(planePoint(event));
+  const snapped = read(event);
+  const from = {
+    x: Math.abs(snapped.x) < 1 ? raw.x : snapped.x,
+    y: Math.abs(snapped.y) < 1 ? raw.y : snapped.y,
+  };
   const move = (next) => {
-    const now = local(planePoint(next));
+    const now = read(next);
     if (!side) {
       const turn = ((Math.atan2(now.y, now.x) - Math.atan2(from.y, from.x)) * 180) / Math.PI;
       const angle = rotation + turn;

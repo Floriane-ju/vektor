@@ -501,7 +501,7 @@ describe('dessin au glisser', () => {
 });
 
 describe('outil curseur', () => {
-  const mountWithShape = (overrides = {}) => {
+  const mountWithShape = (overrides = {}, snap = undefined) => {
     const layer = createLayer({ elements: [createElement('ellipse', 100, 100, { filled: true })], ...overrides });
     const other = createLayer();
     /* Des modificateurs : le calque est actif, pour que ses repères se tracent. */
@@ -526,6 +526,7 @@ describe('outil curseur', () => {
       container: document.createElement('div'),
       shapeContainer: shapes,
       status: { show: () => {} },
+      snap,
     });
     const radio = shapes.querySelector('#shape-cursor');
     radio.checked = true;
@@ -577,6 +578,17 @@ describe('outil curseur', () => {
     on(svg, 'pointerup', 150, 100);
     expect(store.get().layers[0].elements[0].rotation).toBe(90);
     expect(toSvgDocument(svg)).not.toContain('data-transform');
+  });
+
+  it('les poignées du cadre s’aimantent à la grille', () => {
+    const grid = ({ x, y }) => ({ x: Math.round(x / 20) * 20, y: Math.round(y / 20) * 20 });
+    const { store, svg } = mountWithShape({}, grid);
+    on(svg.querySelector('ellipse'), 'pointerdown', 100, 100);
+    on(svg, 'pointerup', 100, 100);
+    /* Bord à 180, poignée saisie à 187 ; lâchée à 247 → bord sur 240. */
+    on(svg.querySelector('[data-resize="e"]'), 'pointerdown', 187, 100);
+    on(svg, 'pointerup', 247, 100);
+    expect(store.get().layers[0].elements[0].rx).toBeCloseTo(140);
   });
 
   const twoShapes = () =>
