@@ -2,7 +2,7 @@
 {
   "id": "T-0114",
   "titre": "Masquer une forme (comme un calque)",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui", "modele"],
   "cree": "2026-09-27",
