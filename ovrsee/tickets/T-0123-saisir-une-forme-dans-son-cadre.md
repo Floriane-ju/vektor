@@ -2,7 +2,7 @@
 {
   "id": "T-0123",
   "titre": "Saisir une forme dans son cadre de sélection",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": ["ui"],
   "cree": "2026-09-27",
@@ -17,5 +17,5 @@ Un point sélectionné est presque impossible à déplacer : seul son disque se 
 
 ## Critères d'acceptation
 
-- [ ] Curseur, pointeur dans le cadre de sélection d'une forme : curseur « grab », glisser déplace la forme.
-- [ ] Pivot, sommets et poignées du cadre restent prioritaires.
+- [x] Curseur, pointeur dans le cadre de sélection d'une forme : curseur « grab », glisser déplace la forme.
+- [x] Pivot, sommets et poignées du cadre restent prioritaires.
