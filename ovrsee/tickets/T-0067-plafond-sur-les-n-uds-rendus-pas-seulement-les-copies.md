@@ -2,7 +2,7 @@
 {
   "id": "T-0067",
   "titre": "Plafond sur les nœuds rendus, pas seulement les copies",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "xs",
   "tags": [
@@ -10,7 +10,7 @@
     "modificateurs"
   ],
   "cree": "2026-09-24",
-  "maj": "2026-09-24",
+  "maj": "2026-09-27",
   "plan": null,
   "epic": "T-0026"
 }
@@ -25,5 +25,5 @@ précisément ce que le garde-fou devait éviter.
 
 ## Critères d'acceptation
 
-- [ ] Le calque est suspendu quand copies × formes dépasse le seuil.
-- [ ] Le compteur et l'avertissement du panneau reflètent ce produit.
+- [x] Le calque est suspendu quand copies × formes dépasse le seuil.
+- [x] Le compteur et l'avertissement du panneau reflètent ce produit.

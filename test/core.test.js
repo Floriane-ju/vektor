@@ -26,6 +26,7 @@ import {
   translateElements,
   getRenderedChildren,
   isSuspended,
+  copyTotal,
   moveElement,
   moveLayer,
   moveModifier,
@@ -2424,6 +2425,15 @@ describe('répétitions et itérations de la forme', () => {
     });
     expect(isSuspended(layer)).toBe(true);
     expect(getRenderedChildren(layer)).toEqual([]);
+  });
+
+  it('suspend le calque sur copies × formes, même sans pile de forme', () => {
+    const layer = createLayer({
+      modifiers: [createModifier({ n: 2000 })],
+      elements: Array.from({ length: 6 }, (_, i) => createElement('ellipse', i, 0)),
+    });
+    expect(copyTotal(layer)).toBe(12000);
+    expect(isSuspended(layer)).toBe(true);
   });
 
   it('survit à la sauvegarde', () => {
