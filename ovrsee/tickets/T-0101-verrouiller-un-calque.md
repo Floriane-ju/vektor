@@ -2,14 +2,14 @@
 {
   "id": "T-0101",
   "titre": "Verrouiller un calque",
-  "colonne": "backlog",
+  "colonne": "pret",
   "priorite": "moyenne",
   "charge": "s",
   "tags": [
     "ui"
   ],
   "cree": "2026-09-25",
-  "maj": "2026-09-25",
+  "maj": "2026-09-27",
   "plan": null,
   "epic": "T-0032"
 }

@@ -8,6 +8,7 @@ ovrsee/pages/scans.jsonl
 ovrsee/.active/
 ovrsee/.active-plan
 ovrsee/.active-ticket
+.DS_Store
 
 # Captures d'écran ovrsee : régénérées à chaque commit, purge auto côté
 # disque (30j puis 1/semaine) — inutile de les suivre dans git.

@@ -2,7 +2,7 @@
 {
   "id": "T-0102",
   "titre": "Calque suspendu signalé dans l'arbre, compteur décomposé",
-  "colonne": "backlog",
+  "colonne": "pret",
   "priorite": "moyenne",
   "charge": "xs",
   "tags": [
@@ -10,7 +10,7 @@
     "modificateurs"
   ],
   "cree": "2026-09-25",
-  "maj": "2026-09-25",
+  "maj": "2026-09-27",
   "plan": null,
   "epic": "T-0032"
 }

@@ -1,9 +1,9 @@
 ---
 {
-  "status": "open",
+  "status": "closed",
   "title": "Répétitions et itérations portées aussi par la forme (format @25)",
   "opened": "2026-09-25",
-  "closed": null,
+  "closed": "2026-09-25",
   "commits": [
     {
       "sha": "11bc44c",

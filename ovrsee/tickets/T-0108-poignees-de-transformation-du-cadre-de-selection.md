@@ -2,13 +2,13 @@
 {
   "id": "T-0108",
   "titre": "Poignées de transformation du cadre de sélection",
-  "colonne": "a-specifier",
+  "colonne": "pret",
   "priorite": "moyenne",
   "tags": [
     "ui"
   ],
   "cree": "2026-09-25",
-  "maj": "2026-09-25",
+  "maj": "2026-09-27",
   "plan": null,
   "epic": "T-0032"
 }

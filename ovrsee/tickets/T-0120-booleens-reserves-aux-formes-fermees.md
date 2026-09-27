@@ -2,9 +2,11 @@
 {
   "id": "T-0120",
   "titre": "Booléens réservés aux formes fermées",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["booleens"],
+  "tags": [
+    "booleens"
+  ],
   "cree": "2026-09-27",
   "maj": "2026-09-27",
   "plan": null
