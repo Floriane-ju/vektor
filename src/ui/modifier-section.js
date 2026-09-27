@@ -11,7 +11,7 @@ import {
   orients,
   PIVOTING,
 } from '../modifiers.js';
-import { iconButton, rebuildWithFocus } from './list.js';
+import { iconButton, presence, rebuildWithFocus, stableKeys } from './list.js';
 import {
   addButtonFor,
   bindControl,
@@ -232,6 +232,8 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
   const fold = collapsible(root, head, 'repeat');
 
   let blocks = [];
+  const mark = presence();
+  const keysOf = stableKeys();
 
   const rebuild = (stack) =>
     rebuildWithFocus(host, () => {
@@ -256,13 +258,20 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
   const sync = (scene) => {
     const target = ownerOf(scene);
     const stack = target?.owner.modifiers ?? [];
-    if (stack.length !== blocks.length) rebuild(stack);
+    const keys = keysOf(stack);
+    const rebuilt = stack.length !== blocks.length;
+    if (rebuilt) rebuild(stack);
     addButton.disabled = !target;
-    if (!target) return;
-    for (const { node, read } of pivotControls) showValue(node, read(target));
-    layerPivot.hidden = !stack.some((modifier) => PIVOTING.has(modifier.type));
-    showTotal(stack, target.layer);
-    for (const entry of blocks) entry.sync(target);
+    if (target) {
+      for (const { node, read } of pivotControls) showValue(node, read(target));
+      layerPivot.hidden = !stack.some((modifier) => PIVOTING.has(modifier.type));
+      showTotal(stack, target.layer);
+      for (const entry of blocks) entry.sync(target);
+    }
+    /* Après `entry.sync` : un bloc neuf montre les champs de tous les types
+       tant qu'il n'a pas masqué ceux qui ne sont pas les siens — sa hauteur
+       d'entrée se mesure une fois réglé. */
+    if (rebuilt) mark(blocks.map((entry, index) => [entry.root, keys[index]]), target?.owner.id, host);
   };
 
   return { root, sync };

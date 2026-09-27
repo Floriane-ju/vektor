@@ -85,6 +85,139 @@ export const whenChanged = (signature, render) => {
   };
 };
 
+/* Pose la marque `data-<name>` le temps de ses animations : finies, elle
+   part, et la taille qu'elles figeaient redevient libre (un bloc qui grandit
+   ensuite n'est pas rogné). */
+export const settle = (node, name, value = '') => {
+  node.dataset[name] = value;
+  const running = node.getAnimations?.({ subtree: true }) ?? [];
+  Promise.all(running.map((animation) => animation.finished))
+    .then(() => delete node.dataset[name])
+    .catch(() => {});
+};
+
+/* Ligne disparue, remise à sa place le temps de s'effacer : inerte, hors
+   de l'arbre d'accessibilité, sans clé de focus (`restoreFocus` ne doit pas
+   la viser). Sa taille, mesurée en place, est le départ de l'animation
+   (`--leave-w`, `--leave-h`) ; sans animation, elle part tout de suite. */
+const fadeOut = (ghost) => {
+  delete ghost.dataset.enter;
+  inertGhost(ghost);
+  const { width, height } = ghost.getBoundingClientRect();
+  ghost.style.setProperty('--leave-w', `${width}px`);
+  ghost.style.setProperty('--leave-h', `${height}px`);
+  ghost.dataset.leave = '';
+  removeAfterAnimation(ghost);
+};
+
+/** Rend un nœud sortant inerte : ni pointeur, ni clavier, ni lecteur d'écran, ni clé de focus. */
+export const inertGhost = (ghost) => {
+  ghost.inert = true;
+  ghost.setAttribute('aria-hidden', 'true');
+  for (const node of [ghost, ...ghost.querySelectorAll('[data-focus-key]')]) delete node.dataset.focusKey;
+  return ghost;
+};
+
+/** Retire le nœud à la fin de son animation — tout de suite s'il n'en a pas. */
+export const removeAfterAnimation = (ghost) => {
+  const name = getComputedStyle(ghost).animationName;
+  if (!name || name === 'none') ghost.remove();
+  else ghost.addEventListener('animationend', (event) => event.target === ghost && ghost.remove());
+};
+
+/**
+ * Entrées et sorties d'une liste reconstruite. `mark(pairs, context, parent)`,
+ * appelé une fois les nœuds du nouveau dessin en place, avec `pairs` =
+ * `[nœud, id][]` dans l'ordre affiché :
+ * - pose `data-enter` (et `--enter-i`, rang parmi les entrants ; `--enter-w`,
+ *   `--enter-h`, sa taille mesurée en place, but de l'animation) sur les
+ *   nœuds dont l'id n'était pas là au dessin précédent ;
+ * - remet chaque nœud disparu à son ancienne place, entre ses voisins
+ *   survivants (dans `parent` si la liste est vide), marqué `data-leave`.
+ * Premier dessin, autre `context` (le propriétaire d'une pile), ou liste
+ * remplacée en entier par d'autres (autre dessin) : ni entrée ni sortie. Une
+ * liste vidée n'est pas remplacée : son dernier élément sort.
+ */
+export const presence = () => {
+  let seen = null;
+  let last;
+  return (pairs, context = null, parent = null) => {
+    const next = new Map(pairs.map(([node, id]) => [id, node]));
+    const replaced =
+      seen === null ||
+      context !== last ||
+      (seen.size > 0 && next.size > 0 && ![...seen.keys()].some((id) => next.has(id)));
+    if (!replaced) {
+      /* Toutes les mesures d'abord : une seule mise en page. */
+      pairs
+        .filter(([, id]) => !seen.has(id))
+        .map(([node]) => [node, node.getBoundingClientRect()])
+        .forEach(([node, { width, height }], i) => {
+          node.style.setProperty('--enter-i', String(i));
+          node.style.setProperty('--enter-w', `${width}px`);
+          node.style.setProperty('--enter-h', `${height}px`);
+          settle(node, 'enter');
+        });
+      const old = [...seen];
+      let anchor = null;
+      old.forEach(([id, ghost], i) => {
+        if (next.has(id)) {
+          anchor = next.get(id);
+          return;
+        }
+        if (anchor) anchor.after(ghost);
+        else {
+          const after = old.slice(i + 1).find(([other]) => next.has(other));
+          if (after) next.get(after[0]).before(ghost);
+          else if (parent) parent.append(ghost);
+          else return;
+        }
+        anchor = ghost;
+        fadeOut(ghost);
+      });
+    }
+    last = context;
+    seen = next;
+  };
+};
+
+/**
+ * Fondu d'état d'une ligne reconstruite (sélectionnée, active…) : `fade(triples)`
+ * avec `[nœud, id, état][]`. Une ligne dont l'état a changé depuis le dessin
+ * précédent porte `data-was="<ancien état>"` le temps que la feuille de style
+ * l'amène de l'ancien aspect au nouveau — une ligne neuve ne connaîtrait pas
+ * de transition CSS.
+ */
+export const stateFade = () => {
+  let states = new Map();
+  return (triples) => {
+    for (const [node, id, state] of triples) {
+      const was = states.get(id);
+      if (was !== undefined && was !== state) settle(node, 'was', was);
+    }
+    states = new Map(triples.map(([, id, state]) => [id, state]));
+  };
+};
+
+/**
+ * Clés stables des éléments d'une pile sans identifiant (étages, opérations
+ * booléennes) : `keysOf(items)` à chaque synchronisation. Un élément garde sa
+ * clé tant qu'il garde sa référence — ou, pile de même longueur, son rang (il
+ * a été réglé) ; les autres en reçoivent une neuve. Une suppression ne décale
+ * donc pas les clés des suivants.
+ */
+export const stableKeys = () => {
+  let items = [];
+  let keys = [];
+  let count = 0;
+  return (next) => {
+    const byRef = new Map(items.map((item, i) => [item, keys[i]]));
+    keys = next.map((item, i) => byRef.get(item) ?? (next.length === items.length ? keys[i] : ++count));
+    items = next;
+    return keys;
+  };
+};
+
 /** Nom affiché d'une forme : le sien, sinon son type et son rang dans le calque, compté depuis le fond. */
 export const shapeName = (layer, element, labels) =>
   element.name ?? `${labels[element.type].label} ${layer.elements.indexOf(element) + 1}`;

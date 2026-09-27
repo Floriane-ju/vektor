@@ -19,10 +19,12 @@ import {
   dropIndex,
   iconButton,
   inlineRename,
+  presence,
   rebuildWithFocus,
   rowKeys,
   shapeName,
   sortableRow,
+  stateFade,
   whenChanged,
 } from './list.js';
 import { icon, ICON_SIZE } from './icons.js';
@@ -272,12 +274,18 @@ export const mountShapeList = ({
     },
   };
 
+  const mark = presence();
+  const fade = stateFade();
   const rebuild = whenChanged(signature, (scene) =>
     rebuildWithFocus(container, () => {
       const layer = getActiveLayer(scene);
       const add = addShapeButton(ctx, layer);
+      const list = document.createElement('ul');
+      list.className = 'layer-list';
       if (!layer || layer.elements.length === 0) {
-        container.append(add);
+        /* Liste vide gardée : la dernière forme supprimée s'y efface. */
+        container.append(list, add);
+        mark([], layer?.id, list);
         return add;
       }
       /* Affiché du premier plan vers le fond, comme le panneau calques : la
@@ -285,12 +293,14 @@ export const mountShapeList = ({
       const displayed = [...layer.elements].reverse();
       const parents = booleanParents(displayed);
       const tree = { layer, activeElementId: scene.activeElementId, selected: selectedIds(scene), displayed, parents };
-      const list = document.createElement('ul');
-      list.className = 'layer-list';
       list.append(
         ...displayed.filter((element) => !parents.has(element.id)).map((element) => shapeRow(ctx, tree, element)),
       );
       container.append(list, add);
+      const cards = [...list.querySelectorAll('.layer-card')];
+      mark(cards.map((card) => [card, card.dataset.elementId]), layer.id, list);
+      const state = (card) => (card.dataset.active === 'true' ? 'active' : card.dataset.selected === 'true' ? 'selected' : 'none');
+      fade(cards.map((card) => [card, card.dataset.elementId, state(card)]));
       return add;
     }),
   );

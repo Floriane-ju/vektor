@@ -9,7 +9,7 @@ import {
   SHAPES,
   updateBoolean,
 } from '../scene.js';
-import { iconButton, rebuildWithFocus, shapeName } from './list.js';
+import { iconButton, presence, rebuildWithFocus, shapeName, stableKeys } from './list.js';
 import { addButtonFor, collapsible, countLabel, el, option, sectionHead, segmented } from './fields.js';
 
 /* Outil d'une opération : une autre forme du calque. L'outil actuel reste
@@ -85,6 +85,8 @@ export const booleanSection = ({ store }) => {
   const fold = collapsible(set, head, 'booleans');
 
   let last = null;
+  const mark = presence();
+  const keysOf = stableKeys();
 
   const sync = (layer, element) => {
     if (!layer || !element) return;
@@ -92,11 +94,14 @@ export const booleanSection = ({ store }) => {
     const scene = store.get();
     addButton.disabled = addBoolean(scene, element.id) === scene;
     fold.summarize(countLabel(element.booleans.length, 'opération'));
+    const keys = keysOf(element.booleans);
     const next = signature(layer, element);
     if (next === last) return;
     last = next;
     rebuildWithFocus(host, () => {
-      host.append(...element.booleans.map((step, index) => block(apply, layer, element, step, index)));
+      const nodes = element.booleans.map((step, index) => block(apply, layer, element, step, index));
+      host.append(...nodes);
+      mark(nodes.map((node, index) => [node, keys[index]]), element.id, host);
       return addButton;
     });
   };

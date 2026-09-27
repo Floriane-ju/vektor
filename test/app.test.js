@@ -279,5 +279,84 @@ it('démarre et rend après un placement', async () => {
   /* Un seul ⌘Z défait forme et réaffichage ensemble. */
   key(false);
   expect(stage.querySelectorAll('[data-element-id]')).toHaveLength(0);
+
+  /* Micro-animations : seule la ligne ajoutée entre ; la case les coupe, et
+     le choix se garde (RGAA 13.8). */
+  const cardCount = document.querySelectorAll('#layer-panel .layer-card[data-layer-id]').length;
+  document.querySelector('.add-layer').click();
+  const cards = [...document.querySelectorAll('#layer-panel .layer-card[data-layer-id]')];
+  expect(cards).toHaveLength(cardCount + 1);
+  expect(cards.filter((node) => node.hasAttribute('data-enter'))).toHaveLength(1);
+  const motion = document.getElementById('settings-motion');
+  motion.checked = false;
+  motion.dispatchEvent(new Event('change'));
+  expect(document.documentElement.dataset.motion).toBe('off');
+  expect(JSON.parse(localStorage.getItem('illu/settings')).motion).toBe(false);
+  /* Un étage ajouté à la pile entre aussi, les autres non. */
+  const addStage = document.querySelector('[data-focus-key="add-modifier"]');
+  addStage.click();
+  addStage.click();
+  const stages = [...document.querySelectorAll('#inspector .stack > .modifier-block')];
+  expect(stages.map((node) => node.hasAttribute('data-enter'))).toEqual([false, true]);
 });
 
+it('n’anime que les ids ajoutés ou retirés, pas une liste remplacée', async () => {
+  const { presence, stableKeys, stateFade } = await import('../src/ui/list.js');
+  const list = document.createElement('ul');
+  document.body.append(list);
+  const mark = presence();
+  const draw = (ids, context) => {
+    const pairs = ids.map((id) => [Object.assign(document.createElement('li'), { textContent: id }), id]);
+    list.replaceChildren(...pairs.map(([node]) => node));
+    mark(pairs, context, list);
+    return pairs.filter(([node]) => node.hasAttribute('data-enter')).map(([, id]) => id);
+  };
+  expect(draw(['a', 'b'], 'L1')).toEqual([]);
+  expect(draw(['a', 'b', 'c', 'd'], 'L1')).toEqual(['c', 'd']);
+  expect(draw(['x'], 'L1')).toEqual([]);
+  expect(draw(['x', 'y'], 'L2')).toEqual([]);
+  expect(draw([], 'L2')).toEqual([]);
+  expect(draw(['z'], 'L2')).toEqual(['z']);
+
+  /* Sans animation (pas de feuille de style ici), le fantôme d'une ligne
+     retirée repart aussitôt : la liste ne garde que les survivantes. */
+  draw(['p', 'q', 'r'], 'L3');
+  draw(['p', 'q', 'r'], 'L3');
+  draw(['p', 'r'], 'L3');
+  expect([...list.children].map((node) => node.textContent)).toEqual(['p', 'r']);
+
+  /* Avec une animation, le fantôme reste à sa place, marqué, jusqu'à sa fin —
+     y compris quand la liste se vide. */
+  const computed = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = () => ({ animationName: 'row-out' });
+  try {
+    draw(['p'], 'L3');
+    expect([...list.children].map((node) => [node.textContent, node.hasAttribute('data-leave')])).toEqual([
+      ['p', false],
+      ['r', true],
+    ]);
+    draw([], 'L3');
+    expect([...list.children].map((node) => node.textContent)).toEqual(['p']);
+    expect(list.firstChild.inert).toBe(true);
+  } finally {
+    globalThis.getComputedStyle = computed;
+  }
+
+  /* Une ligne dont l'état change garde l'ancien le temps du fondu ; une
+     ligne neuve, ou inchangée, non. */
+  const fade = stateFade();
+  const row = (id, state) => [document.createElement('li'), id, state];
+  fade([row('a', 'layer'), row('b', 'none')]);
+  const [a, b, c] = [row('a', 'none'), row('b', 'layer'), row('c', 'none')];
+  fade([a, b, c]);
+  expect([a, b, c].map(([node]) => node.dataset.was)).toEqual(['layer', 'none', undefined]);
+
+  /* Retirer le milieu d'une pile ne décale pas les clés des suivants ;
+     régler un élément (nouvelle référence, même longueur) garde la sienne. */
+  const keysOf = stableKeys();
+  const [m0, m1, m2] = [{}, {}, {}];
+  const [k0, , k2] = keysOf([m0, m1, m2]);
+  expect(keysOf([m0, m2])).toEqual([k0, k2]);
+  expect(keysOf([{}, m2])).toEqual([k0, k2]);
+  expect(keysOf([{}, m2, {}])[2]).not.toBe(k2);
+});

@@ -34,6 +34,10 @@
   --gutter-right: 360px;
   --gutter-top: 104px;
   --gutter-bottom: 88px;
+  --ease-out: cubic-bezier(0.2, 0.9, 0.3, 1.2); /* léger dépassement */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 220ms;
   color-scheme: dark;
 }
 
@@ -303,7 +307,7 @@ input[type="range"] {
 .panel-left { left: 24px; width: 288px; padding: 16px 12px; }
 .panel-left > h2 { margin: 0; padding: 0 8px 12px; font: 600 var(--text-md)/1 var(--font); }
 /* Tant que l'arbre ne l'a pas logée sous un calque, la liste ne s'affiche pas. */
-.panel-left > #shape-list { display: none; }
+.panel-left > .shape-list { display: none; }
 
 .panel-right { right: 24px; width: 312px; }
 
@@ -372,19 +376,19 @@ input.layer-name-input {
 }
 
 /* Formes du calque déplié. */
-#shape-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px 32px; }
-#shape-list .layer-row { height: 36px; }
-#shape-list .layer-name { font-weight: 400; }
-#shape-list .layer-card[data-active="true"] > .layer-row { background: var(--accent); color: var(--ink); }
-#shape-list .layer-card[data-active="true"] .layer-name { font-weight: 600; }
+.shape-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px 32px; }
+.shape-list .layer-row { height: 36px; }
+.shape-list .layer-name { font-weight: 400; }
+.shape-list .layer-card[data-active="true"] > .layer-row { background: var(--accent); color: var(--ink); }
+.shape-list .layer-card[data-active="true"] .layer-name { font-weight: 600; }
 /* Les autres formes de la sélection : l’accent atténué. */
-#shape-list .layer-card[data-selected="true"] > .layer-row { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.shape-list .layer-card[data-selected="true"] > .layer-row { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 /* L'aperçu porte la couleur de la forme ; en blanc sur l'accent de la ligne
    sélectionnée. */
 .shape-glyph { color: var(--shape-color, currentColor); }
-#shape-list .layer-card[data-active="true"] > .layer-row > .shape-glyph { color: var(--white); }
+.shape-list .layer-card[data-active="true"] > .layer-row > .shape-glyph { color: var(--white); }
 /* Survoler une forme de la liste l'encadre sur le dessin (voir `shape-list.js`). */
-#shape-list .layer-card:hover:not(:has(.layer-card:hover)) > .layer-row { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.shape-list .layer-card:hover:not(:has(.layer-card:hover)) > .layer-row { box-shadow: inset 0 0 0 1.5px var(--accent); }
 /* Outil booléen rangé sous la forme qui l'emploie : un filet relie la
    branche à son parent, un coude à chaque outil. */
 .boolean-branch { position: relative; margin: 2px 0 0 16px; padding-left: 16px; }
@@ -407,17 +411,13 @@ input.layer-name-input {
 }
 .layer-card[data-template="true"] > .layer-row .layer-name { font-style: italic; opacity: 0.75; }
 
-/* Actions de ligne : au survol, au focus et sur la ligne active. Un calque
-   masqué les garde visibles, sinon on ne saurait plus le réafficher. */
+/* Actions de ligne : au survol, au focus et sur la ligne active, jamais
+   ailleurs — même un calque masqué, en 3D ou verrouillé (le nom estompé
+   dit déjà qu'il est masqué ; le survol rend l'œil). */
 .row-actions { display: flex; gap: 0; opacity: 0; }
 .layer-row:hover .row-actions,
 .layer-row:focus-within .row-actions,
 .layer-card[data-active="true"] > .layer-row .row-actions { opacity: 1; }
-.layer-card[data-visible="false"] > .layer-row .row-actions { opacity: 1; }
-/* Un calque en 3D le montre sans survol, comme un calque masqué. */
-.layer-card[data-plane="true"] > .layer-row .row-actions { opacity: 1; }
-/* Verrouillé aussi : on voit le cadenas sans chercher. */
-.layer-card[data-locked="true"] > .layer-row .row-actions { opacity: 1; }
 
 .icon-btn {
   min-width: 24px;
@@ -765,3 +765,167 @@ input.stroke-width { width: 100px; padding: 0 6px; text-align: right; }
 .layer-row[data-drop="before"] { box-shadow: inset 0 2px 0 var(--accent); }
 .layer-row[data-drop="after"] { box-shadow: inset 0 -2px 0 var(--accent); }
 .layer-row[data-drop="into"] { box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+/* ---- Micro-animations ----
+   Courtes (≤ 300 ms), jamais en boucle. RGAA 13.8 : la case « Animations »
+   des Paramètres (ou `prefers-reduced-motion` tant qu'elle n'est pas
+   touchée) pose `data-motion="off"` sur la racine, qui coupe tout — y compris
+   les transitions plus haut. */
+
+:root[data-motion="off"] *,
+:root[data-motion="off"] *::before,
+:root[data-motion="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Ligne apparue (calque, forme, `presence` dans ui/list.js) : elle se déplie
+   à sa place, puis s'éclaire un instant pour dire où elle est arrivée. */
+@keyframes row-in {
+  from { height: 0; opacity: 0; }
+  60% { opacity: 1; }
+}
+@keyframes row-slide {
+  from { transform: translateY(-6px) scale(0.96); }
+}
+/* La ligne s'ouvre jusqu'à sa hauteur fixe, sans dépassement (une hauteur
+   qui déborde puis revient se voit comme un sursaut) ; le rebond reste au
+   glissé. La liste des formes logée dessous s'ouvre par son pli. */
+.layer-card[data-enter] > .layer-row {
+  overflow: hidden;
+  transform-origin: left center;
+  animation:
+    row-in var(--dur) var(--ease) backwards,
+    row-slide var(--dur) var(--ease-out) backwards,
+    row-glow 480ms var(--ease) backwards;
+  animation-delay: calc(var(--enter-i, 0) * 40ms);
+}
+
+/* Pli de la liste des formes d'un calque (`ui/layer-panel.js`) : changer de
+   calque le referme dans l'ancien pendant qu'il s'ouvre dans le nouveau.
+   `grid-template-rows` 0fr → 1fr suit la hauteur réelle, sans la mesurer. */
+.layer-fold { display: grid; grid-template-rows: 1fr; }
+.layer-fold > * { min-height: 0; }
+.layer-fold:is([data-open], [data-close]) { overflow: hidden; }
+@keyframes fold-open {
+  from { grid-template-rows: 0fr; opacity: 0; }
+}
+@keyframes fold-close {
+  to { grid-template-rows: 0fr; opacity: 0; }
+}
+.layer-fold[data-open] { animation: fold-open var(--dur) var(--ease) backwards; }
+.layer-fold[data-close] { animation: fold-close var(--dur) var(--ease) forwards; }
+
+/* Sélection qui change : la ligne part de son ancien aspect (`data-was`,
+   `stateFade`) vers le nouveau — elle est neuve, une transition n'y ferait rien. */
+@keyframes was-accent { from { background-color: var(--accent); color: var(--ink); } }
+@keyframes was-outline { from { box-shadow: inset 0 0 0 1.5px var(--line); } }
+@keyframes was-tint { from { background-color: color-mix(in srgb, var(--accent) 30%, transparent); } }
+@keyframes was-plain { from { background-color: transparent; color: var(--text); box-shadow: none; } }
+.layer-card[data-was] > .layer-row { animation: was-plain var(--dur) var(--ease) backwards; }
+.layer-card:is([data-was="layer"], [data-was="active"]) > .layer-row { animation-name: was-accent; }
+.layer-card[data-was="parent"] > .layer-row { animation-name: was-outline; }
+.layer-card[data-was="selected"] > .layer-row { animation-name: was-tint; }
+
+/* Onglet ajouté : il s'ouvre en largeur depuis 0 et pousse « Nouveau » vers
+   la droite, son nom glissant dedans. `--enter-w` = sa largeur mesurée
+   (`presence`) : `interpolate-size` vers `auto` n'existe pas dans Firefox. `backwards` seulement : après, la largeur redevient `auto`. */
+/* Étage de répétition, interpolation, opération booléenne ajoutés : le bloc
+   descend en place et s'éclaire, comme une ligne de l'arbre. */
+@keyframes block-in {
+  from { height: 0; padding-block: 0; margin-block: 0; border-width: 0; opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to { height: var(--enter-h); }
+}
+.stack > [data-enter] {
+  overflow: hidden;
+  transform-origin: top center;
+  animation:
+    block-in var(--dur) var(--ease) backwards,
+    row-glow 480ms var(--ease) backwards;
+}
+
+@keyframes tab-in {
+  from { width: 0; opacity: 0; }
+  50% { opacity: 1; }
+  to { width: var(--enter-w); }
+}
+@keyframes tab-slide {
+  from { transform: translateX(-16px); }
+}
+.drawing-tab[data-enter] {
+  overflow: hidden;
+  animation: tab-in 300ms var(--ease) backwards;
+}
+.drawing-tab[data-enter] > * { animation: tab-slide 300ms var(--ease) backwards; }
+
+/* ---- Sorties ----
+   Ligne disparue, remise en place le temps de s'effacer (`presence` dans
+   ui/list.js) : elle se replie depuis sa taille mesurée (`--leave-h`,
+   `--leave-w`) et glisse en s'estompant ; les voisines se resserrent. */
+@keyframes row-out {
+  from { height: var(--leave-h); }
+  to { height: 0; opacity: 0; transform: translateX(-12px) scale(0.96); }
+}
+@keyframes block-out {
+  from { height: var(--leave-h); }
+  to { height: 0; padding-block: 0; margin-block: 0; border-width: 0; opacity: 0; transform: scale(0.96); }
+}
+@keyframes tab-out {
+  from { width: var(--leave-w); }
+  to { width: 0; opacity: 0; }
+}
+[data-leave] { overflow: hidden; pointer-events: none; }
+.layer-card[data-leave] { animation: row-out 220ms var(--ease) forwards; transform-origin: left center; }
+.stack > [data-leave] { animation: block-out 220ms var(--ease) forwards; transform-origin: top center; }
+.drawing-tab[data-leave] { animation: tab-out 240ms var(--ease) forwards; }
+
+@keyframes status-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
+.status[data-enter] { animation: status-in var(--dur) var(--ease) both; }
+
+/* Popovers : ils éclosent de leur bouton, et s'effacent en partant. */
+.menu,
+.settings,
+.stroke-palette {
+  --pop-from: translateY(-6px) scale(0.97);
+  opacity: 0;
+  transform: var(--pop-from);
+  transition:
+    opacity var(--dur-fast) var(--ease),
+    transform var(--dur) var(--ease-out),
+    display var(--dur) allow-discrete,
+    overlay var(--dur) allow-discrete;
+}
+.settings { --pop-from: translateY(6px) scale(0.97); transform-origin: bottom left; }
+.menu { transform-origin: top right; }
+:is(.menu, .settings, .stroke-palette):popover-open {
+  opacity: 1;
+  transform: none;
+  @starting-style { opacity: 0; transform: var(--pop-from); }
+}
+
+/* Outils du bas : la pastille s'enfonce à l'appui, la couleur glisse de
+   l'ancien outil au nouveau, et l'outil choisi rebondit (clic ou raccourci). */
+.shape-picker label {
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    transform var(--dur-fast) var(--ease-out);
+}
+.shape-picker label:active { transform: scale(0.88); }
+@keyframes tool-pop {
+  from { transform: scale(0.8); }
+}
+.shape-picker input:checked + label { animation: tool-pop 280ms var(--ease-out); }
+
+/* Appui : le bouton s'enfonce. */
+:is(.pill-btn, .icon-btn, .add-layer, .add-shape, .menu-item, .text-btn, .chevron) {
+  transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+:is(.pill-btn, .icon-btn, .add-layer, .add-shape, .menu-item, .text-btn, .chevron):active:not(:disabled) {
+  transform: scale(0.92);
+}
+.row-actions,
+.drawing-tab,
+.drawing-tab-close { transition: opacity var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }

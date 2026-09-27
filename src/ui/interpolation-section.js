@@ -9,7 +9,7 @@ import {
 } from '../scene.js';
 import { MODIFIER_LABELS } from '../modifiers.js';
 import { CURVE_LABELS, randomSeed } from '../interpolate.js';
-import { iconButton, rebuildWithFocus } from './list.js';
+import { iconButton, presence, rebuildWithFocus } from './list.js';
 import { collapsible, countLabel, el, field, input, row, sectionHead, select, textButton } from './fields.js';
 
 /* Les bornes se saisissent en pourcentage : 1 = 100 %. */
@@ -192,20 +192,25 @@ export const interpolationSection = ({ store, ownerOf, key = '' }) => {
   const fold = collapsible(set, head, 'interpolations');
 
   let last = null;
+  const mark = presence();
   const sync = (owner) => {
     if (!owner) return;
     const next = signature(owner);
-    if (next !== last) {
+    const rebuilt = next !== last;
+    if (rebuilt) {
       last = next;
       rebuildWithFocus(host, () => {
         bounds = [];
-        host.append(...owner.interpolations.map((interpolation) => block(ctx, interpolation, owner.modifiers)));
+        const nodes = owner.interpolations.map((interpolation) => block(ctx, interpolation, owner.modifiers));
+        host.append(...nodes);
         return addButton;
       });
     }
     clearButton.hidden = owner.interpolations.length === 0;
     fold.summarize(countLabel(owner.interpolations.length, 'interpolation'));
     for (const control of bounds) control(owner);
+    /* Mesurée une fois les bornes réglées : c'est la hauteur d'arrivée. */
+    if (rebuilt) mark([...host.children].map((node, index) => [node, owner.interpolations[index].id]), owner.id, host);
   };
 
   return { root: set, sync };

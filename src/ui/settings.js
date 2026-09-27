@@ -1,4 +1,5 @@
 import { icon, ICON_SIZE } from './icons.js';
+import { switchField } from './fields.js';
 import { activePlane, getActiveLayer, POLAR_GRID, snapToGrid, snapToPolarGrid, STAGE } from '../scene.js';
 import { planeMatrix, unproject } from '../plane.js';
 
@@ -10,7 +11,9 @@ const BOUNDS = { divisions: [2, 100], circles: [1, 50] };
 /* Plus dézoomée, la grille est trop dense : illisible et lente à dessiner. */
 const GRID_MIN_ZOOM = 0.7;
 
-const DEFAULTS = { grid: false, gridType: 'square', divisions: 10, circles: 8 };
+/* `motion` : animations de l'interface, `null` tant que l'utilisateur n'a pas
+   choisi — la préférence du système (`prefers-reduced-motion`) décide alors. */
+const DEFAULTS = { grid: false, gridType: 'square', divisions: 10, circles: 8, motion: null };
 
 const clampSetting = (name, value) => {
   const [min, max] = BOUNDS[name];
@@ -26,6 +29,7 @@ const load = () => {
       gridType: Object.hasOwn(GRID_TYPES, raw.gridType) ? raw.gridType : DEFAULTS.gridType,
       divisions: clampSetting('divisions', raw.divisions ?? DEFAULTS.divisions),
       circles: clampSetting('circles', raw.circles ?? DEFAULTS.circles),
+      motion: typeof raw.motion === 'boolean' ? raw.motion : null,
     };
   } catch {
     return DEFAULTS;
@@ -195,6 +199,13 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
     gridType.append(option);
   }
 
+  /* RGAA 13.8 : tout mouvement de l'interface se coupe ici (`data-motion` sur
+     la racine, voir `style.css`). */
+  const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+  const motionToggle = document.createElement('input');
+  motionToggle.type = 'checkbox';
+  motionToggle.id = 'settings-motion';
+
   const divisions = numberInput('settings-divisions', 'divisions');
   const circles = numberInput('settings-circles', 'circles');
   const circlesField = field('Cercles', circles);
@@ -205,6 +216,9 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
     divisions.value = String(settings.divisions);
     circles.value = String(settings.circles);
     circlesField.hidden = settings.gridType !== 'polar';
+    const motion = settings.motion ?? !reduced?.matches;
+    motionToggle.checked = motion;
+    document.documentElement.dataset.motion = motion ? 'on' : 'off';
     svgRoot.toggleAttribute('data-grid', settings.grid);
     /* Masquée seulement : la case reste cochée et l'aimantation agit. */
     const shown = settings.grid && (view?.zoom() ?? 1) >= GRID_MIN_ZOOM;
@@ -229,12 +243,15 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
   gridType.addEventListener('change', () => update({ gridType: gridType.value }));
   divisions.addEventListener('change', () => update({ divisions: clampSetting('divisions', divisions.value) }));
   circles.addEventListener('change', () => update({ circles: clampSetting('circles', circles.value) }));
+  motionToggle.addEventListener('change', () => update({ motion: motionToggle.checked }));
+  reduced?.addEventListener?.('change', () => settings.motion === null && apply());
 
   panel.append(
     title,
     field('Type', gridType),
     field('Divisions', divisions),
     circlesField,
+    switchField('Animations', motionToggle),
   );
 
   /* La case reste une vraie case : la pastille n'en est que l'habillage, pressée

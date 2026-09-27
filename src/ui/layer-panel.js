@@ -1,4 +1,4 @@
-import { dragHandle, dropIndex, iconButton, inlineRename, rebuildWithFocus, rowKeys, sortableRow, whenChanged } from './list.js';
+import { dragHandle, dropIndex, iconButton, inertGhost, inlineRename, presence, rebuildWithFocus, removeAfterAnimation, settle, stateFade, rowKeys, sortableRow, whenChanged } from './list.js';
 import { icon, ICON_SIZE } from './icons.js';
 import {
   addLayer,
@@ -154,6 +154,22 @@ const sortLayer = (store, row, layer) =>
     },
   });
 
+const fold = (content) => {
+  const node = document.createElement('div');
+  node.className = 'layer-fold';
+  node.append(content);
+  return node;
+};
+
+/* Copie inerte de la liste des formes quittée, repliée dans son calque. */
+const closingFold = (children) => {
+  const copy = inertGhost(children.cloneNode(true));
+  copy.removeAttribute('id');
+  const node = fold(copy);
+  node.dataset.close = '';
+  return node;
+};
+
 /* Ligne d'un calque. `ctx` = `{ store, children, collapsedId, toggle, remove }`. */
 const layerRow = (ctx, scene, layer) => {
   const { store, children } = ctx;
@@ -172,7 +188,9 @@ const layerRow = (ctx, scene, layer) => {
   const row = document.createElement('div');
   row.className = 'layer-row';
   card.append(row);
-  if (isOpen && children) card.append(children);
+  /* Le pli qui loge la liste des formes : il s'ouvre et se referme en hauteur
+     (voir `style.css`, `.layer-fold`). */
+  if (isOpen && children) card.append(fold(children));
 
   const name = layerName(store, layer, isActive);
   rowKeys(name, { move: (delta) => store.apply(moveLayer, layer.id, delta), remove: () => ctx.remove(layer) });
@@ -220,15 +238,27 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
     },
   };
 
+  const mark = presence();
+  const fade = stateFade();
+  /* Calque dont le pli est ouvert ; `undefined` avant le premier dessin, qui
+     ne s'anime pas. */
+  let openId;
   const rebuild = whenChanged(
     (scene) => signature(scene, collapsedId),
-    (scene) =>
+    (scene) => {
+      /* La liste des formes n'a pas encore été redessinée (l'arbre s'abonne
+         avant elle) : c'est encore celle du calque qu'on quitte. */
+      const nextOpen = scene.layers.some((layer) => layer.id === scene.activeLayerId) && collapsedId !== scene.activeLayerId
+        ? scene.activeLayerId
+        : null;
+      const closing = openId && openId !== nextOpen && children ? closingFold(children) : null;
       rebuildWithFocus(container, () => {
         const list = document.createElement('ul');
         list.className = 'layer-list';
         /* Affiché du premier plan vers le fond : `layers[0]` est le fond, donc la
            liste se lit à l'envers du tableau, et « ↑ » veut bien dire « devant ». */
-        list.append(...[...scene.layers].reverse().map((layer) => layerRow(ctx, scene, layer)));
+        const cards = [...scene.layers].reverse().map((layer) => layerRow(ctx, scene, layer));
+        list.append(...cards);
 
         const add = document.createElement('button');
         add.type = 'button';
@@ -245,8 +275,21 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
         }
 
         container.append(list, add);
+        mark(cards.map((card) => [card, card.dataset.layerId]), null, list);
+        fade(cards.map((card) => [card, card.dataset.layerId, card.dataset.selected ?? 'none']));
+        if (openId !== undefined && openId !== nextOpen) {
+          const opened = list.querySelector(':scope > .layer-card > .layer-fold');
+          if (opened) settle(opened, 'open');
+          const left = closing && cards.find((card) => card.dataset.layerId === openId);
+          if (left) {
+            left.append(closing);
+            removeAfterAnimation(closing);
+          }
+        }
+        openId = nextOpen;
         return add;
-      }),
+      });
+    },
   );
 
   function render(scene) {

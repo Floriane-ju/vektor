@@ -1,7 +1,7 @@
 import { createScene, MAX_NAME_LENGTH, reserveIds } from '../scene.js';
 import { drawingName, loadLocal, removeLocal, saveDrawings, sceneKey } from '../persistence.js';
 import { icon, ICON_SIZE } from './icons.js';
-import { inlineRename } from './list.js';
+import { inlineRename, presence } from './list.js';
 
 const hasShapes = (scene) => scene?.layers.some((layer) => layer.elements.length > 0) ?? false;
 
@@ -49,7 +49,9 @@ export const mountDrawingTabs = ({ store, container, status, drawings: initial, 
   const create = () => {
     const number = Math.max(0, ...drawings.tabs.map((tab) => Number(tab.id.slice(1)))) + 1;
     const id = `D${number}`;
-    update({ ...drawings, tabs: [...drawings.tabs, { id, name: drawingName(id) }] });
+    /* Pas de `update` ici : `activate` redessine, une seule fois — un second
+       dessin recréerait l'onglet sans son animation d'entrée. */
+    drawings = { ...drawings, tabs: [...drawings.tabs, { id, name: drawingName(id) }] };
     activate(id, { state: createScene() });
   };
 
@@ -105,6 +107,7 @@ export const mountDrawingTabs = ({ store, container, status, drawings: initial, 
     return wrap;
   };
 
+  const mark = presence();
   const draw = () => {
     const focused = document.activeElement?.dataset?.focusKey;
     const add = document.createElement('button');
@@ -113,7 +116,9 @@ export const mountDrawingTabs = ({ store, container, status, drawings: initial, 
     add.dataset.focusKey = 'drawing-new';
     add.append(icon('plus', ICON_SIZE.sm), 'Nouveau');
     add.addEventListener('click', create);
-    container.replaceChildren(...drawings.tabs.map(tabNode), add);
+    const tabs = drawings.tabs.map(tabNode);
+    container.replaceChildren(...tabs, add);
+    mark(tabs.map((node, i) => [node, drawings.tabs[i].id]), null, container);
     if (focused) container.querySelector(`[data-focus-key="${focused}"]`)?.focus();
   };
 

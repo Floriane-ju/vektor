@@ -33,6 +33,8 @@ it('ouvre un dessin vierge, revient au premier avec sa scène', () => {
   container.querySelector('.drawing-new').click();
   const names = () => [...container.querySelectorAll('.drawing-tab-name')].map((node) => node.textContent);
   expect(names()).toEqual(['Vektor 1', 'Vektor 2']);
+  /* L'onglet ajouté reste marqué pour son animation d'entrée. */
+  expect(container.querySelectorAll('.drawing-tab')[1].hasAttribute('data-enter')).toBe(true);
   expect(store.get().layers.length).toBeLessThan(original.layers.length);
   expect(loadDrawings().active).toBe('D2');
 

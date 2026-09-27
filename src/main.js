@@ -22,6 +22,10 @@ const status = {
   show(message, tone = 'info') {
     statusNode.textContent = message;
     statusNode.dataset.tone = tone;
+    /* Rejoue l'animation d'entrée (`style.css`) à chaque message. */
+    delete statusNode.dataset.enter;
+    void statusNode.offsetWidth;
+    statusNode.dataset.enter = '';
   },
 };
 
@@ -91,14 +95,16 @@ const { getTool } = mountToolbar({
 });
 mountPropertyPanel({ store, container: document.getElementById('inspector') });
 mountStrokeCard({ store, container: document.getElementById('stroke-card') });
-mountShapeList({ store, container: shapeList, svgRoot, getTool, status });
-/* L'arbre loge la liste des formes sous le calque actif déplié. */
+/* L'arbre loge la liste des formes sous le calque actif déplié. Il s'abonne
+   avant elle : changer de calque, il replie une copie de l'ancienne liste
+   avant qu'elle ne soit redessinée pour le nouveau. */
 mountLayerPanel({
   store,
   container: document.getElementById('layer-panel'),
   status,
   children: shapeList,
 });
+mountShapeList({ store, container: shapeList, svgRoot, getTool, status });
 
 render(store.get(), svgRoot);
 view.fit();
