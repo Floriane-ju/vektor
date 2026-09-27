@@ -4,7 +4,26 @@
   "title": "Onglets de dessins (Vektor 1, + Nouveau)",
   "opened": "2026-09-27",
   "closed": null,
-  "commits": []
+  "commits": [
+    {
+      "sha": "afcc38c",
+      "date": "2026-09-27",
+      "files": [
+        "CLAUDE.md",
+        "index.html",
+        "src/main.js",
+        "src/persistence.js",
+        "src/scene.js",
+        "src/store.js",
+        "src/ui/drawing-tabs.js",
+        "src/ui/icons.js",
+        "style.css",
+        "test/app.test.js",
+        "test/core.test.js",
+        "test/drawing-tabs.test.js"
+      ]
+    }
+  ]
 }
 ---
 

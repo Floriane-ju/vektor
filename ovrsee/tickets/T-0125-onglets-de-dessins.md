@@ -2,7 +2,7 @@
 {
   "id": "T-0125",
   "titre": "Onglets de dessins",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "m",
   "tags": [
