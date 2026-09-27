@@ -3,7 +3,6 @@ import { shapeName } from './list.js';
 import { interpolationSection } from './interpolation-section.js';
 import { modifierSection } from './modifier-section.js';
 import { booleanSection } from './boolean-section.js';
-import { insideField } from './inside-field.js';
 import { shapeFields } from './shape-fields.js';
 import { strokeFields } from './stroke-fields.js';
 import { planeFields } from './plane-fields.js';
@@ -69,7 +68,6 @@ const shapeDetail = (store, binder) => {
     key: '-element',
   });
   const booleans = booleanSection({ store });
-  const inside = insideField({ store });
 
   const root = el('div', 'inspector-body');
   root.dataset.kind = 'shape';
@@ -85,7 +83,6 @@ const shapeDetail = (store, binder) => {
     interpolations.root,
     separator(),
     booleans.root,
-    inside.root,
   );
 
   const sync = (scene, element) => {
@@ -97,13 +94,12 @@ const shapeDetail = (store, binder) => {
     shape.sync(element, layer);
     stroke.sync(element);
     booleans.sync(layer, element);
-    inside.sync(layer, element);
     interpolations.sync(element);
-    /* Outil booléen : ni trait, ni remplissage, ni logement ne se voient —
+    /* Outil booléen : ni trait, ni remplissage ne se voient —
        seule sa géométrie compte. Ses propres booléens restent s'il en a,
        pour pouvoir les retirer. */
     const tool = isBooleanTool(layer, element);
-    for (const node of [...stroke.nodes, inside.root]) node.hidden ||= tool;
+    for (const node of stroke.nodes) node.hidden ||= tool;
     booleans.root.hidden = tool && element.booleans.length === 0;
   };
   return { root, sync };

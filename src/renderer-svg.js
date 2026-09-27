@@ -12,7 +12,7 @@ import {
 } from './scene.js';
 import { axisDirection } from './modifiers.js';
 import { booleanPieces, extrusion, outlinePath, planeBand, planeDouble, planeMatrix, polygonVertices, project, shifted } from './plane.js';
-import { createInside, createPlaneDouble, createShape, occlude, shapeOccluder, wallNeighbours } from './renderer-plane.js';
+import { createPlaneDouble, drawPlane, occlude } from './renderer-plane.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -22,9 +22,13 @@ const copyKey = (id, { copy, own = 0 }) => `${id}:${copy}:${own}`;
 /**
  * Dessin d'un calque, retenu tant que sa référence ne change pas (les
  * transitions sont immuables) : `group` et ses nœuds de dessin `drawn` dans
- * l'ordre, silhouettes des volumes 3D (`occluders`), boîte de la copie source
+ * l'ordre, silhouette du bloc 3D (`occluders`), boîte de la copie source
  * de chaque forme (`bounds`), boîte du dessin (`box`, outils exclus) et de
  * toutes les copies (`frame`, cadre du calque sélectionné).
+ *
+ * Calque en 3D : ses copies passent ensemble par `drawPlane`, en profondeur
+ * réelle. Restent à plat, dessinés avant ce bloc et hors profondeur : un
+ * booléen troué ou ouvert (masques) et l'aplat des recoupements creux.
  */
 const drawLayer = (layer) => {
   const children = layerChildren(layer);
@@ -33,42 +37,21 @@ const drawLayer = (layer) => {
 
   const group = document.createElementNS(SVG_NS, 'g');
   group.dataset.layerId = layer.id;
-  /* Masques des formes logées : propres au calque, pour qu'il se garde entier. */
-  const defs = svgNode('defs');
-  /* Forme logée dans un volume (`inside`) : tranchée selon la profondeur de
-     chaque hôte de sa chaîne, de même copie (`createInside`), et dessinée
-     juste après son hôte direct ; elle ne cache que ce qu'on en voit. */
-  const nodeOf = new Map();
-  const shape = (child, hosts, walls) => {
-    const inside = hosts.length > 0 ? createInside(child, hosts, defs) : null;
-    const node = inside ? inside.node : createShape(child, walls);
-    nodeOf.set(copyKey(child.id, child), { node, host: inside ? copyKey(hosts[0].host.id, hosts[0].host) : null, depth: hosts.length });
-    const silhouette = child.opaque === false ? null : inside ? inside.occluder : shapeOccluder(child);
-    if (silhouette) entry.occluders.set(node, silhouette);
-    return node;
-  };
+  const planar = Boolean(activePlane(layer));
+  const volumes = [];
 
   /* Un outil booléen ne se dessine pas : il ne vit que dans le résultat. Une
-     forme masquée non plus, mais reste outil ou hôte. */
+     forme masquée non plus, mais reste outil. */
   const tools = new Set([
     ...layer.elements.flatMap((element) => element.booleans.map((step) => step.with)),
     ...layer.elements.filter((element) => element.hidden).map((element) => element.id),
   ]);
   const byCopy = new Map(children.map((child) => [copyKey(child.id, child), child]));
-  /* Outil ou hôte de même copie ; répété moins que la forme, sa copie propre 0.
+  /* Outil de même copie ; répété moins que la forme, sa copie propre 0.
      ponytail: un outil répété sous une forme qui ne l'est pas n'agit que par
      sa première copie propre. */
   const partner = (id, child) => byCopy.get(copyKey(id, child)) ?? byCopy.get(copyKey(id, { ...child, own: 0 }));
-  /* Volumes qui se cachent eux-mêmes : ils se cachent aussi l'un l'autre. */
-  /* Hôtes de même copie, du direct au plus lointain (`insideLoop` exclut les boucles). */
-  const hostChain = (child) => {
-    const chain = [];
-    for (let host = child.inside && partner(child.inside, child); host && chain.length < layer.elements.length; host = host.inside && partner(host.inside, host)) {
-      chain.push(host);
-    }
-    return chain;
-  };
-  const walls = wallNeighbours(children.filter((child) => !tools.has(child.id) && child.booleans.length === 0 && !child.inside));
+  const draw = (child) => (planar ? volumes.push(child) : group.append(createNode(child)));
   /* Recoupements creux : les aplats rejoignent un tracé commun, chaque forme
      ne garde que son trait. */
   const holes = [];
@@ -85,22 +68,22 @@ const drawLayer = (layer) => {
     if (steps.length > 0) {
       /* En 3D avec profondeur, c'est la forme résultante qui s'extrude. */
       const pieces = child.matrix && child.height ? booleanPieces(child, steps) : null;
-      if (pieces) for (const piece of pieces) group.append(shape(piece, []));
+      if (pieces) for (const piece of pieces) draw(piece);
       else group.append(createBoolean(child, steps));
       continue;
     }
-    const hosts = hostChain(child)
-      .map((host) => ({ host, shape: shapeOccluder(host, child, children.filter((other) => other.id === host.id && other.copy === host.copy)) }))
-      .filter((link) => link.shape);
-    const others = walls.get(child);
     const area = layer.evenOdd && child.fill !== 'none' ? areaPath(child) : null;
     if (!area) {
-      group.append(shape(child, hosts, others));
+      draw(child);
       continue;
     }
     holes.push({ area, opacity: child.opacity ?? 1 });
     holeFill ??= child.fill;
-    const outline = shape({ ...child, fill: 'none' }, hosts, others);
+    if (planar) {
+      volumes.push({ ...child, fill: 'none' });
+      continue;
+    }
+    const outline = createNode({ ...child, fill: 'none' });
     /* L'intérieur reste cliquable au curseur, même creusé. */
     outline.setAttribute('pointer-events', 'visible');
     group.append(outline);
@@ -110,15 +93,12 @@ const drawLayer = (layer) => {
     group.prepend(node);
     if (mask) group.append(mask);
   }
-  /* Chaque forme logée passe juste après son hôte : ni l'hôte ne la cache en
-     entier, ni elle ne passe devant les volumes qui le suivent. Hôtes d'abord,
-     pour qu'une chaîne suive. */
-  for (const { node, host } of [...nodeOf.values()].reverse().sort((a, b) => a.depth - b.depth)) {
-    const hostNode = host && nodeOf.get(host)?.node;
-    if (hostNode?.parentNode === group) hostNode.after(node);
+  if (volumes.length > 0) {
+    const { node, occluder } = drawPlane(volumes);
+    group.append(node);
+    if (occluder) entry.occluders.set(node, occluder);
   }
-  entry.drawn = [...group.children];
-  if (defs.children.length > 0) group.append(defs);
+  entry.drawn = [...group.children].filter((node) => node.tagName !== 'mask');
   entry.group = group;
   return entry;
 };

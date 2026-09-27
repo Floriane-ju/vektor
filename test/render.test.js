@@ -2012,48 +2012,49 @@ describe('plan 3D', () => {
     render({ layers: [layer], activeLayerId: layer.id, activeElementId: null }, svg);
     return svg;
   };
+  /* Sous-tracés d'un `d`, en listes de points. */
+  const subpaths = (d) =>
+    d.split('M').slice(1).map((run) => [...run.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) })));
+  const lengthOf = (node) =>
+    [...node.querySelectorAll('path[fill="none"]')]
+      .flatMap((path) => subpaths(path.getAttribute('d')))
+      .reduce((sum, run) => sum + run.slice(1).reduce((total, p, i) => total + Math.hypot(p.x - run[i].x, p.y - run[i].y), 0), 0);
 
   it('projette la forme en <path>, sans transform qui écraserait le trait', () => {
     const svg = draw(createLayer({ plane, elements: [createElement('ellipse', 450, 450, { rotation: 20 })] }));
-    const node = svg.querySelector('[data-layer-id] [data-element-id]');
-    expect(node.tagName).toBe('path');
+    const node = svg.querySelector('[data-layer-id] [data-element-id] path');
     expect(node.getAttribute('transform')).toBeNull();
     expect(svg.querySelector('[data-layer-id] ellipse')).toBeNull();
   });
 
-  it('extrude : masque de la face avant, arêtes de flanc, face arrière', () => {
+  it('extrude : traits visibles seulement, sans masque', () => {
     const element = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 20 });
     const svg = draw(createLayer({ plane, elements: [element] }));
-    const group = svg.querySelector(`[data-layer-id] > [data-element-id="${element.id}"]`);
-    expect(group.tagName).toBe('g');
-    expect(group.querySelector('mask')).not.toBeNull();
-    const volume = group.querySelector('g[mask]');
-    const paths = volume.querySelectorAll('path');
-    /* Un seul tracé : l'arête de silhouette, la moitié proche du fond, l'autre arête. */
-    expect(paths).toHaveLength(1);
-    const d = paths[0].getAttribute('d');
-    expect(d.match(/M/g)).toHaveLength(1);
-    expect(d).not.toMatch(/Z/);
-    expect(group.querySelectorAll('[data-element-id]')).toHaveLength(0);
+    const group = svg.querySelector(`[data-plane] > [data-element-id="${element.id}"]`);
+    expect(svg.querySelector('mask')).toBeNull();
+    const [outlines, flanks] = group.querySelectorAll('path');
+    /* Face du haut entière, moitié proche du fond ; deux arêtes de silhouette. */
+    expect(subpaths(outlines.getAttribute('d'))).toHaveLength(2);
+    expect(outlines.getAttribute('d').match(/Z/g)).toHaveLength(1);
+    expect(subpaths(flanks.getAttribute('d'))).toHaveLength(2);
+    expect(flanks.getAttribute('stroke-linecap')).toBe('round');
   });
 
-  it('un point extrudé se dessine en segment à bout rond, sans masque', () => {
+  it('un point extrudé se dessine en segment à bout rond, centré sur le plan', () => {
     const element = createElement('point', 450, 450, { height: 100 });
     const svg = draw(createLayer({ plane, elements: [element] }));
-    const group = svg.querySelector(`[data-element-id="${element.id}"]`);
-    expect(group.querySelector('mask')).toBeNull();
-    const sides = group.querySelectorAll('path')[1];
-    expect(sides.getAttribute('stroke-linecap')).toBe('round');
-    /* Centré sur le plan : ±100·sin 60° / 2. */
-    expect(sides.getAttribute('d')).toBe('M450,493.301 L450,406.699');
+    const axis = svg.querySelector(`[data-element-id="${element.id}"] path`);
+    expect(axis.getAttribute('stroke-linecap')).toBe('round');
+    /* ±100·sin 60° / 2. */
+    expect(axis.getAttribute('d')).toBe('M450,493.301 L450,406.699');
   });
 
-  it('flancs colorés : aplat teinté de la couleur de la forme', () => {
+  it('flancs colorés : aplat de la couleur de la forme', () => {
     const element = createElement('rect', 450, 450, { height: 20, stroke: '#ff0000' });
     const svg = draw(createLayer({ plane: { ...plane, sides: 'filled' }, elements: [element] }));
-    const tint = svg.querySelector('g[mask] > g[opacity]');
-    expect(tint.getAttribute('opacity')).toBe('1');
-    expect(tint.getAttribute('fill')).toBe('#ff0000');
+    const fills = svg.querySelectorAll(`[data-fills] > path[data-element-id="${element.id}"]`);
+    expect(fills.length).toBeGreaterThan(1);
+    expect([...fills].every((node) => node.getAttribute('fill') === '#ff0000')).toBe(true);
   });
 
   it('le cadre de sélection englobe le volume extrudé', () => {
@@ -2077,6 +2078,75 @@ describe('plan 3D', () => {
     expect(svg.querySelector('[data-guides]').getAttribute('transform')).toMatch(/^matrix\(/);
     expect(toSvgDocument(svg)).not.toContain('data-guides');
   });
+
+  it('le fond de l’écran passe derrière, quel que soit l’ordre des formes', () => {
+    /* Trois cylindres au fond, un anneau et son axe devant : images de T-0116. */
+    const plane45 = { tilt: 45, heading: 45, sides: 'transparent' };
+    const cylinders = [300, 400, 460].map((x) => createElement('ellipse', x + 100, 340, { rx: 50, ry: 50, height: 200 }));
+    const ring = createElement('ellipse', 380, 520, { rx: 100, ry: 100, height: 40, outlined: true, gap: 20 });
+    const inner = createElement('ellipse', 380, 520, { rx: 45, ry: 45, height: 80 });
+    const axis = createElement('point', 380, 520, { height: 300 });
+    const shapes = [...cylinders, ring, inner, axis];
+    const lengths = (elements) => {
+      const svg = draw(createLayer({ plane: plane45, elements }));
+      return shapes.map((element) => {
+        const node = svg.querySelector(`[data-element-id="${element.id}"]`);
+        return node ? lengthOf(node) : 0;
+      });
+    };
+    const ahead = lengths(shapes);
+    const reversed = lengths([...shapes].reverse());
+    ahead.forEach((length, i) => expect(reversed[i]).toBeCloseTo(length, 3));
+    /* Les cylindres du fond ne cachent rien de l'anneau ; lui cache une part d'eux. */
+    const front = lengths([ring, inner, axis]);
+    [3, 4, 5].forEach((i) => expect(ahead[i]).toBeCloseTo(front[i], 3));
+    const back = lengths(cylinders);
+    [0, 1, 2].forEach((i) => expect(ahead[i]).toBeLessThanOrEqual(back[i] + 1e-6));
+    expect(ahead.slice(0, 3).reduce((a, b) => a + b)).toBeLessThan(back.slice(0, 3).reduce((a, b) => a + b) - 20);
+  });
+
+  it('pose les repères du calque sur le plan, et l’export les retire', () => {
+    const layer = createLayer({
+      plane,
+      elements: [createElement('ellipse', 450, 450, { height: 10 })],
+      modifiers: [{ type: 'axial', n: 3 }],
+    });
+    const svg = draw(layer);
+    expect(svg.querySelector('[data-guides]').getAttribute('transform')).toMatch(/^matrix\(/);
+    expect(toSvgDocument(svg)).not.toContain('data-guides');
+  });
+
+  it('contour double à plat : ses deux traits décalés dans le plan, le séparateur s’écrase', () => {
+    const element = createElement('ellipse', 450, 450, { rx: 100, ry: 100, strokeWidth: 4, gap: 20, outlined: true });
+    const svg = draw(createLayer({ plane, elements: [element] }));
+    expect(svg.querySelector('mask')).toBeNull();
+    const [outer, inner] = subpaths(svg.querySelector(`[data-element-id="${element.id}"] path`).getAttribute('d'));
+    const extent = (points, axis) => Math.max(...points.map((p) => p[axis])) - Math.min(...points.map((p) => p[axis]));
+    /* Rayon ± 12 dans le plan : 24 d'écart en largeur, moitié en hauteur (cos 60°). */
+    expect(extent(outer, 'x') - extent(inner, 'x')).toBeCloseTo(48, 0);
+    expect(extent(outer, 'y') - extent(inner, 'y')).toBeCloseTo(24, 0);
+  });
+
+  it('contour double ouvert : deux traits à plat, une bande à bouts ronds en volume', () => {
+    const line = (extra) => createElement('line', 450, 450, { rx: 100, ry: 0, strokeWidth: 4, gap: 20, outlined: true, ...extra });
+    const flat = line({});
+    const [left, right] = subpaths(draw(createLayer({ plane, elements: [flat] })).querySelector(`[data-element-id="${flat.id}"] path`).getAttribute('d'));
+    /* ± 12 dans le plan, en travers de la ligne : moitié à l'écran (cos 60°). */
+    expect(Math.abs(left[0].y - right[0].y)).toBeCloseTo(12, 0);
+    const band = line({ height: 30 });
+    const outlines = draw(createLayer({ plane, elements: [band] })).querySelector(`[data-element-id="${band.id}"] path`);
+    expect(outlines.getAttribute('stroke-linejoin')).toBe('round');
+  });
+
+  it('des rubans répétés (spirale puis axial) se cachent l’un l’autre', () => {
+    const visible = (modifiers) => {
+      const point = createElement('point', 520, 450, { strokeWidth: 6, height: 60, outlined: true, gap: 14, modifiers });
+      const svg = draw(createLayer({ center: { x: 450, y: 450 }, plane: { tilt: 55, heading: 20, sides: 'transparent' }, elements: [point] }));
+      return lengthOf(svg.querySelector(`[data-element-id="${point.id}"]`));
+    };
+    const spiral = createModifier({ type: 'spiral', n: 16, angleStep: 0.6, radiusStep: 10, linear: true });
+    expect(visible([spiral, createModifier({ type: 'axial', n: 2 })])).toBeLessThan(visible([spiral]) - 20);
+  });
 });
 
 describe('plan 3D et recoupements creux', () => {
@@ -2088,154 +2158,6 @@ describe('plan 3D et recoupements creux', () => {
     const ys = [...svg.querySelector('[data-even-odd]').getAttribute('d').matchAll(/,(-?[\d.]+)/g)].map((m) => Number(m[1]));
     /* Face du haut : centre remonté d'une demi-profondeur, 100·sin 60° / 2. */
     expect(Math.max(...ys)).toBeCloseTo(450 - 43.301 + 15, 0);
-  });
-});
-
-describe('plan 3D et contour double', () => {
-  it('extrude un anneau : bord extérieur plein, fond du trou vu par l’ouverture seule', () => {
-    const element = createElement('ellipse', 450, 450, { rx: 100, ry: 100, strokeWidth: 4, gap: 10, outlined: true, height: 30 });
-    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [element] });
-    const svg = stage();
-    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
-    const group = svg.querySelector(`[data-element-id="${element.id}"]`);
-    const [opening, cover] = [...group.querySelectorAll(':scope > mask')];
-    /* Ouverture : ne garde que l'intérieur de la face avant. */
-    expect(opening.querySelector('rect').getAttribute('fill')).toBe('#000');
-    expect(cover.querySelector('rect').getAttribute('fill')).toBe('#fff');
-    const hole = group.querySelector(`:scope > g[mask="url(#${opening.id})"]`);
-    const volume = group.querySelector(`:scope > g[mask="url(#${cover.id})"]`);
-    expect(hole).not.toBeNull();
-    /* Le fond de l'anneau n'est pas un second contour double. */
-    expect(volume.querySelector('mask')).toBeNull();
-    expect(volume.querySelectorAll('path')).toHaveLength(1);
-  });
-});
-
-describe('plan 3D et contour double ouvert', () => {
-  it('extrude la bande entre les deux traits comme un volume plein, masqué par sa face', () => {
-    const line = createElement('line', 450, 450, { rx: 100, ry: 0, strokeWidth: 4, gap: 10, outlined: true, height: 30 });
-    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [line] });
-    const svg = stage();
-    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
-    const group = svg.querySelector(`[data-element-id="${line.id}"]`);
-    const cover = group.querySelector(':scope > mask:not([data-walls])');
-    expect(cover).not.toBeNull();
-    const volume = group.querySelector(`:scope > g[mask="url(#${cover.id})"]`);
-    /* Plus de fond évidé dessiné en entier : seulement le fond visible et les arêtes. */
-    expect(volume.querySelector('mask')).toBeNull();
-  });
-
-  it('se cache elle-même : ses arêtes sont coupées là où ses parois avant passent devant', () => {
-    /* Arc ouvert : ses parois avant passent devant son fond, côté arrière. */
-    const arc = createElement('arc', 450, 450, { rx: 100, ry: 100, start: 0, end: 300, closure: 'open', strokeWidth: 4, height: 60 });
-    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [arc] });
-    const svg = stage();
-    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
-    const walls = svg.querySelector(`[data-element-id="${arc.id}"] mask[data-walls]`);
-    expect(walls).not.toBeNull();
-    /* Plus d'ordre du peintre : aucun aplat de paroi, le fond puis les flancs. */
-    expect(walls.querySelector('path[fill="#000"]')).toBeNull();
-    const [back, flanks] = [...walls.querySelectorAll('path[fill="none"]')].map((path) =>
-      path.getAttribute('d').split('M').slice(1).map((run) => [...run.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])])),
-    );
-    expect(back.length).toBeGreaterThan(1);
-    /* Les deux flancs de silhouette, de part et d'autre, se voient d'un bout à l'autre : pleine hauteur. */
-    const lengths = flanks.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]));
-    const full = Math.max(...lengths);
-    expect(lengths.filter((length) => length > full - 1e-3).length).toBeGreaterThanOrEqual(2);
-    /* Le masque découpe un aplat de la couleur du trait. */
-    expect(svg.querySelector(`rect[mask="url(#${walls.id})"]`).getAttribute('fill')).toBe(arc.stroke);
-  });
-
-  it('le bord du fond se découpe par la géométrie, d’un seul tracé : ni dents de scie ni miettes', () => {
-    /* Peint paroi par paroi, chaque aplat rognait le trait de ses voisines. */
-    const runs = (element) => {
-      const layer = createLayer({ center: { x: 450, y: 450 }, plane: { tilt: 55, heading: 20, sides: 'transparent' }, elements: [element] });
-      const svg = stage();
-      render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
-      const walls = svg.querySelector('mask[data-walls]');
-      expect(walls.querySelector('mask')).toBeNull();
-      /* Plus de bord redessiné paroi par paroi : le fond, puis les flancs. */
-      expect(walls.querySelectorAll('path[fill="none"]').length).toBeLessThanOrEqual(2);
-      /* Le fond : premier trait du masque, avant les flancs. */
-      const back = walls.querySelector('path[fill="none"]');
-      return back.getAttribute('d').split('M').slice(1).map((run) => {
-        const points = [...run.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
-        return points.slice(1).reduce((length, p, i) => length + Math.hypot(p[0] - points[i][0], p[1] - points[i][1]), 0);
-      });
-    };
-    const spiral = createModifier({ type: 'spiral', n: 24, angleStep: 0.7, radiusStep: 10, linear: true, smooth: true });
-    for (const extra of [{}, { outlined: true, gap: 16 }]) {
-      const lengths = runs(createElement('point', 480, 450, { strokeWidth: 8, height: 80, modifiers: [spiral], ...extra }));
-      /* Quelques morceaux continus, pas un par segment ni de miette entre deux parois. */
-      expect(lengths.length).toBeLessThan(12);
-      expect(Math.min(...lengths)).toBeGreaterThan(1);
-    }
-  });
-
-  it('des rubans répétés (spirale puis axial) se cachent l’un l’autre', () => {
-    /* Longueur des arêtes visibles de la première copie. */
-    const visible = (modifiers) => {
-      const point = createElement('point', 520, 450, { strokeWidth: 6, height: 60, outlined: true, gap: 14, modifiers });
-      const layer = createLayer({ center: { x: 450, y: 450 }, plane: { tilt: 55, heading: 20, sides: 'transparent' }, elements: [point] });
-      const svg = stage();
-      render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
-      const [first] = svg.querySelectorAll('mask[data-walls]');
-      return [...first.querySelectorAll('path[fill="none"]')]
-        .flatMap((path) => path.getAttribute('d').split('M').slice(1))
-        .map((run) => [...run.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]))
-        .reduce((sum, points) => sum + points.slice(1).reduce((length, p, i) => length + Math.hypot(p[0] - points[i][0], p[1] - points[i][1]), 0), 0);
-    };
-    const spiral = createModifier({ type: 'spiral', n: 16, angleStep: 0.6, radiusStep: 10, linear: true });
-    const alone = visible([spiral]);
-    const paired = visible([spiral, createModifier({ type: 'axial', n: 2 })]);
-    expect(paired).toBeLessThan(alone - 20);
-  });
-
-  it('une étoile ou un tracé fermé creux se cachent eux-mêmes, un rectangle garde la moitié proche du fond', () => {
-    const star = createElement('polygon', 450, 450, { rx: 100, ry: 100, sides: 5, inner: 40, height: 60 });
-    const free = createElement('polyline', 450, 450, {
-      points: [{ x: -80, y: -60 }, { x: 80, y: -60 }, { x: 80, y: 60 }, { x: 0, y: 0 }, { x: -80, y: 60 }],
-      closed: true,
-      height: 60,
-    });
-    const box = createElement('rect', 450, 450, { rx: 50, ry: 50, height: 60 });
-    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [star, free, box] });
-    const svg = stage();
-    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
-    const walls = (element) => svg.querySelector(`[data-element-id="${element.id}"] mask[data-walls]`);
-    expect(walls(star)).not.toBeNull();
-    expect(walls(free)).not.toBeNull();
-    expect(walls(box)).toBeNull();
-  });
-
-  it('un tracé ouvert simple extrudé se cache aussi lui-même', () => {
-    const line = createElement('polyline', 450, 450, {
-      points: [{ x: -100, y: 0 }, { x: 0, y: 60 }, { x: 100, y: 0 }, { x: 0, y: -60 }, { x: -60, y: 0 }],
-      closed: false,
-      height: 60,
-    });
-    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [line] });
-    const svg = stage();
-    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
-    expect(svg.querySelector(`[data-element-id="${line.id}"] mask[data-walls]`)).not.toBeNull();
-  });
-});
-
-describe('plan 3D : paroi', () => {
-  it('une extrusion haute ne trace que la moitié proche du fond, et pas les coins arrière', () => {
-    const plane = { tilt: 55, heading: 30, sides: 'transparent' };
-    const disk = createElement('ellipse', 450, 450, { rx: 100, ry: 100, height: 300 });
-    const box = createElement('rect', 450, 450, { rx: 50, ry: 50, height: 300 });
-    const svg = stage();
-    render({ layers: [createLayer({ plane, elements: [disk, box] })], activeLayerId: null, activeElementId: null }, svg);
-    const [back] = svg.querySelectorAll(`[data-element-id="${disk.id}"] g[mask] > path`);
-    expect(back.getAttribute('d')).not.toMatch(/Z/);
-    expect(back.getAttribute('d').match(/M/g)).toHaveLength(1);
-    const [, sides] = svg.querySelectorAll(`[data-element-id="${box.id}"] g[mask] > path`);
-    /* Pente en biais : les deux coins de silhouette partent avec le fond ; seul
-       le coin proche garde son arête, le quatrième passe derrière. */
-    expect(sides.getAttribute('d').match(/M/g)).toHaveLength(1);
   });
 });
 
@@ -2259,74 +2181,36 @@ describe('arbre : bouton 3D', () => {
   });
 });
 
-describe('plan 3D : contour double', () => {
-  it('décale ses deux traits dans le plan : le séparateur s’écrase avec la perspective', () => {
-    const element = createElement('ellipse', 450, 450, { rx: 100, ry: 100, strokeWidth: 4, gap: 20, outlined: true });
-    const layer = createLayer({ plane: { tilt: 60, heading: 0, sides: 'transparent' }, elements: [element] });
-    const svg = stage();
-    render({ layers: [layer], activeLayerId: null, activeElementId: null }, svg);
-    const group = svg.querySelector(`[data-layer-id] > [data-element-id="${element.id}"]`);
-    expect(group.querySelector('mask')).toBeNull();
-    const [outer, inner] = [...group.querySelectorAll('path')].map((node) =>
-      [...node.getAttribute('d').matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) })),
-    );
-    const extent = (points, axis) => Math.max(...points.map((p) => p[axis])) - Math.min(...points.map((p) => p[axis]));
-    /* Rayon ± 12 dans le plan : 24 d'écart en largeur, moitié en hauteur (cos 60°). */
-    expect(extent(outer, 'x') - extent(inner, 'x')).toBeCloseTo(48, 0);
-    expect(extent(outer, 'y') - extent(inner, 'y')).toBeCloseTo(24, 0);
-  });
-
-  it('ouvert (ligne, ruban) : ses deux traits aussi, avec ou sans profondeur', () => {
-    const plane = { tilt: 60, heading: 0, sides: 'transparent' };
-    const coords = (node) =>
-      [...node.getAttribute('d').matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
-    const draw = (extra) => {
-      const line = createElement('line', 450, 450, { rx: 100, ry: 0, strokeWidth: 4, gap: 20, outlined: true, ...extra });
-      const svg = stage();
-      render({ layers: [createLayer({ plane, elements: [line] })], activeLayerId: null, activeElementId: null }, svg);
-      return svg.querySelector(`[data-layer-id] > [data-element-id="${line.id}"]`);
-    };
-    const flat = draw({});
-    expect(flat.querySelector('mask')).toBeNull();
-    const [left, right] = [...flat.querySelectorAll('path')].map(coords);
-    /* ± 12 dans le plan, en travers de la ligne : moitié à l'écran (cos 60°). */
-    expect(Math.abs(left[0].y - right[0].y)).toBeCloseTo(12, 0);
-    const top = draw({ height: 30 }).lastElementChild;
-    /* Coins des bouts ronds, raccord avec les arêtes de flanc (pas de pointe en onglet). */
-    expect(top.getAttribute('stroke-linejoin')).toBe('round');
-    const face = coords(top);
-    expect(Math.max(...face.map((p) => p.y)) - Math.min(...face.map((p) => p.y))).toBeCloseTo(12, 0);
-  });
-});
-
-describe('plan 3D : occlusion', () => {
+describe('plan 3D : occlusion entre calques', () => {
   const plane = { tilt: 45, heading: 45, sides: 'transparent' };
-  const draw = (elements) => {
+  const draw = (...layers) => {
     const svg = stage();
-    render({ layers: [createLayer({ plane, elements })], activeLayerId: null, activeElementId: null }, svg);
+    render({ layers: layers.map((elements) => createLayer({ plane, elements })), activeLayerId: null, activeElementId: null }, svg);
     return svg;
   };
 
-  it('un volume cache ce qui est dessiné avant lui, pas ce qui le suit', () => {
+  it('le calque du dessus cache celui du dessous, jamais l’inverse', () => {
     const axis = createElement('point', 450, 450, { height: 300 });
     const disk = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40 });
-    const behind = draw([axis, disk]);
-    const hidden = behind.querySelector(`[data-element-id="${axis.id}"]`).parentElement;
+    const svg = draw([axis], [disk]);
+    const hidden = svg.querySelector(`[data-element-id="${axis.id}"]`).closest('[data-plane]').parentElement;
     expect(hidden.getAttribute('mask')).toMatch(/^url\(#occlude-/);
-    expect(behind.querySelector(`defs > mask[id="${hidden.getAttribute('mask').slice(5, -1)}"]`)).not.toBeNull();
-    const front = draw([disk, axis]);
-    expect(front.querySelector(`[data-element-id="${axis.id}"]`).parentElement.dataset.layerId).toBeDefined();
-    expect(front.querySelector(`[data-element-id="${disk.id}"]`).parentElement.getAttribute('mask')).toBeNull();
+    const top = svg.querySelector(`[data-element-id="${disk.id}"]`).closest('[data-plane]');
+    expect(top.parentElement.dataset.layerId).toBeDefined();
   });
 
-  it('un volume non opaque ne cache rien, logé ou non', () => {
+  it('un volume en fil de fer ne cache pas le calque du dessous', () => {
     const axis = createElement('point', 450, 450, { height: 300 });
     const disk = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, opaque: false });
-    expect(draw([axis, disk]).querySelector(`[data-element-id="${axis.id}"]`).parentElement.getAttribute('mask')).toBeNull();
-    const ring = createElement('ellipse', 450, 450, { rx: 90, ry: 90, height: 20, outlined: true, gap: 20 });
-    const guest = createElement('ellipse', 450, 450, { rx: 30, ry: 30, height: 10, inside: ring.id, opaque: false });
-    const svg = draw([guest, ring]);
-    expect(svg.querySelector(`[data-element-id="${ring.id}"]`).parentElement.getAttribute('mask')).toBeNull();
+    expect(draw([axis], [disk]).querySelector('mask')).toBeNull();
+  });
+
+  it('un anneau laisse voir par son trou', () => {
+    const axis = createElement('point', 450, 450, { height: 300 });
+    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
+    const mask = draw([axis], [ring]).querySelector('defs > mask');
+    expect(mask.querySelector('clipPath')).not.toBeNull();
+    expect(mask.querySelector('path[clip-path]').getAttribute('fill')).toBe('#fff');
   });
 
   it('une forme masquée ne se dessine pas, mais reste outil booléen', () => {
@@ -2343,9 +2227,7 @@ describe('plan 3D : occlusion', () => {
     const tool = createElement('ellipse', 500, 450, { rx: 60, ry: 60 });
     const shape = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, booleans: [{ with: tool.id, op: 'subtract' }] });
     const svg = draw([tool, shape]);
-    const node = svg.querySelector(`[data-element-id="${shape.id}"]`);
-    /* Face avant + parois : le groupe d'extrusion, pas les masques du booléen à plat. */
-    expect(node.querySelectorAll('path').length).toBeGreaterThan(1);
+    expect(svg.querySelector(`[data-plane] > [data-element-id="${shape.id}"] path`)).not.toBeNull();
     expect(svg.querySelector('mask[id^="bool-"]')).toBeNull();
     /* Trou (disque intérieur) : rendu à plat par masques. */
     const inner = createElement('ellipse', 450, 450, { rx: 20, ry: 20 });
@@ -2353,129 +2235,12 @@ describe('plan 3D : occlusion', () => {
     expect(draw([inner, ring]).querySelector('mask[id^="bool-"]')).not.toBeNull();
   });
 
-  it('un anneau laisse voir par son trou', () => {
-    const axis = createElement('point', 450, 450, { height: 300 });
-    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
-    const svg = draw([axis, ring]);
-    const mask = svg.querySelector('defs > mask');
-    expect(mask.querySelector('clipPath')).not.toBeNull();
-    expect(mask.querySelector('path[clip-path]').getAttribute('fill')).toBe('#fff');
-  });
-
   it('sans volume, aucun masque d’occlusion', () => {
     expect(draw([createElement('ellipse', 450, 450), createElement('rect', 450, 450)]).querySelector('defs')).toBeNull();
   });
 });
 
-describe('forme logée : rendu, panneau, arbre', () => {
-  const plane = { tilt: 45, heading: 45, sides: 'transparent' };
-
-  const drawn = (elements) => {
-    const svg = stage();
-    render({ layers: [createLayer({ plane, elements })], activeLayerId: null, activeElementId: null }, svg);
-    return svg;
-  };
-  const slices = (svg, element) =>
-    Object.fromEntries(
-      [...svg.querySelectorAll(`[data-element-id="${element.id}"] > [data-slice]`)].map((node) => [
-        node.dataset.slice,
-        node.getAttribute('mask') ?? 'aucun',
-      ]),
-    );
-
-  it('traverse un anneau : devant au-dessus, par l’ouverture dedans, derrière en dessous', () => {
-    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
-    const axis = createElement('point', 450, 450, { height: 300, inside: ring.id });
-    expect(slices(drawn([axis, ring]), axis)).toEqual({
-      below: expect.stringMatching(/^url\(#occlude-/),
-      middle: expect.stringMatching(/^url\(#inside-/),
-      above: 'aucun',
-    });
-  });
-
-  it('dans un volume plein, la tranche du milieu disparaît ; logée, elle suit son hôte et ne le cache pas', () => {
-    const disk = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40 });
-    const axis = createElement('point', 450, 450, { height: 300, inside: disk.id });
-    const svg = drawn([axis, disk]);
-    expect(Object.keys(slices(svg, axis))).toEqual(['below', 'above']);
-    const [first, second] = svg.querySelector('[data-layer-id]').children;
-    expect(first.dataset.elementId).toBe(disk.id);
-    expect(second.dataset.elementId).toBe(axis.id);
-    expect(svg.querySelector(`[data-element-id="${disk.id}"]`).parentElement.getAttribute('mask')).toBeNull();
-  });
-
-  it('traverse une spirale de points reliés : seules les parois devant la cachent', () => {
-    const spiral = createModifier({ type: 'spiral', n: 12, angleStep: 0.6, radiusStep: 12, linear: true });
-    const ribbon = createElement('point', 500, 450, { height: 40, modifiers: [spiral] });
-    const axis = createElement('point', 450, 450, { height: 300, inside: ribbon.id });
-    const svg = drawn([axis, ribbon]);
-    const masks = slices(svg, axis);
-    expect(masks).toEqual({
-      below: expect.stringMatching(/^url\(#occlude-/),
-      middle: expect.stringMatching(/^url\(#occlude-/),
-      above: 'aucun',
-    });
-    const walls = svg.querySelector(masks.middle.slice(4, -1)).querySelectorAll('g[fill="#000"] > path');
-    expect(walls.length).toBeGreaterThan(0);
-    expect(walls.length).toBeLessThan(11);
-    /* Ombre découpée par la silhouette du ruban : pas d'arrondi au-delà de ses bouts. */
-    const shadow = svg.querySelector(masks.middle.slice(4, -1)).querySelector('g[fill="#000"]');
-    expect(svg.querySelector(`clipPath${shadow.getAttribute('clip-path').slice(4, -1)} path`)).not.toBeNull();
-  });
-
-  it('traverse une spirale répétée en axial : les parois de chaque copie la cachent', () => {
-    const spiral = createModifier({ type: 'spiral', n: 12, angleStep: 0.6, radiusStep: 12, linear: true });
-    const walls = (modifiers) => {
-      const ribbon = createElement('point', 500, 450, { height: 40, modifiers });
-      const axis = createElement('point', 450, 450, { height: 300, inside: ribbon.id });
-      const svg = drawn([axis, ribbon]);
-      return svg.querySelector(slices(svg, axis).middle.slice(4, -1)).querySelectorAll('g[fill="#000"] > path').length;
-    };
-    expect(walls([spiral, createModifier({ type: 'axial', n: 2 })])).toBeGreaterThan(walls([spiral]));
-  });
-
-  it('pleine et logée dans un anneau, elle cache ce qui est dessiné avant elle, par la seule ouverture', () => {
-    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
-    const disk = createElement('ellipse', 450, 450, { rx: 30, ry: 30, height: 10, inside: ring.id });
-    const svg = drawn([disk, ring]);
-    const holder = svg.querySelector(`[data-element-id="${ring.id}"]`).parentElement;
-    const mask = svg.querySelector(holder.getAttribute('mask').slice(4, -1));
-    expect(mask.querySelector(`g[mask="${slices(svg, disk).middle}"] > g[fill="#000"]`)).not.toBeNull();
-  });
-
-  it('un volume fermé logé n’est pas subdivisé : chaque tranche peint la forme entière, bornée à sa silhouette', () => {
-    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
-    const tube = createElement('ellipse', 450, 450, { rx: 30, ry: 30, height: 200, inside: ring.id });
-    const svg = drawn([tube, ring]);
-    const parts = [...svg.querySelectorAll(`[data-element-id="${tube.id}"] > [data-slice] > [clip-path]`)];
-    expect(parts).toHaveLength(3);
-    const faces = parts.map((part) => part.lastElementChild.outerHTML);
-    expect(new Set(faces).size).toBe(1);
-  });
-
-  it('logée dans une forme elle-même logée : tranchée par toute la chaîne, dessinée après son hôte', () => {
-    const ring = createElement('ellipse', 450, 450, { rx: 80, ry: 80, height: 40, outlined: true, gap: 20 });
-    const disk = createElement('ellipse', 450, 450, { rx: 30, ry: 30, height: 10, inside: ring.id });
-    const axis = createElement('point', 450, 450, { height: 300, inside: disk.id });
-    const svg = drawn([axis, disk, ring]);
-    const order = [...svg.querySelector('[data-layer-id]').children]
-      .map((node) => node.querySelector('[data-element-id]')?.dataset.elementId ?? node.dataset.elementId)
-      .filter(Boolean);
-    expect(order).toEqual([ring.id, disk.id, axis.id]);
-    const pieces = [...svg.querySelectorAll(`[data-element-id="${axis.id}"] > [data-slice]`)];
-    /* Sous l'anneau, sous le disque dans l'anneau, au-dessus du disque dans l'anneau, au-dessus. */
-    expect(pieces.map((node) => node.dataset.slice)).toEqual(['below', 'below', 'above', 'above']);
-    expect(pieces[1].querySelector(':scope > g[mask]')).not.toBeNull();
-    expect(pieces[3].getAttribute('mask')).toBeNull();
-  });
-
-  it('un anneau de points reliés (axial) accueille une forme comme un cercle', () => {
-    const axial = createModifier({ type: 'axial', n: 5, linear: true });
-    const ring = createElement('point', 530, 450, { height: 40, modifiers: [axial] });
-    const axis = createElement('point', 450, 450, { height: 300, inside: ring.id });
-    expect(Object.keys(slices(drawn([axis, ring]), axis))).toEqual(['below', 'above']);
-  });
-
+describe('panneau : profondeur', () => {
   it('l’interrupteur « Opaque » n’apparaît qu’en 3D sur une forme à profondeur, et la règle', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const disk = createElement('ellipse', 0, 0, { height: 20 });
@@ -2521,48 +2286,30 @@ describe('forme logée : rendu, panneau, arbre', () => {
     inspector.remove();
   });
 
-  it('le sélecteur n’apparaît qu’en 3D, ou si le calque porte déjà un lien', async () => {
+  it('outil booléen : ni profondeur, ni remplissage, ni style de trait', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
-    const disk = createElement('ellipse', 0, 0);
-    const axis = createElement('point', 0, 0);
-    const layer = createLayer({ elements: [disk, axis] });
-    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: axis.id });
+    const tool = createElement('ellipse', 40, 0);
+    const shape = createElement('ellipse', 0, 0, { height: 20, booleans: [{ with: tool.id, op: 'subtract' }] });
+    const layer = createLayer({ plane: { enabled: true, tilt: 45, heading: 45, sides: 'transparent' }, elements: [tool, shape] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: shape.id });
     const inspector = document.createElement('div');
     document.body.append(inspector);
     const { shapeDetail } = mountPropertyPanel({ store, container: inspector });
-    const field = shapeDetail.querySelector('#inside-host').closest('section');
-    expect(field.hidden).toBe(true);
-    const { setLayerPlane, setInside } = await import('../src/scene.js');
-    store.apply(setLayerPlane, layer.id, {});
-    expect(field.hidden).toBe(false);
-    const select = shapeDetail.querySelector('#inside-host');
-    /* Aucune + l'ellipse ; ni le point lui-même, ni rien d'ouvert. */
-    expect([...select.options].map((option) => option.value)).toEqual(['', disk.id]);
-    select.value = disk.id;
-    select.dispatchEvent(new Event('change'));
-    expect(store.get().layers[0].elements[1].inside).toBe(disk.id);
-    store.apply(setLayerPlane, layer.id, null);
-    expect(field.hidden).toBe(false);
-    store.apply(setInside, axis.id, null);
-    expect(field.hidden).toBe(true);
+    const depthField = () => [...shapeDetail.querySelectorAll('.field')].find((node) => node.querySelector('label')?.textContent === 'Profondeur');
+    expect(depthField().hidden).toBe(false);
+    const { setActiveElement } = await import('../src/scene.js');
+    const fill = () => [...shapeDetail.querySelectorAll('.switch-field')].find((node) => node.textContent === 'Remplir');
+    expect(fill().hidden).toBe(false);
+    store.apply(setActiveElement, tool.id);
+    expect(depthField().hidden).toBe(true);
+    /* L'outil n'est pas dessiné : ni remplissage, ni style de trait. */
+    expect(fill().hidden).toBe(true);
+    expect(shapeDetail.querySelector('.group').hidden).toBe(true);
+    store.apply(setActiveElement, shape.id);
+    expect(fill().hidden).toBe(false);
     inspector.remove();
   });
 
-  it('l’arbre range la forme logée sous son hôte, dans une branche à part', async () => {
-    const { mountShapeList } = await import('../src/ui/shape-list.js');
-    const disk = createElement('ellipse', 0, 0);
-    const axis = createElement('point', 0, 0, { inside: disk.id });
-    const layer = createLayer({ elements: [disk, axis] });
-    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
-    const container = document.createElement('div');
-    document.body.append(container);
-    mountShapeList({ store, container, status: { show: () => {} } });
-    const guest = container.querySelector(`.inside-branch > [data-element-id="${axis.id}"]`);
-    expect(guest).not.toBeNull();
-    expect(guest.closest(`[data-element-id="${disk.id}"]`)).not.toBeNull();
-    expect(container.querySelector('.boolean-branch')).toBeNull();
-    container.remove();
-  });
 });
 
 describe('gridImage', () => {

@@ -354,26 +354,6 @@ input.layer-name-input {
   border-top: 1.5px solid var(--line);
 }
 .layer-card[data-template="true"] > .layer-row .layer-name { font-style: italic; opacity: 0.75; }
-/* Forme logée dans une autre : même branche, filet pointillé et marque « ⊂ ». */
-.inside-branch { position: relative; margin: 2px 0 0 16px; padding-left: 16px; }
-.inside-branch::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: -2px;
-  bottom: 18px;
-  border-left: 1.5px dashed var(--line);
-}
-.inside-branch > .layer-card { position: relative; }
-.inside-branch > .layer-card::before {
-  content: '⊂';
-  position: absolute;
-  left: -13px;
-  top: 8px;
-  font-size: var(--text-xs);
-  line-height: 1;
-  color: var(--text-dim);
-}
 
 /* Actions de ligne : au survol, au focus et sur la ligne active. Un calque
    masqué les garde visibles, sinon on ne saurait plus le réafficher. */

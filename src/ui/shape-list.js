@@ -54,24 +54,7 @@ const booleanParents = (displayed) => {
   return parents;
 };
 
-/**
- * Hôte sous lequel chaque forme logée (`inside`) se range. Un seul niveau,
- * comme les outils : ni un outil booléen, ni une forme dont l'hôte est déjà
- * rangé, ni l'hôte d'une autre ne se range.
- */
-const insideParents = (displayed, tools) => {
-  const ids = new Set(displayed.map((element) => element.id));
-  const parents = new Map();
-  for (const element of displayed) {
-    const host = element.inside;
-    if (!host || !ids.has(host) || tools.has(element.id) || tools.has(host) || parents.has(host)) continue;
-    if ([...parents.values()].includes(element.id)) continue;
-    parents.set(element.id, host);
-  }
-  return parents;
-};
-
-/* Sous-liste rangée sous une forme : ses outils booléens, ou ses formes logées. */
+/* Sous-liste rangée sous une forme : ses outils booléens. */
 const branch = (className, label, rows) => {
   const node = document.createElement('ul');
   node.className = `layer-list ${className}`;
@@ -163,11 +146,11 @@ const shapeLine = ({ store, remove }, layer, element, isSelected) => {
 };
 
 /**
- * Card d'une forme, avec ses outils booléens et ses formes logées rangés
- * dessous. `tree` = `{ layer, activeElementId, selected, displayed, parents, hosts }`.
+ * Card d’une forme, avec ses outils booléens rangés
+ * dessous. `tree` = `{ layer, activeElementId, selected, displayed, parents }`.
  */
 const shapeRow = (ctx, tree, element) => {
-  const { layer, activeElementId, selected, displayed, parents, hosts } = tree;
+  const { layer, activeElementId, selected, displayed, parents } = tree;
   const isActive = element.id === activeElementId;
   const card = document.createElement('li');
   card.className = 'layer-card';
@@ -194,19 +177,6 @@ const shapeRow = (ctx, tree, element) => {
     );
   }
 
-  /* Formes logées dans celle-ci : filet pointillé, pour ne pas les confondre
-     avec des outils — elles se dessinent, cachées par son volume en 3D. */
-  const guests = displayed.filter((candidate) => hosts.get(candidate.id) === element.id);
-  if (guests.length > 0) {
-    card.append(
-      branch('inside-branch', `Dans ${label}`, guests.map((guest) => {
-        const child = shapeRow(ctx, tree, guest);
-        child.dataset.inside = 'true';
-        child.title = `À l'intérieur de ${label}`;
-        return child;
-      })),
-    );
-  }
   return card;
 };
 
@@ -218,7 +188,7 @@ const signature = (scene) => {
     layer?.id ?? null,
     scene.activeElementId,
     selectedIds(scene),
-    layer?.elements.map((element) => [element.id, element.type, element.name, !element.hidden, element.booleans.map((step) => step.with), element.inside]) ?? [],
+    layer?.elements.map((element) => [element.id, element.type, element.name, !element.hidden, element.booleans.map((step) => step.with)]) ?? [],
   ]);
 };
 
@@ -314,12 +284,11 @@ export const mountShapeList = ({
          liste se lit à l'envers du tableau, et « ↑ » veut dire « devant ». */
       const displayed = [...layer.elements].reverse();
       const parents = booleanParents(displayed);
-      const hosts = insideParents(displayed, parents);
-      const tree = { layer, activeElementId: scene.activeElementId, selected: selectedIds(scene), displayed, parents, hosts };
+      const tree = { layer, activeElementId: scene.activeElementId, selected: selectedIds(scene), displayed, parents };
       const list = document.createElement('ul');
       list.className = 'layer-list';
       list.append(
-        ...displayed.filter((element) => !parents.has(element.id) && !hosts.has(element.id)).map((element) => shapeRow(ctx, tree, element)),
+        ...displayed.filter((element) => !parents.has(element.id)).map((element) => shapeRow(ctx, tree, element)),
       );
       container.append(list, add);
       return add;

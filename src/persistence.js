@@ -23,7 +23,6 @@ import {
   clampPlaneSides,
   clampTilt,
   DEFAULT_PLANE,
-  insideHosts,
   isHexColor,
   RANGE_BOUNDS,
   reserveIds,
@@ -37,7 +36,7 @@ import {
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@32';
+export const FORMAT = 'vektor/scene@33';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -90,7 +89,9 @@ export const FORMAT = 'vektor/scene@32';
      convertir. Le bump empêche une version antérieure de la relire en `none` ;
    - `@1` à `@30` n'avaient pas d'option d'opacité des volumes : opaques, même
      dessin — sauf une forme logée, qui ne cachait rien et cache désormais ;
-   - `@1` à `@31` ne masquaient pas les formes : toutes visibles. */
+   - `@1` à `@31` ne masquaient pas les formes : toutes visibles ;
+   - `@1` à `@32` logeaient une forme dans une autre (`inside`) : le lien est
+     oublié, la profondeur réelle du calque 3D en tient lieu. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -124,6 +125,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@29',
   'vektor/scene@30',
   'vektor/scene@31',
+  'vektor/scene@32',
   FORMAT,
 ]);
 
@@ -306,8 +308,6 @@ const readElement = (input, style) => {
     height: clampHeight(num(raw.height, 0)),
     opaque: raw.opaque !== false,
     ...(raw.hidden === true ? { hidden: true } : {}),
-    /* Vérifié à l'échelle du calque (`readInside`), une fois toutes ses formes lues. */
-    inside: typeof raw.inside === 'string' ? raw.inside : null,
     ...(raw.type === 'polygon'
       ? { sides: clampSides(num(raw.sides, defaults.sides)), inner: clampInner(num(raw.inner, defaults.inner)) }
       : {}),
@@ -429,18 +429,6 @@ const readPlane = (raw) =>
       }
     : null;
 
-/**
- * Hôtes des formes logées : un hôte absent du calque, ouvert, ou qui fermerait
- * une boucle est oublié, la forme ressort. Pris dans l'ordre, chaque lien se
- * juge contre ceux déjà gardés.
- */
-const readInside = (elements) =>
-  elements.reduce((kept, element, index) => {
-    const layer = { elements: kept.concat(elements.slice(index).map((rest) => ({ ...rest, inside: null }))) };
-    const valid = element.inside !== null && insideHosts(layer, element.id).some((host) => host.id === element.inside);
-    return [...kept, valid || element.inside === null ? element : { ...element, inside: null }];
-  }, []);
-
 const readLayer = (raw, index, legacy) => {
   if (raw == null || typeof raw !== 'object') fail(`Calque ${index} : objet attendu.`);
   if (typeof raw.id !== 'string' || raw.id === '') fail(`Calque ${index} : \`id\` manquant.`);
@@ -453,7 +441,7 @@ const readLayer = (raw, index, legacy) => {
       x: num(raw.center?.x, STAGE.width / 2),
       y: num(raw.center?.y, STAGE.height / 2),
     },
-    elements: readInside(readElements(raw)),
+    elements: readElements(raw),
     modifiers,
     interpolations: readInterpolations(raw, modifiers.length),
     evenOdd: raw.evenOdd === true,

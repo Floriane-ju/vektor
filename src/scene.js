@@ -310,12 +310,9 @@ export const createElement = (type, x, y, overrides = {}) => ({
   /* Profondeur d'extrusion le long de la normale du plan 3D du calque, centrée
      sur le plan (10 : de -5 à 5). Sans plan, sans effet. */
   height: 0,
-  /* En 3D, le volume cache ce qui est dessiné avant lui (`occlude`) ; éteint,
-     il ne cache que ses propres arêtes de fond. */
+  /* En 3D, le volume cache ce qui est derrière lui (`hidden.js`) ; éteint, fil
+     de fer : il ne cache rien, pas même ses propres arêtes arrière. */
   opaque: true,
-  /* Forme hôte du même calque dans laquelle celle-ci est logée (`setInside`) :
-     en 3D, le volume de l'hôte la cache, sauf à travers son trou. */
-  inside: null,
   /* Piles propres de la forme, appliquées avant celles du calque : ses copies
      se multiplient avec les siennes (`getRenderedChildren`). */
   modifiers: [],
@@ -688,7 +685,6 @@ export const duplicateLayer = (scene, id) => {
       id: ids.get(element.id),
       interpolations: element.interpolations.map((interpolation) => ({ ...interpolation, id: nextId('I') })),
       booleans: element.booleans.map((step) => ({ ...step, with: ids.get(step.with) ?? step.with })),
-      inside: element.inside && (ids.get(element.inside) ?? null),
     })),
     interpolations: source.interpolations.map((interpolation) => ({ ...interpolation, id: nextId('I') })),
   };
@@ -950,15 +946,13 @@ export const updateElement = (scene, elementId, patch) =>
     elements.map((element) => (element.id === elementId ? { ...element, ...patch } : element)),
   );
 
-/* Les formes qui employaient `toolId` comme outil booléen, ou comme hôte, le perdent. */
+/* Les formes qui employaient `toolId` comme outil booléen le perdent. */
 const withoutTool = (elements, toolId) =>
-  elements.map((element) => {
-    const booleans = element.booleans.some((step) => step.with === toolId)
-      ? element.booleans.filter((step) => step.with !== toolId)
-      : element.booleans;
-    const inside = element.inside === toolId ? null : element.inside;
-    return booleans === element.booleans && inside === element.inside ? element : { ...element, booleans, inside };
-  });
+  elements.map((element) =>
+    element.booleans.some((step) => step.with === toolId)
+      ? { ...element, booleans: element.booleans.filter((step) => step.with !== toolId) }
+      : element,
+  );
 
 export const removeElement = (scene, elementId) => {
   /* Un outil supprimé libère les formes qu'il travaillait. */
@@ -1026,64 +1020,14 @@ export const updateBoolean = (scene, elementId, index, patch) => {
 export const removeBoolean = (scene, elementId, index) =>
   mapBooleans(scene, elementId, (steps) => steps.filter((_, i) => i !== index));
 
-/* ---- Forme logée dans une autre ---- */
-
 /* Outil d'un booléen du calque : jamais dessiné, seule sa géométrie compte. */
 export const isBooleanTool = (layer, element) =>
   layer.elements.some((other) => other.booleans.some((step) => step.with === element.id));
 
 /**
- * Contour fermé : ce qui peut en accueillir une autre. Ni point, ni ligne, ni
- * tracé ou arc ouvert — sans intérieur, rien à loger. Exception : le point
- * répété linéairement, devenu tracé — anneau (axial) ou ruban (spirale), que
- * la forme logée traverse.
- */
-export const isClosedShape = (element) => {
-  if (element.type === 'point') return linearStages(element.modifiers ?? []).length > 0;
-  switch (SHAPES[element.type]?.geometry) {
-    case 'ellipse':
-    case 'rect':
-    case 'polygon':
-      return true;
-    case 'polyline':
-      return Boolean(element.closed);
-    case 'arc':
-      return element.closure !== 'open' || Math.abs(element.end - element.start) >= 360;
-    default:
-      return false;
-  }
-};
-
-/** `hostId` comme hôte de `elementId` fermerait-il une boucle d'hôtes ? */
-export const insideLoop = (layer, elementId, hostId) => {
-  const byId = new Map(layer.elements.map((el) => [el.id, el]));
-  const seen = new Set();
-  for (let id = hostId; id; id = byId.get(id)?.inside ?? null) {
-    if (id === elementId) return true;
-    if (seen.has(id)) return false;
-    seen.add(id);
-  }
-  return false;
-};
-
-/** Hôtes possibles d'une forme : les formes fermées du calque, hors elle-même et les boucles. */
-export const insideHosts = (layer, elementId) =>
-  layer.elements.filter(
-    (host) => host.id !== elementId && isClosedShape(host) && !insideLoop(layer, elementId, host.id),
-  );
-
-/** Loge `elementId` dans `hostId` (même calque, forme fermée), ou l'en sort (`null`). */
-export const setInside = (scene, elementId, hostId) => {
-  const layer = layerOfElement(scene, elementId);
-  if (!layer) return scene;
-  if (hostId !== null && !insideHosts(layer, elementId).some((host) => host.id === hostId)) return scene;
-  return updateElement(scene, elementId, { inside: hostId });
-};
-
-/**
  * Chaque forme de `ids` reçoit une copie posée juste devant elle, décalée de
  * `offset` pour qu'on la voie, et les copies deviennent la sélection. Un outil
- * booléen ou un hôte copié avec le groupe est remplacé par sa copie, comme
+ * booléen copié avec le groupe est remplacé par sa copie, comme
  * dans `duplicateLayer` ; hors du groupe, la copie garde celui de l'originale.
  */
 export const duplicateElements = (scene, ids, offset) => {
@@ -1098,7 +1042,6 @@ export const duplicateElements = (scene, ids, offset) => {
     y: element.y + offset,
     interpolations: element.interpolations.map((interpolation) => ({ ...interpolation, id: nextId('I') })),
     booleans: element.booleans.map((step) => ({ ...step, with: copies.get(step.with) ?? step.with })),
-    inside: element.inside && (copies.get(element.inside) ?? element.inside),
   });
   const layers = scene.layers.map((layer) =>
     layer.elements.some((element) => copies.has(element.id))
@@ -1140,7 +1083,7 @@ export const placeElement = (scene, elementId, layerId, index) => {
     const elements = placeAt(source.elements, element, index);
     return elements === source.elements ? scene : mapLayer(scene, layerId, (layer) => ({ ...layer, elements }));
   }
-  const moved = element.booleans.length > 0 || element.inside ? { ...element, booleans: [], inside: null } : element;
+  const moved = element.booleans.length > 0 ? { ...element, booleans: [] } : element;
   const layers = scene.layers.map((layer) => {
     if (layer === source) {
       return { ...layer, elements: withoutTool(layer.elements.filter((candidate) => candidate !== element), elementId) };

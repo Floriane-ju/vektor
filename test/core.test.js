@@ -2037,26 +2037,6 @@ describe('plan 3D', async () => {
     close(offsetPolygon([...square].reverse(), -2)[0], { x: 2, y: 8 });
   });
 
-  it('ne garde du fond que la moitié proche, celle que la paroi ne cache pas', async () => {
-    const { nearEdges } = await import('../src/plane.js');
-    const square = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }];
-    /* Face avant vers le haut : seul le bord du bas reste visible. */
-    expect(nearEdges(square, { x: 0, y: -5 })).toEqual([[{ x: 10, y: 10 }, { x: 0, y: 10 }]]);
-    /* En biais : deux bords, en une seule chaîne, même à cheval sur le premier sommet. */
-    expect(nearEdges(square, { x: 5, y: 5 })).toEqual([[{ x: 0, y: 10 }, { x: 0, y: 0 }, { x: 10, y: 0 }]]);
-  });
-
-  it('fait affleurer l’arête de silhouette au bord extérieur du trait', async () => {
-    const { flushCorner } = await import('../src/plane.js');
-    const v = { x: 0, y: -40 };
-    /* Sur une courbe, la pointe est dans l'axe : le coin reste en place. */
-    close(flushCorner({ x: 0, y: 0 }, { x: 1, y: 5 }, { x: -3, y: 0 }, v, 6), { x: 0, y: 0 });
-    /* Coin aigu : la pointe dépasse de 5 ; l'axe de l'arête passe à 3 en deçà,
-       sur le prolongement du bord. */
-    const joined = flushCorner({ x: 0, y: 0 }, { x: 10, y: 10 }, { x: -5, y: 0 }, v, 6);
-    close(joined, { x: -2, y: -2 });
-  });
-
   it('passer un calque en 3D donne la profondeur par défaut à ses formes à plat, et aux nouvelles', async () => {
     const { DEFAULT_DEPTH } = await import('../src/scene.js');
     const layer = createLayer({ elements: [createElement('rect', 0, 0), createElement('ellipse', 0, 0, { height: 40 })] });
@@ -2129,65 +2109,13 @@ describe('plan 3D', async () => {
   });
 });
 
-describe('forme logée dans une autre', async () => {
-  const { isClosedShape, setInside, placeElement } = await import('../src/scene.js');
-  const make = () => {
-    const disk = createElement('ellipse', 0, 0);
-    const box = createElement('rect', 0, 0);
-    const axis = createElement('point', 0, 0);
-    const bow = createElement('arc', 0, 0, { closure: 'open' });
-    const layer = createLayer({ elements: [disk, box, axis, bow] });
-    return { disk, box, axis, bow, scene: { layers: [layer, createLayer()], activeLayerId: layer.id, activeElementId: null } };
-  };
-
-  it('seule une forme fermée accueille', () => {
-    expect(isClosedShape(createElement('ellipse', 0, 0))).toBe(true);
-    expect(isClosedShape(createElement('point', 0, 0))).toBe(false);
-    expect(isClosedShape(createElement('line', 0, 0))).toBe(false);
-    expect(isClosedShape(createElement('arc', 0, 0, { closure: 'open' }))).toBe(false);
-    expect(isClosedShape(createElement('arc', 0, 0, { closure: 'chord' }))).toBe(true);
-    expect(isClosedShape(createElement('polyline', 0, 0, { closed: false }))).toBe(false);
-    const spiral = (linear) => createModifier({ type: 'spiral', n: 6, linear });
-    expect(isClosedShape(createElement('point', 0, 0, { modifiers: [spiral(true)] }))).toBe(true);
-    expect(isClosedShape(createElement('point', 0, 0, { modifiers: [spiral(false)] }))).toBe(false);
-  });
-
-  it('loge, refuse un hôte ouvert, soi-même ou une boucle, et ressort', () => {
-    const { disk, box, axis, bow, scene } = make();
-    const inDisk = setInside(scene, axis.id, disk.id);
-    expect(inDisk.layers[0].elements[2].inside).toBe(disk.id);
-    expect(setInside(scene, axis.id, bow.id)).toBe(scene);
-    expect(setInside(scene, disk.id, disk.id)).toBe(scene);
-    const chained = setInside(setInside(scene, box.id, disk.id), disk.id, box.id);
-    expect(chained.layers[0].elements[0].inside).toBeNull();
-    expect(setInside(inDisk, axis.id, null).layers[0].elements[2].inside).toBeNull();
-  });
-
-  it('supprimer ou déplacer l’hôte rompt le lien ; dupliquer le calque le suit', () => {
-    const { disk, axis, scene } = make();
-    const linked = setInside(scene, axis.id, disk.id);
-    expect(removeElement(linked, disk.id).layers[0].elements.find((el) => el.id === axis.id).inside).toBeNull();
-    const moved = placeElement(linked, disk.id, linked.layers[1].id, 0);
-    expect(moved.layers[0].elements.find((el) => el.id === axis.id).inside).toBeNull();
-    const copy = duplicateLayer(linked, linked.layers[0].id).layers[1];
-    expect(copy.elements[2].inside).toBe(copy.elements[0].id);
-  });
-
-  it('à l’import, un lien vers un hôte absent, ouvert ou en boucle est oublié', () => {
+describe('forme logée : retirée', () => {
+  it('un lien `inside` d’un ancien fichier est oublié à la lecture', () => {
     const raw = JSON.stringify({
-      format: 'vektor/scene@23',
-      layers: [{
-        id: 'L1',
-        elements: [
-          { id: 'E1', type: 'ellipse', inside: 'E2' },
-          { id: 'E2', type: 'rect', inside: 'E1' },
-          { id: 'E3', type: 'point', inside: 'E9' },
-          { id: 'E4', type: 'point', inside: 'E5' },
-          { id: 'E5', type: 'line' },
-        ],
-      }],
+      format: 'vektor/scene@32',
+      layers: [{ id: 'L1', elements: [{ id: 'E1', type: 'ellipse' }, { id: 'E2', type: 'point', inside: 'E1' }] }],
     });
-    expect(deserialize(raw).layers[0].elements.map((el) => el.inside)).toEqual(['E2', null, null, null, null]);
+    expect(deserialize(raw).layers[0].elements.every((el) => !('inside' in el))).toBe(true);
   });
 });
 
@@ -2512,42 +2440,6 @@ describe('untangle', () => {
   });
 });
 
-import { sheet } from '../src/plane.js';
-
-describe('sheet', () => {
-  /* Paroi devant ou derrière le pied de la forme logée, jugée là où elle croise son axe. */
-  const wall = (points) =>
-    sheet(
-      { type: 'polyline', x: 0, y: 0, rx: 100, ry: 20, points, closed: false, strokeWidth: 4, matrix: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } },
-      { x: 0, y: -10 },
-      { x: 0, y: 0 },
-    ).solids.length;
-
-  it('garde la paroi qui croise l’axe devant le pied, même si son milieu est derrière', () => {
-    expect(wall([{ x: -100, y: -20 }, { x: 10, y: 5 }])).toBe(1);
-  });
-
-  it('écarte la paroi qui croise l’axe derrière le pied, même si son milieu est devant', () => {
-    expect(wall([{ x: -100, y: 20 }, { x: 10, y: -5 }])).toBe(0);
-  });
-});
-
-describe('sheet : silhouette', () => {
-  it('s’arrête au bout du ruban : l’arrondi du trait des parois ne déborde pas', () => {
-    const shape = sheet(
-      { type: 'polyline', x: 0, y: 0, rx: 100, ry: 0, points: [{ x: -100, y: 20 }, { x: 100, y: 20 }], closed: false, strokeWidth: 4, matrix: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } },
-      { x: 0, y: -10 },
-      { x: 0, y: 0 },
-    );
-    const xs = shape.clip.flat().map((p) => p.x);
-    expect(Math.max(...xs)).toBeCloseTo(100);
-    expect(Math.min(...xs)).toBeCloseTo(-100);
-    const ys = shape.clip.flat().map((p) => p.y);
-    expect(Math.max(...ys)).toBeCloseTo(22);
-    expect(Math.min(...ys)).toBeCloseTo(8);
-  });
-});
-
 import { MAX_NAME_LENGTH, renameElement } from '../src/scene.js';
 import { shapeName } from '../src/ui/list.js';
 
@@ -2589,7 +2481,7 @@ describe('formes nommables', () => {
   });
 
   it('le format est bumpé, l’ancien reste lisible', () => {
-    expect(FORMAT).toBe('vektor/scene@32');
+    expect(FORMAT).toBe('vektor/scene@33');
     const raw = JSON.parse(serialize(withShapes()));
     raw.format = 'vektor/scene@29';
     expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);
