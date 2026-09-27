@@ -7,6 +7,9 @@ import { planeMatrix, unproject } from '../plane.js';
 const SETTINGS_KEY = 'illu/settings';
 const GRID_TYPES = { square: 'Carrée', polar: 'Ronde' };
 const BOUNDS = { divisions: [2, 100], circles: [1, 50] };
+/* Plus dézoomée, la grille est trop dense : illisible et lente à dessiner. */
+const GRID_MIN_ZOOM = 0.7;
+
 const DEFAULTS = { grid: false, gridType: 'square', divisions: 10, circles: 8 };
 
 const clampSetting = (name, value) => {
@@ -203,7 +206,9 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
     circles.value = String(settings.circles);
     circlesField.hidden = settings.gridType !== 'polar';
     svgRoot.toggleAttribute('data-grid', settings.grid);
-    svgRoot.style.backgroundImage = settings.grid ? gridImage(settings, color, plane, visible()) : '';
+    /* Masquée seulement : la case reste cochée et l'aimantation agit. */
+    const shown = settings.grid && (view?.zoom() ?? 1) >= GRID_MIN_ZOOM;
+    svgRoot.style.backgroundImage = shown ? gridImage(settings, color, plane, visible()) : '';
   };
 
   /* La grille suit le plan du calque actif ; ne la redessiner que s'il change. */

@@ -134,6 +134,7 @@ export const mountZoom = ({ svgRoot, container }) => {
   return {
     fit,
     visible,
+    zoom: () => view.zoom,
     /** Appelé à chaque changement de vue avec la zone visible. */
     onChange: (listener) => listeners.push(listener),
   };
