@@ -2,7 +2,7 @@
 {
   "id": "T-0119",
   "titre": "Contour double d'une forme booléenne",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "tags": ["booleens", "3d"],
   "cree": "2026-09-27",
