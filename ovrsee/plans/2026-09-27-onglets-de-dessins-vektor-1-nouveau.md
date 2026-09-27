@@ -1,9 +1,9 @@
 ---
 {
-  "status": "open",
+  "status": "closed",
   "title": "Onglets de dessins (Vektor 1, + Nouveau)",
   "opened": "2026-09-27",
-  "closed": null,
+  "closed": "2026-09-27",
   "commits": [
     {
       "sha": "afcc38c",
@@ -22,6 +22,11 @@
         "test/core.test.js",
         "test/drawing-tabs.test.js"
       ]
+    },
+    {
+      "sha": "dcab289",
+      "date": "2026-09-27",
+      "files": []
     }
   ]
 }
