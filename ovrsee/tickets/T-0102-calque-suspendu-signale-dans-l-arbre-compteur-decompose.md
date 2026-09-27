@@ -2,7 +2,7 @@
 {
   "id": "T-0102",
   "titre": "Calque suspendu signalé dans l'arbre, compteur décomposé",
-  "colonne": "pret",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "xs",
   "tags": [

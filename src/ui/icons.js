@@ -16,6 +16,8 @@ const PATHS = {
   cube: '<path d="M10 2.5 L16.5 6.25 V13.75 L10 17.5 L3.5 13.75 V6.25 Z M3.5 6.25 L10 10 L16.5 6.25 M10 10 V17.5" stroke-linejoin="round"/>',
   cubeOff:
     '<path d="M10 2.5 L16.5 6.25 V13.75 L10 17.5 L3.5 13.75 V6.25 Z" stroke-linejoin="round"/><path d="M4 16 L16 4" stroke-linecap="round"/>',
+  /* Calque suspendu (trop de copies) : triangle d'alerte. */
+  warning: '<path d="M10 3 L18 17 H2 Z" stroke-linejoin="round"/><path d="M10 8 V12 M10 14.5 V14.6" stroke-linecap="round"/>',
   chevronDown: '<path d="M5 8 L10 13 L15 8" stroke-linecap="round" stroke-linejoin="round"/>',
   /* Poignée de glisser-déposer : deux colonnes de trois points. */
   grip: [7, 13].flatMap((x) => [5, 10, 15].map((y) => `<circle cx="${x}" cy="${y}" r="1.4" fill="currentColor" stroke="none"/>`)).join(''),

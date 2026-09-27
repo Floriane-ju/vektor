@@ -33,6 +33,15 @@ const COUNT_SLIDER = { min: '1', max: '256', step: '1' };
 
 const plural = (total) => `${total} copie${total > 1 ? 's' : ''}`;
 
+/* « 40 copies du calque × 60 des formes = 2 400 » : les deux facteurs de `copyTotal`. */
+const suspendedBreakdown = (layer, total) => {
+  const fr = (n) => n.toLocaleString('fr-FR');
+  const own = layer.elements.reduce((sum, element) => sum + copyCount(element.modifiers), 0);
+  /* Calque vide : `copyTotal` compte une forme sans pile, le calque seul fait le total. */
+  if (own === 0) return `${fr(total)} copies du calque`;
+  return `${fr(copyCount(layer.modifiers))} copies du calque × ${fr(own)} des formes = ${fr(total)}`;
+};
+
 /* Case « Orienter », « Lisser »… d'un étage : `key` lu et écrit tel quel. */
 const stageFlags = (bindStage) => {
   const flag = (read, key) => bindStage(input('checkbox'), read, (value) => ({ [key]: value }), { event: 'change' });
@@ -231,7 +240,7 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
       return addButton;
     });
 
-  /* Total des copies, et son plafond. */
+  /* Total des copies, et son plafond. Suspendu : d'où vient le total, pour savoir quel étage réduire. */
   const showTotal = (stack, layer) => {
     const own = copyCount(stack);
     const total = copyTotal(layer);
@@ -239,7 +248,7 @@ export const modifierSection = ({ store, ownerOf, forElement = false }) => {
     copyTotalNode.hidden = stack.length === 0;
     copyTotalNode.dataset.tone = over ? 'error' : 'info';
     copyTotalNode.textContent = over
-      ? `${total.toLocaleString('fr-FR')} copies — rendu suspendu au-delà de ${MAX_COPIES.toLocaleString('fr-FR')}`
+      ? `${suspendedBreakdown(layer, total)} — rendu suspendu au-delà de ${MAX_COPIES.toLocaleString('fr-FR')}`
       : plural(own);
     fold.summarize(stack.length ? `${countLabel(stack.length, 'étage')} · ${plural(own)}` : countLabel(0, 'étage'));
   };

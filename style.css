@@ -311,6 +311,9 @@ input[type="range"] {
   color: inherit;
   font-weight: 600;
 }
+/* Calque suspendu : alerte toujours visible, hors des actions au survol. */
+.suspended-mark { display: inline-flex; flex-shrink: 0; color: var(--danger); }
+[data-selected="layer"] > .layer-row .suspended-mark { color: var(--ink); }
 /* Renommage en place (`inlineRename`) : le champ prend la place du nom. */
 input.layer-name-input {
   flex-grow: 1;

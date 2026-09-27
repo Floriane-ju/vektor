@@ -1156,6 +1156,22 @@ describe('accessibilité au clavier', () => {
     expect(total.textContent).toMatch(/suspendu/);
   });
 
+  it('décompose le total suspendu et le signale dans l’arbre', async () => {
+    const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
+    const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
+    const { createElement, createLayer } = await import('../src/scene.js');
+    const shape = createElement('rect', 0, 0, { modifiers: [{ type: 'step', n: 60 }] });
+    const layer = createLayer({ modifiers: [{ type: 'step', n: 200 }], elements: [shape] });
+    const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: null });
+    const panel = document.createElement('div');
+    panel.append(mountPropertyPanel({ store }).layerDetail);
+    const tree = document.createElement('div');
+    mountLayerPanel({ store, container: tree, status: { show: () => {} } });
+
+    expect(panel.querySelector('.copy-count').textContent).toMatch(/^200 copies du calque × 60 des formes = 12\s000 — rendu suspendu/);
+    expect(tree.querySelector('.suspended-mark').title).toMatch(/^Rendu suspendu : 12\s000 copies$/);
+  });
+
   it('la forme s’ajoute et se positionne sans souris', async () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const { mountShapeList } = await import('../src/ui/shape-list.js');

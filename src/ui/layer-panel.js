@@ -11,6 +11,8 @@ import {
   setActiveElement,
   setActiveLayer,
   activePlane,
+  copyTotal,
+  isSuspended,
   togglePlane,
   toggleVisibility,
 } from '../scene.js';
@@ -43,6 +45,18 @@ const planeButton = (store, layer) => {
   });
   button.append(icon(on ? 'cube' : 'cubeOff', ICON_SIZE.sm));
   return button;
+};
+
+/* Trop de copies : le calque n'est plus dessiné, l'arbre le dit. */
+const suspendedMark = (layer) => {
+  const mark = icon('warning', ICON_SIZE.sm);
+  mark.classList.add('suspended-mark');
+  mark.removeAttribute('aria-hidden');
+  mark.setAttribute('role', 'img');
+  const text = `Rendu suspendu : ${copyTotal(layer).toLocaleString('fr-FR')} copies`;
+  mark.title = text;
+  mark.setAttribute('aria-label', text);
+  return mark;
 };
 
 /* Visibles au survol, au focus et sur la ligne active (voir `style.css`). */
@@ -145,7 +159,9 @@ const layerRow = (ctx, scene, layer) => {
 
   const name = layerName(store, layer, isActive);
   rowKeys(name, { move: (delta) => store.apply(moveLayer, layer.id, delta), remove: () => ctx.remove(layer) });
-  row.append(dragHandle(), layerChevron(ctx, layer, isActive, isOpen), name, layerActions(ctx, layer));
+  row.append(dragHandle(), layerChevron(ctx, layer, isActive, isOpen), name);
+  if (isSuspended(layer)) row.append(suspendedMark(layer));
+  row.append(layerActions(ctx, layer));
   sortLayer(store, row, layer);
   return card;
 };
@@ -157,7 +173,7 @@ const signature = (scene, collapsedId) =>
     scene.activeLayerId,
     scene.activeElementId !== null,
     collapsedId,
-    scene.layers.map((layer) => [layer.id, layer.name, layer.visible, activePlane(layer) !== null]),
+    scene.layers.map((layer) => [layer.id, layer.name, layer.visible, activePlane(layer) !== null, isSuspended(layer) && copyTotal(layer)]),
   ]);
 
 /**
