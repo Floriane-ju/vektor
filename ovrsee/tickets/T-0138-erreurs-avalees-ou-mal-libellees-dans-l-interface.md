@@ -2,7 +2,7 @@
 {
   "id": "T-0138",
   "titre": "Erreurs avalées ou mal libellées dans l'interface",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "basse",
   "charge": "xs",
   "tags": [

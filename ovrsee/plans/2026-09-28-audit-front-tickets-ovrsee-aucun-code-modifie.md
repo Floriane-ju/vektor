@@ -56,6 +56,16 @@
         "style.css",
         "test/core.test.js"
       ]
+    },
+    {
+      "sha": "4804ac6",
+      "date": "2026-09-28",
+      "files": [
+        "src/ui/drawing-tabs.js",
+        "src/ui/export-menu.js",
+        "src/ui/list.js",
+        "test/drawing-tabs.test.js"
+      ]
     }
   ]
 }

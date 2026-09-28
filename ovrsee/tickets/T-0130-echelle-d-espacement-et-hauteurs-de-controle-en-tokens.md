@@ -2,7 +2,7 @@
 {
   "id": "T-0130",
   "titre": "Échelle d'espacement et hauteurs de contrôle en tokens",
-  "colonne": "backlog",
+  "colonne": "en-cours",
   "priorite": "moyenne",
   "charge": "m",
   "tags": [
@@ -12,7 +12,7 @@
   ],
   "cree": "2026-09-28",
   "maj": "2026-09-28",
-  "plan": null,
+  "plan": "2026-09-28-audit-front-tickets-ovrsee-aucun-code-modifie.md",
   "epic": "T-0127"
 }
 ---

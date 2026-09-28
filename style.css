@@ -30,9 +30,34 @@
   --text-lg: 20px;      /* titre de l'inspecteur, glyphe « + » */
   --text-xl: 28px;      /* marque */
   --font: 'General Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
-  /* Réserve autour du plan pour les panneaux flottants. */
-  --gutter-left: 336px;
-  --gutter-right: 360px;
+  /* Espacement : une échelle, rien entre ses crans. */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 32px;
+  /* Hauteurs de contrôle. */
+  --control-xs: 24px;   /* bouton d'icône, chevron */
+  --control-sm: 28px;   /* bouton texte, segment, champ de valeur */
+  --control-md: 32px;   /* ajout de forme, interrupteur */
+  --control: 36px;      /* champ, bouton pilule, entrée de menu */
+  --row-h: 40px;        /* ligne de l'arbre */
+  --tool: 44px;         /* outil de dessin */
+  /* Panneaux flottants : écart au bord de la fenêtre, largeurs. */
+  --float-inset: 24px;
+  --float-inset-bottom: 16px;
+  --panel-left-w: 288px;
+  --panel-right-w: 312px;
+  /* Sous la barre du haut : bord, pilule (contrôle + ses marges), bord. */
+  --menu-offset: 72px;
+  /* Réserve autour du plan pour les panneaux flottants (lue aussi par `ui/zoom.js`,
+     d'où les `@property` : la valeur calculée arrive en px, `calc()` résolu). */
+  --gutter-left: calc(var(--panel-left-w) + 2 * var(--float-inset));
+  --gutter-right: calc(var(--panel-right-w) + 2 * var(--float-inset));
   --gutter-top: 104px;
   --gutter-bottom: 88px;
   --ease-out: cubic-bezier(0.2, 0.9, 0.3, 1.2); /* léger dépassement */
@@ -41,6 +66,9 @@
   --dur: 220ms;
   color-scheme: dark;
 }
+
+@property --gutter-left { syntax: '<length>'; inherits: true; initial-value: 0px; }
+@property --gutter-right { syntax: '<length>'; inherits: true; initial-value: 0px; }
 
 * { box-sizing: border-box; }
 
@@ -78,8 +106,8 @@ button { cursor: pointer; }
 
 select,
 input:is([type="number"], [type="text"]) {
-  height: 36px;
-  padding: 0 12px;
+  height: var(--control);
+  padding: 0 var(--space-5);
   min-width: 0;
   width: 100%;
 }
@@ -157,13 +185,13 @@ input[type="range"] {
 .topbar {
   position: fixed;
   z-index: 1;
-  left: 32px;
-  top: 24px;
+  left: var(--space-9);
+  top: var(--float-inset);
   /* Ne passe pas sous la carte du trait et les actions, à droite. */
-  max-width: calc(100vw - 32px - var(--gutter-right));
+  max-width: calc(100vw - var(--space-9) - var(--gutter-right));
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: var(--space-8);
 }
 .topbar > .float { position: static; }
 
@@ -173,7 +201,7 @@ input[type="range"] {
   font: 600 var(--text-xl)/1 var(--font);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-4);
 }
 
 /* Logo en masque : il prend la couleur du texte, un seul fichier sert aussi de favicon. */
@@ -188,41 +216,41 @@ input[type="range"] {
 .pill {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px;
+  gap: var(--space-2);
+  padding: var(--space-3);
   border-radius: var(--pill);
 }
 
 /* Carte du trait puis actions, alignées à droite : la carte suit la largeur de la barre. */
-.top-right { position: fixed; z-index: 1; right: 24px; top: 24px; display: flex; gap: 8px; }
+.top-right { position: fixed; z-index: 1; right: var(--float-inset); top: var(--float-inset); display: flex; gap: var(--space-4); }
 .top-right > .float { position: static; }
 .tools {
   left: calc((var(--gutter-left) + 100vw - var(--gutter-right)) / 2);
-  bottom: 16px;
+  bottom: var(--float-inset-bottom);
   transform: translateX(-50%);
 }
-.view-controls { left: 24px; bottom: 16px; padding: 4px; }
+.view-controls { left: var(--float-inset); bottom: var(--float-inset-bottom); padding: var(--space-2); }
 
 .pill-sep {
   width: 1px;
   height: 20px;
-  margin: 0 4px;
+  margin: 0 var(--space-2);
   background: var(--line);
 }
 
 .pill-btn {
-  height: 36px;
-  padding: 0 16px;
+  height: var(--control);
+  padding: 0 var(--space-6);
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   border-radius: var(--pill);
   background: transparent;
   white-space: nowrap;
 }
 .pill-btn:hover:not(:disabled) { background: var(--bg-field); }
-.pill-btn.is-square { width: 36px; padding: 0; justify-content: center; }
-.pill-btn.is-primary { background: var(--text); color: var(--ink); padding-right: 14px; }
+.pill-btn.is-square { width: var(--control); padding: 0; justify-content: center; }
+.pill-btn.is-primary { background: var(--text); color: var(--ink); padding-right: var(--space-5); }
 .pill-btn.is-primary:hover { background: var(--white); }
 
 /* ---- Onglets de dessins ---- */
@@ -237,15 +265,15 @@ input[type="range"] {
 .drawing-tab:hover { color: var(--text); }
 .drawing-tab[data-active="true"] { background: var(--bg-field); color: var(--text); }
 .drawing-tab-name {
-  height: 36px;
-  padding: 0 16px;
+  height: var(--control);
+  padding: 0 var(--space-6);
   background: none;
   color: inherit;
   white-space: nowrap;
 }
-.drawing-tab:has(.drawing-tab-close) .drawing-tab-name { padding-right: 4px; }
-.drawing-tab .layer-name-input { width: 12ch; margin: 0 8px; }
-.drawing-tab-close { margin-right: 8px; opacity: 0; }
+.drawing-tab:has(.drawing-tab-close) .drawing-tab-name { padding-right: var(--space-2); }
+.drawing-tab .layer-name-input { width: 12ch; margin: 0 var(--space-4); }
+.drawing-tab-close { margin-right: var(--space-4); opacity: 0; }
 .drawing-tab:hover .drawing-tab-close,
 .drawing-tab[data-active="true"] .drawing-tab-close,
 .drawing-tab-close:focus-visible { opacity: 0.75; }
@@ -254,12 +282,12 @@ input[type="range"] {
 .drawing-new:hover { color: var(--text); }
 
 /* Bascule : la case native, cachée, pilote l'aspect pressé de la pastille. */
-.pill-toggle { cursor: pointer; font: 500 var(--text-sm)/1 var(--font); padding: 0 14px; }
+.pill-toggle { cursor: pointer; font: 500 var(--text-sm)/1 var(--font); padding: 0 var(--space-6); }
 .pill-toggle input { position: absolute; opacity: 0; pointer-events: none; }
 .pill-toggle:has(input:checked) { background: var(--text); color: var(--ink); }
 .pill-toggle:has(input:focus-visible) { outline: 2px solid var(--select); outline-offset: 2px; }
 
-.zoom-controls { display: flex; align-items: center; gap: 4px; }
+.zoom-controls { display: flex; align-items: center; gap: var(--space-2); }
 .zoom-level { min-width: 44px; text-align: center; font: 500 var(--text-sm)/1 var(--font); font-variant-numeric: tabular-nums; }
 
 .icon { display: inline-flex; }
@@ -270,7 +298,7 @@ input[type="range"] {
    le navigateur qui fournit la navigation aux flèches et l'exclusivité. */
 .shape-picker {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   border: 0;
@@ -284,8 +312,8 @@ input[type="range"] {
 }
 .shape-picker input { position: absolute; opacity: 0; pointer-events: none; }
 .shape-picker label {
-  width: 44px;
-  height: 44px;
+  width: var(--tool);
+  height: var(--tool);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -305,14 +333,14 @@ input[type="range"] {
   border-radius: var(--radius-panel);
 }
 
-.panel-left { left: 24px; width: 288px; padding: 16px 12px; }
-.panel-left > h2 { margin: 0; padding: 0 8px 12px; font: 600 var(--text-md)/1 var(--font); }
+.panel-left { left: var(--float-inset); width: var(--panel-left-w); padding: var(--space-6) var(--space-5); }
+.panel-left > h2 { margin: 0; padding: 0 var(--space-4) var(--space-5); font: 600 var(--text-md)/1 var(--font); }
 /* Tant que l'arbre ne l'a pas logée sous un calque, la liste ne s'affiche pas. */
 .panel-left > .shape-list { display: none; }
 
-.panel-right { right: 24px; width: 312px; }
+.panel-right { right: var(--float-inset); width: var(--panel-right-w); }
 
-.empty-note { color: var(--text-dim); margin: 0 8px 10px; }
+.empty-note { color: var(--text-dim); margin: 0 var(--space-4) var(--space-5); }
 
 /* ---- Arbre des calques ---- */
 
@@ -322,15 +350,15 @@ input[type="range"] {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
 }
 
 .layer-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 8px;
+  gap: var(--space-4);
+  height: var(--row-h);
+  padding: 0 var(--space-4);
   border-radius: var(--radius);
 }
 .layer-row:hover { background: var(--bg-field); }
@@ -340,8 +368,8 @@ input[type="range"] {
 .layer-card[data-visible="false"] > .layer-row .layer-name { opacity: 0.5; }
 
 .chevron {
-  width: 24px;
-  height: 24px;
+  width: var(--control-xs);
+  height: var(--control-xs);
   flex-shrink: 0;
   padding: 0;
   display: flex;
@@ -360,7 +388,7 @@ input[type="range"] {
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
-  padding: 4px 0;
+  padding: var(--space-2) 0;
   background: none;
   color: inherit;
   font-weight: 600;
@@ -371,14 +399,14 @@ input[type="range"] {
 /* Renommage en place (`inlineRename`) : le champ prend la place du nom. */
 input.layer-name-input {
   flex-grow: 1;
-  height: 28px;
-  padding: 0 6px;
+  height: var(--control-sm);
+  padding: 0 var(--space-3);
   font-weight: 600;
 }
 
 /* Formes du calque déplié. */
-.shape-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px 32px; }
-.shape-list .layer-row { height: 36px; }
+.shape-list { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-1) 0 var(--space-2) var(--space-9); }
+.shape-list .layer-row { height: var(--control); }
 .shape-list .layer-name { font-weight: 400; }
 .shape-list .layer-card[data-active="true"] > .layer-row { background: var(--accent); color: var(--ink); }
 .shape-list .layer-card[data-active="true"] .layer-name { font-weight: 600; }
@@ -392,7 +420,7 @@ input.layer-name-input {
 .shape-list .layer-card:hover:not(:has(.layer-card:hover)) > .layer-row { box-shadow: inset 0 0 0 1.5px var(--accent); }
 /* Outil booléen rangé sous la forme qui l'emploie : un filet relie la
    branche à son parent, un coude à chaque outil. */
-.boolean-branch { position: relative; margin: 2px 0 0 16px; padding-left: 16px; }
+.boolean-branch { position: relative; margin: var(--space-1) 0 0 var(--space-6); padding-left: var(--space-6); }
 .boolean-branch::before {
   content: '';
   position: absolute;
@@ -421,9 +449,9 @@ input.layer-name-input {
 .layer-card[data-active="true"] > .layer-row .row-actions { opacity: 1; }
 
 .icon-btn {
-  min-width: 24px;
-  height: 24px;
-  padding: 0 4px;
+  min-width: var(--control-xs);
+  height: var(--control-xs);
+  padding: 0 var(--space-2);
   line-height: 1;
   background: none;
   color: inherit;
@@ -434,8 +462,8 @@ input.layer-name-input {
 .layer-card[data-active="true"] > .layer-row .icon-btn.is-danger { color: inherit; }
 
 .add-shape {
-  height: 32px;
-  padding: 0 8px;
+  height: var(--control-md);
+  padding: 0 var(--space-4);
   background: transparent;
   color: var(--text-dim);
   font: 400 var(--text-sm)/1 var(--font);
@@ -445,8 +473,8 @@ input.layer-name-input {
 
 .add-layer {
   width: 100%;
-  height: 40px;
-  margin-top: 8px;
+  height: var(--row-h);
+  margin-top: var(--space-4);
   border-radius: var(--pill);
 }
 .add-layer:hover { background: var(--bg-field-raised); }
@@ -456,38 +484,38 @@ input.layer-name-input {
 .inspector-body {
   margin: 0;
   min-width: 0;
-  padding: 20px;
+  padding: var(--space-7);
   border: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-6);
 }
 .inspector-body[hidden] { display: none; }
 
-.inspector-head { display: flex; flex-direction: column; gap: 8px; }
-.inspector-kind { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); color: var(--text-dim); }
+.inspector-head { display: flex; flex-direction: column; gap: var(--space-4); }
+.inspector-kind { display: flex; align-items: center; gap: var(--space-4); font-size: var(--text-sm); color: var(--text-dim); }
 .inspector-title { margin: 0; font: 600 var(--text-lg)/1.1 var(--font); overflow-wrap: anywhere; }
 
-.inspector-section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.inspector-section { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
 .inspector-section:not(:has(> :not([hidden]))) { display: none; }
-.inspector-section:has(> :not([hidden])) ~ .inspector-section:has(> :not([hidden])) { padding-top: 16px; border-top: 1px solid var(--line); }
+.inspector-section:has(> :not([hidden])) ~ .inspector-section:has(> :not([hidden])) { padding-top: var(--space-6); border-top: 1px solid var(--line); }
 
-.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.field { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
 .field[hidden], .field-row[hidden], .group[hidden] { display: none; }
 .field > label,
 .slider-head label,
 .segmented legend { font-size: var(--text-xs); line-height: 1; color: var(--text-dim); }
 
-.field-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.field-row { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-4); }
 /* Grille 2 colonnes ; le rayon (premier champ, seul de sa sorte) prend toute la ligne. */
 .field-row.is-grid { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .field-row.is-grid > :first-child { grid-column: 1 / -1; }
 
-.slider-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.slider-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
 .range-value {
   width: 64px !important;
-  height: 28px !important;
-  padding: 0 8px !important;
+  height: var(--control-sm) !important;
+  padding: 0 var(--space-4) !important;
   text-align: right;
   font: 600 var(--text-sm)/1 var(--font);
   font-variant-numeric: tabular-nums;
@@ -495,18 +523,18 @@ input.layer-name-input {
 }
 .range-value:hover, .range-value:focus { background: var(--bg-field); }
 
-.group { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.stack { display: flex; flex-direction: column; gap: 8px; }
+.group { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+.stack { display: flex; flex-direction: column; gap: var(--space-4); }
 /* Vide, il garderait le `gap` du groupe et décentrerait le titre entre ses séparateurs. */
 .group > .stack:empty { display: none; }
 
-.section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
 .section-head h3 { margin: 0; font: 600 var(--text-md)/1 var(--font); }
 /* Titre repliable : tout le titre est le bouton, chevron à gauche. */
 .section-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   padding: 0;
   background: transparent;
   color: inherit;
@@ -523,8 +551,8 @@ input.layer-name-input {
 .copy-count[data-tone="error"] { color: var(--danger); }
 
 .text-btn {
-  height: 28px;
-  padding: 0 8px;
+  height: var(--control-sm);
+  padding: 0 var(--space-4);
   border-radius: var(--pill);
   background: transparent;
   font-size: var(--text-sm);
@@ -538,8 +566,8 @@ input.layer-name-input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 32px;
+  gap: var(--space-5);
+  min-height: var(--control-md);
   cursor: pointer;
 }
 .switch-field[hidden] { display: none; }
@@ -570,11 +598,11 @@ input.layer-name-input {
 
 /* Segments : radios natifs dans une pastille. */
 .segmented { margin: 0; padding: 0; border: 0; min-width: 0; }
-.segmented legend { padding: 0; margin-bottom: 8px; }
-.segments { display: flex; gap: 4px; padding: 4px; border-radius: var(--pill); background: var(--bg-field); }
+.segmented legend { padding: 0; margin-bottom: var(--space-4); }
+.segments { display: flex; gap: var(--space-2); padding: var(--space-2); border-radius: var(--pill); background: var(--bg-field); }
 .segment {
   flex: 1 1 0;
-  height: 30px;
+  height: var(--control-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -588,11 +616,11 @@ input.layer-name-input {
 
 /* Couleur du calque. */
 .swatches,
-.swatch-list { display: flex; gap: 6px; flex-wrap: wrap; }
+.swatch-list { display: flex; gap: var(--space-3); flex-wrap: wrap; }
 .swatch {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: var(--control);
+  height: var(--control);
   padding: 0;
   display: flex;
   align-items: center;
@@ -629,7 +657,7 @@ input.layer-name-input {
   padding: 0;
   cursor: pointer;
 }
-.hex-row { display: flex; align-items: center; gap: 8px; }
+.hex-row { display: flex; align-items: center; gap: var(--space-4); }
 .hex-row label { font-size: var(--text-xs); color: var(--text-dim); }
 .hex { width: 104px !important; }
 
@@ -651,55 +679,55 @@ input.layer-name-input {
   box-shadow: none;
   font-size: var(--text-xs);
 }
-.stroke-width-field { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 4px; }
+.stroke-width-field { display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4) 0 var(--space-2); }
 .stroke-line { width: 14px; height: 0; border-top: 3px solid var(--text-dim); border-radius: var(--radius-line); }
-input.stroke-width { width: 100px; padding: 0 6px; text-align: right; }
+input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right; }
 .stroke-palette {
   position: fixed;
   inset: auto;
   margin: 0;
-  padding: 16px;
+  padding: var(--space-6);
   width: 16rem;
   color: var(--text);
   background: var(--bg-panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
 }
-.stroke-palette:popover-open { display: flex; flex-direction: column; gap: 12px; }
+.stroke-palette:popover-open { display: flex; flex-direction: column; gap: var(--space-5); }
 .stroke-palette h2 { margin: 0; font: 600 var(--text-md)/1 var(--font); }
 
 /* Pile de modificateurs. */
 .modifier-block,
 .interpolation-block {
-  padding: 12px;
+  padding: var(--space-5);
   border-radius: var(--radius);
   background: var(--bg-field);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-5);
 }
 .modifier-block :is(select, input:is([type="number"], [type="text"])),
 .interpolation-block :is(select, input:is([type="number"], [type="text"])) { background: var(--bg-field-raised); }
 .modifier-block .range-value { background: transparent; }
 
 .modifier-head,
-.interpolation-head { display: flex; align-items: center; gap: 6px; }
+.interpolation-head { display: flex; align-items: center; gap: var(--space-3); }
 .modifier-head select,
 .interpolation-head select { flex-grow: 1; }
 
 
 .unit-input { position: relative; display: flex; align-items: center; }
-.unit-input input { padding-right: 28px; }
-.unit-input span { position: absolute; right: 12px; color: var(--text-dim); pointer-events: none; }
+.unit-input input { padding-right: calc(var(--space-5) + var(--space-6)); }
+.unit-input span { position: absolute; right: var(--space-5); color: var(--text-dim); pointer-events: none; }
 
 /* ---- Statut ---- */
 
 .status {
-  right: 24px;
-  bottom: 16px;
-  max-width: calc(var(--gutter-right) - 48px);
+  right: var(--float-inset);
+  bottom: var(--float-inset-bottom);
+  max-width: calc(var(--gutter-right) - 2 * var(--float-inset));
   margin: 0;
-  padding: 10px 16px;
+  padding: var(--space-4) var(--space-6);
   border-radius: var(--radius-panel);
   color: var(--text-dim);
   font-size: var(--text-sm);
@@ -713,43 +741,43 @@ input.stroke-width { width: 100px; padding: 0 6px; text-align: right; }
 .settings {
   position: fixed;
   margin: 0;
-  padding: 8px;
+  padding: var(--space-4);
   color: var(--text);
   background: var(--bg-panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
 }
-.menu { inset: 72px 24px auto auto; min-width: 240px; }
+.menu { inset: var(--menu-offset) var(--float-inset) auto auto; min-width: 240px; }
 .menu:popover-open { display: flex; flex-direction: column; }
 .menu-item {
-  height: 36px;
-  padding: 0 12px;
+  height: var(--control);
+  padding: 0 var(--space-5);
   text-align: left;
   background: transparent;
   border-radius: var(--radius);
 }
 .menu-item:hover { background: var(--bg-field); }
 
-.settings { inset: auto auto 72px 24px; min-width: 16rem; padding: 16px 20px; }
-.settings h2 { margin: 0 0 12px; font: 600 var(--text-md)/1 var(--font); }
-.settings-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 8px; }
+.settings { inset: auto auto var(--menu-offset) var(--float-inset); min-width: 16rem; padding: var(--space-6) var(--space-7); }
+.settings h2 { margin: 0 0 var(--space-5); font: 600 var(--text-md)/1 var(--font); }
+.settings-field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); margin: 0 0 var(--space-4); }
 .settings-field[hidden] { display: none; }
 .settings-field :is(input[type="number"], select) { width: 7rem; }
 
 .shortcuts {
   max-width: 28rem;
-  padding: 20px 24px;
+  padding: var(--space-7) var(--space-8);
   color: var(--text);
   background: var(--bg-panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
 }
 .shortcuts::backdrop { background: var(--backdrop); }
-.shortcuts h2 { margin: 0 0 12px; font: 600 var(--text-md)/1 var(--font); }
-.shortcuts dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 16px; }
+.shortcuts h2 { margin: 0 0 var(--space-5); font: 600 var(--text-md)/1 var(--font); }
+.shortcuts dl { display: grid; grid-template-columns: auto 1fr; gap: var(--space-3) var(--space-6); margin: 0 0 var(--space-6); }
 .shortcuts dd { margin: 0; color: var(--text-dim); }
 .shortcuts kbd {
-  padding: 2px 6px;
+  padding: var(--space-1) var(--space-3);
   font: 500 var(--text-xs)/1.4 var(--font);
   background: var(--bg-field);
   border-radius: var(--radius-sm);
@@ -760,7 +788,7 @@ input.stroke-width { width: 100px; padding: 0 6px; text-align: right; }
    contour quand une forme entre dans un autre calque. */
 .layer-row[draggable="true"] { cursor: grab; }
 /* Poignée discrète, pleine au survol de la ligne. */
-.drag-handle { display: flex; flex: none; opacity: 0.35; margin-inline-end: -4px; }
+.drag-handle { display: flex; flex: none; opacity: 0.35; margin-inline-end: calc(-1 * var(--space-2)); }
 .layer-row:hover .drag-handle { opacity: 0.8; }
 .layer-row[data-drop="before"] { box-shadow: inset 0 2px 0 var(--accent); }
 .layer-row[data-drop="after"] { box-shadow: inset 0 -2px 0 var(--accent); }

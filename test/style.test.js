@@ -13,3 +13,13 @@ it('chaque animation citée a ses @keyframes', () => {
     .filter((name) => /^[a-z][\w-]*$/.test(name) && name !== 'none');
   expect(used.filter((name) => !defined.has(name))).toEqual([]);
 });
+
+/* Hors `:root`, espacements et hauteurs de contrôle passent par l'échelle. */
+const rules = css.slice(css.indexOf('}', css.indexOf(':root {')) + 1);
+
+it('espacements sans px bruts hors :root', () => {
+  const raw = [...rules.matchAll(/(?<![\w-])(?:gap|padding|margin)[\w-]*\s*:\s*([^;}]+)/g)]
+    .map((match) => match[0])
+    .filter((decl) => /(?<![\w.-])[1-9]\d*px/.test(decl));
+  expect(raw).toEqual([]);
+});
