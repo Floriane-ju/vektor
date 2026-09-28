@@ -119,7 +119,7 @@ const layerChevron = ({ store, toggle }, layer, isActive, isOpen) => {
 const layerName = (store, layer, isActive) => {
   const name = document.createElement('button');
   name.type = 'button';
-  name.className = 'layer-name';
+  name.className = 'tree-name';
   name.textContent = layer.name;
   name.dataset.focusKey = `name-${layer.id}`;
   name.setAttribute('aria-pressed', String(isActive));
@@ -177,7 +177,7 @@ const layerRow = (ctx, scene, layer) => {
   const isOpen = isActive && ctx.collapsedId() !== layer.id;
 
   const card = document.createElement('li');
-  card.className = 'layer-card';
+  card.className = 'tree-item';
   /* `layer` : le calque seul est sélectionné ; `parent` : une de ses formes. */
   card.dataset.active = String(isActive);
   if (isActive) card.dataset.selected = scene.activeElementId === null ? 'layer' : 'parent';
@@ -186,7 +186,7 @@ const layerRow = (ctx, scene, layer) => {
   card.dataset.locked = String(layer.locked === true);
   card.dataset.plane = String(activePlane(layer) !== null);
   const row = document.createElement('div');
-  row.className = 'layer-row';
+  row.className = 'tree-row';
   card.append(row);
   /* Le pli qui loge la liste des formes : il s'ouvre et se referme en hauteur
      (voir `style.css`, `.layer-fold`). */
@@ -278,7 +278,7 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
         mark(cards.map((card) => [card, card.dataset.layerId]), null, list);
         fade(cards.map((card) => [card, card.dataset.layerId, card.dataset.selected ?? 'none']));
         if (openId !== undefined && openId !== nextOpen) {
-          const opened = list.querySelector(':scope > .layer-card > .layer-fold');
+          const opened = list.querySelector(':scope > .tree-item > .layer-fold');
           if (opened) settle(opened, 'open');
           const left = closing && cards.find((card) => card.dataset.layerId === openId);
           if (left) {

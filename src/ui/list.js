@@ -235,7 +235,7 @@ export const inlineRename = (name, { label, rename }) => {
     const current = name.textContent;
     const field = document.createElement('input');
     field.type = 'text';
-    field.className = 'layer-name-input';
+    field.className = 'rename-input';
     field.value = current;
     field.maxLength = MAX_NAME_LENGTH;
     field.spellcheck = false;
@@ -304,7 +304,7 @@ export const rowKeys = (name, { move, remove }) =>
     if (event.key === 'Delete' || event.key === 'Backspace') remove();
     else if (arrow && event.altKey) move(event.key === 'ArrowUp' ? 1 : -1);
     else if (arrow) {
-      const names = [...(name.closest('[data-tree]') ?? document).querySelectorAll('.layer-name')];
+      const names = [...(name.closest('[data-tree]') ?? document).querySelectorAll('.tree-name')];
       names[names.indexOf(name) + (event.key === 'ArrowUp' ? -1 : 1)]?.focus();
     } else return;
     event.preventDefault();

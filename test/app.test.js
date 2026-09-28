@@ -31,7 +31,7 @@ it('démarre et rend après un placement', async () => {
   const stage = document.getElementById('stage');
 
   expect(stage.childNodes).toHaveLength(0);
-  expect(document.querySelectorAll('#layer-panel .layer-row')).toHaveLength(1);
+  expect(document.querySelectorAll('#layer-panel .tree-row')).toHaveLength(1);
   /* Sans forme sélectionnée, le panneau de droite ne montre que le calque. */
   const inspector = document.getElementById('inspector');
   const shown = () => [...inspector.children].filter((node) => !node.hidden).map((node) => node.dataset.kind);
@@ -64,7 +64,7 @@ it('démarre et rend après un placement', async () => {
   pointer('pointerup', 230, 200);
 
   expect(stage.querySelectorAll('ellipse[data-element-id]')).toHaveLength(2);
-  expect(document.querySelectorAll('#shape-list .layer-row')).toHaveLength(2);
+  expect(document.querySelectorAll('#shape-list .tree-row')).toHaveLength(2);
   /* La forme dessinée est sélectionnée : le panneau passe à ses réglages, et
      l'arbre loge la liste des formes sous le calque. */
   expect(shown()).toEqual(['shape']);
@@ -73,7 +73,7 @@ it('démarre et rend après un placement', async () => {
   expect(shown()).toEqual(['layer']);
   /* La liste se lit du premier plan vers le fond : la première ligne est la
      dernière forme dessinée. */
-  document.querySelector('#shape-list .layer-name').click();
+  document.querySelector('#shape-list .tree-name').click();
   expect(shown()).toEqual(['shape']);
 
   /* Deux modificateurs empilés sur le calque : leurs copies se multiplient. */
@@ -128,10 +128,10 @@ it('démarre et rend après un placement', async () => {
   field.remove();
 
   /* Maj+clic dans l'arbre : dupliquer et supprimer valent pour la sélection entière, en un pas. */
-  const names = () => [...document.querySelectorAll('#shape-list .layer-name')];
+  const names = () => [...document.querySelectorAll('#shape-list .tree-name')];
   names()[0].click();
   names()[1].dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
-  expect(document.querySelectorAll('#shape-list .layer-name[aria-pressed="true"]')).toHaveLength(2);
+  expect(document.querySelectorAll('#shape-list .tree-name[aria-pressed="true"]')).toHaveLength(2);
   press({ key: 'd', metaKey: true });
   expect(circles()).toBe(4 * 2);
   press({ key: 'Delete' });
@@ -142,7 +142,7 @@ it('démarre et rend après un placement', async () => {
   expect(circles()).toBe(2 * 2);
 
   /* Sans forme sélectionnée, Suppr vise le calque actif. */
-  const layerCount = () => document.querySelectorAll('.layer-card[data-layer-id]').length;
+  const layerCount = () => document.querySelectorAll('.tree-item[data-layer-id]').length;
   const before = layerCount();
   press({ key: 'Escape' });
   press({ key: 'Delete' });
@@ -152,10 +152,10 @@ it('démarre et rend après un placement', async () => {
 
   /* Clavier de l'arbre : ↑/↓ parcourent les lignes sans pousser la forme,
      Retour arrière supprime la ligne qui a le focus, pas la sélection. */
-  const rows = () => [...document.querySelectorAll('#layer-panel .layer-name')];
+  const rows = () => [...document.querySelectorAll('#layer-panel .tree-name')];
   const shapeIds = () => [...document.querySelectorAll('#shape-list [data-element-id]')].map((n) => n.dataset.elementId);
   const onRow = (row, key) => row.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
-  document.querySelector('#shape-list .layer-name').click();
+  document.querySelector('#shape-list .tree-name').click();
   const selected = () => stage.querySelector('[data-element-id]').getAttribute('cx');
   const [kept, target] = shapeIds();
   const position = selected();
@@ -226,7 +226,7 @@ it('démarre et rend après un placement', async () => {
   expect(strokes()).toEqual(['#7dd3c0', '#ee4722', '#ee4722']);
   /* Plusieurs formes de couleurs différentes : la carte dit « multi », un clic les accorde. */
   const rectIds = [...new Set([...stage.querySelectorAll('rect[data-element-id]')].map((node) => node.dataset.elementId))];
-  const shapeName = (id) => document.querySelector(`#shape-list [data-element-id="${id}"] .layer-name`);
+  const shapeName = (id) => document.querySelector(`#shape-list [data-element-id="${id}"] .tree-name`);
   shapeName(rectIds[0]).click();
   shapeName(rectIds[1]).dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
   expect(card.querySelector('.stroke-current').hasAttribute('data-mixed')).toBe(true);
@@ -282,9 +282,9 @@ it('démarre et rend après un placement', async () => {
 
   /* Micro-animations : seule la ligne ajoutée entre ; la case les coupe, et
      le choix se garde (RGAA 13.8). */
-  const cardCount = document.querySelectorAll('#layer-panel .layer-card[data-layer-id]').length;
+  const cardCount = document.querySelectorAll('#layer-panel .tree-item[data-layer-id]').length;
   document.querySelector('.add-layer').click();
-  const cards = [...document.querySelectorAll('#layer-panel .layer-card[data-layer-id]')];
+  const cards = [...document.querySelectorAll('#layer-panel .tree-item[data-layer-id]')];
   expect(cards).toHaveLength(cardCount + 1);
   expect(cards.filter((node) => node.hasAttribute('data-enter'))).toHaveLength(1);
   const motion = document.getElementById('settings-motion');

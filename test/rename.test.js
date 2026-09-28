@@ -1,15 +1,15 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it } from 'vitest';
-import { addElement, createScene, moveElement, SHAPES } from '../src/scene.js';
+import { addElement, createScene, moveElement, selectElements, SHAPES } from '../src/scene.js';
 import { createStore } from '../src/store.js';
 import { mountLayerPanel } from '../src/ui/layer-panel.js';
 import { mountShapeList } from '../src/ui/shape-list.js';
 
 let store;
 const status = { show: () => {} };
-const names = (selector) => [...document.querySelectorAll(`${selector} .layer-name`)].map((node) => node.textContent);
+const names = (selector) => [...document.querySelectorAll(`${selector} .tree-name`)].map((node) => node.textContent);
 const key = (node, name) => node.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
-const editing = () => document.querySelector('.layer-name-input');
+const editing = () => document.querySelector('.rename-input');
 const type = (text, finish) => {
   const field = editing();
   field.value = text;
@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 
 it('F2 renomme un calque en place, Entrée valide, Échap annule', () => {
-  const name = () => document.querySelector('#layers > ul > li > .layer-row .layer-name');
+  const name = () => document.querySelector('#layers > ul > li > .tree-row .tree-name');
   key(name(), 'F2');
   expect(editing().value).toBe('Calque 1');
   type('Fond', 'Escape');
@@ -47,7 +47,7 @@ it('F2 renomme un calque en place, Entrée valide, Échap annule', () => {
 
 it('une forme nommée garde son nom quand on la réordonne', () => {
   expect(names('#shapes')).toEqual([`${SHAPES.rect.label} 2`, `${SHAPES.ellipse.label} 1`]);
-  const ellipseName = document.querySelectorAll('#shapes .layer-name')[1];
+  const ellipseName = document.querySelectorAll('#shapes .tree-name')[1];
   key(ellipseName, 'F2');
   type('Soleil', 'Enter');
   expect(names('#shapes')).toEqual([`${SHAPES.rect.label} 2`, 'Soleil']);
@@ -57,7 +57,18 @@ it('une forme nommée garde son nom quand on la réordonne', () => {
   expect(names('#shapes')).toEqual(['Soleil', `${SHAPES.rect.label} 1`]);
 
   /* Vider le champ rend le libellé par défaut. */
-  key(document.querySelector('#shapes .layer-name'), 'F2');
+  key(document.querySelector('#shapes .tree-name'), 'F2');
   type('', 'Enter');
   expect(names('#shapes')).toEqual([`${SHAPES.ellipse.label} 2`, `${SHAPES.rect.label} 1`]);
+});
+
+it('les autres formes de la sélection portent `data-in-selection`, la forme active non', () => {
+  const [first, second] = store.get().layers[0].elements;
+  store.apply(selectElements, [first.id, second.id]);
+  const card = (id) => document.querySelector(`#shapes [data-element-id="${id}"]`)?.closest('.tree-item');
+  const active = store.get().activeElementId;
+  const other = active === first.id ? second.id : first.id;
+  expect(card(other).hasAttribute('data-in-selection')).toBe(true);
+  expect(card(active).hasAttribute('data-in-selection')).toBe(false);
+  expect(document.querySelector('#layers [data-selected]').dataset.selected).toBe('parent');
 });

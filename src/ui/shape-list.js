@@ -92,11 +92,11 @@ const hoverCard = (ctx, card, element) => {
 const shapeLine = ({ store, remove }, layer, element, isSelected) => {
   /* Même ligne que l'arbre des calques. */
   const row = document.createElement('div');
-  row.className = 'layer-row is-shape';
+  row.className = 'tree-row is-shape';
 
   const name = document.createElement('button');
   name.type = 'button';
-  name.className = 'layer-name';
+  name.className = 'tree-name';
   name.textContent = shapeName(layer, element, SHAPES);
   name.dataset.focusKey = `name-${element.id}`;
   name.setAttribute('aria-pressed', String(isSelected));
@@ -155,10 +155,10 @@ const shapeRow = (ctx, tree, element) => {
   const { layer, activeElementId, selected, displayed, parents } = tree;
   const isActive = element.id === activeElementId;
   const card = document.createElement('li');
-  card.className = 'layer-card';
+  card.className = 'tree-item';
   card.dataset.active = String(isActive);
   /* Membre de la sélection sans être la forme active que montre le panneau. */
-  if (!isActive && selected.includes(element.id)) card.dataset.selected = 'true';
+  if (!isActive && selected.includes(element.id)) card.dataset.inSelection = '';
   card.dataset.elementId = element.id;
   card.dataset.visible = String(!element.hidden);
   hoverCard(ctx, card, element);
@@ -218,7 +218,7 @@ const addShapeButton = ({ store, getTool, status }, layer) => {
    la forme modifiée si un calque très chargé rame. */
 const refreshGlyphs = (container, scene) => {
   for (const element of getActiveLayer(scene)?.elements ?? []) {
-    const glyph = container.querySelector(`[data-element-id="${element.id}"] > .layer-row > .shape-glyph`);
+    const glyph = container.querySelector(`[data-element-id="${element.id}"] > .tree-row > .shape-glyph`);
     if (!glyph) continue;
     glyph.style.setProperty('--shape-color', element.stroke);
     const preview = shapePreview(element, GLYPH_SIZE);
@@ -297,9 +297,9 @@ export const mountShapeList = ({
         ...displayed.filter((element) => !parents.has(element.id)).map((element) => shapeRow(ctx, tree, element)),
       );
       container.append(list, add);
-      const cards = [...list.querySelectorAll('.layer-card')];
+      const cards = [...list.querySelectorAll('.tree-item')];
       mark(cards.map((card) => [card, card.dataset.elementId]), layer.id, list);
-      const state = (card) => (card.dataset.active === 'true' ? 'active' : card.dataset.selected === 'true' ? 'selected' : 'none');
+      const state = (card) => (card.dataset.active === 'true' ? 'active' : 'inSelection' in card.dataset ? 'selected' : 'none');
       fade(cards.map((card) => [card, card.dataset.elementId, state(card)]));
       return add;
     }),

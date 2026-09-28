@@ -2,7 +2,7 @@
 {
   "id": "T-0132",
   "titre": "Règles CSS dupliquées et !important évitables",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "s",
   "tags": [

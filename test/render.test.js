@@ -995,7 +995,7 @@ describe('glisser-déposer dans l’arbre', () => {
     from.dispatchEvent(new MouseEvent('dragend', { bubbles: true }));
     return where;
   };
-  const rowOf = (panel, id) => panel.querySelector(`[data-focus-key="name-${id}"]`).closest('.layer-row');
+  const rowOf = (panel, id) => panel.querySelector(`[data-focus-key="name-${id}"]`).closest('.tree-row');
 
   const mount = async (scene) => {
     const { mountLayerPanel } = await import('../src/ui/layer-panel.js');
@@ -2286,7 +2286,7 @@ describe('arbre : bouton 3D', () => {
     expect(buttons()[1].getAttribute('aria-label')).toMatch(/^Masquer/);
     buttons()[0].click();
     expect(store.get().layers[0].plane.enabled).toBe(true);
-    expect(panel.querySelector('.layer-card').dataset.plane).toBe('true');
+    expect(panel.querySelector('.tree-item').dataset.plane).toBe('true');
     buttons()[0].click();
     expect(store.get().layers[0].plane.enabled).toBe(false);
     panel.remove();

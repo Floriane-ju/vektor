@@ -300,7 +300,7 @@ input[type="range"] {
   white-space: nowrap;
 }
 .drawing-tab:has(.drawing-tab-close) .drawing-tab-name { padding-right: var(--space-2); }
-.drawing-tab .layer-name-input { width: 12ch; margin: 0 var(--space-4); }
+.drawing-tab .rename-input { width: 12ch; margin: 0 var(--space-4); }
 .drawing-tab-close { margin-right: var(--space-4); opacity: 0; }
 .drawing-tab:hover .drawing-tab-close,
 .drawing-tab[data-active="true"] .drawing-tab-close,
@@ -389,7 +389,7 @@ input[type="range"] {
   gap: var(--space-1);
 }
 
-.layer-row {
+.tree-row {
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -397,12 +397,12 @@ input[type="range"] {
   padding: 0 var(--space-4);
   border-radius: var(--radius);
 }
-.layer-row:hover { background: var(--bg-field); }
+.tree-row:hover { background: var(--bg-field); }
 
-.layer-card[data-selected="layer"] > .layer-row,
-.shape-list .layer-card[data-active="true"] > .layer-row { background: var(--accent); color: var(--ink); }
-.layer-card[data-selected="parent"] > .layer-row { box-shadow: inset 0 0 0 var(--hairline) var(--line); }
-.layer-card[data-visible="false"] > .layer-row .layer-name { opacity: 0.5; }
+.tree-item[data-selected="layer"] > .tree-row,
+.shape-list .tree-item[data-active="true"] > .tree-row { background: var(--accent); color: var(--ink); }
+.tree-item[data-selected="parent"] > .tree-row { box-shadow: inset 0 0 0 var(--hairline) var(--line); }
+.tree-item[data-visible="false"] > .tree-row .tree-name { opacity: 0.5; }
 
 .chevron {
   width: var(--control-xs);
@@ -415,10 +415,10 @@ input[type="range"] {
   background: transparent;
   color: var(--text-dim);
 }
-[data-selected="layer"] > .layer-row .chevron { color: var(--ink); }
+[data-selected="layer"] > .tree-row .chevron { color: var(--ink); }
 
 
-.layer-name {
+.tree-name {
   flex-grow: 1;
   min-width: 0;
   overflow: hidden;
@@ -432,9 +432,9 @@ input[type="range"] {
 }
 /* Calque suspendu : alerte toujours visible, hors des actions au survol. */
 .suspended-mark { display: inline-flex; flex-shrink: 0; color: var(--danger); }
-[data-selected="layer"] > .layer-row .suspended-mark { color: var(--ink); }
+[data-selected="layer"] > .tree-row .suspended-mark { color: var(--ink); }
 /* Renommage en place (`inlineRename`) : le champ prend la place du nom. */
-input.layer-name-input {
+input.rename-input {
   flex-grow: 1;
   height: var(--control-sm);
   padding: 0 var(--space-3);
@@ -443,17 +443,17 @@ input.layer-name-input {
 
 /* Formes du calque déplié. */
 .shape-list { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-1) 0 var(--space-2) var(--space-9); }
-.shape-list .layer-row { height: var(--control); }
-.shape-list .layer-name { font-weight: var(--weight-regular); }
-.shape-list .layer-card[data-active="true"] .layer-name { font-weight: var(--weight-bold); }
+.shape-list .tree-row { height: var(--control); }
+.shape-list .tree-name { font-weight: var(--weight-regular); }
+.shape-list .tree-item[data-active="true"] .tree-name { font-weight: var(--weight-bold); }
 /* Les autres formes de la sélection : l’accent atténué. */
-.shape-list .layer-card[data-selected="true"] > .layer-row { background: var(--accent-tint); }
+.shape-list .tree-item[data-in-selection] > .tree-row { background: var(--accent-tint); }
 /* L'aperçu porte la couleur de la forme ; en blanc sur l'accent de la ligne
    sélectionnée. */
 .shape-glyph { color: var(--shape-color, currentColor); }
-.shape-list .layer-card[data-active="true"] > .layer-row > .shape-glyph { color: var(--white); }
+.shape-list .tree-item[data-active="true"] > .tree-row > .shape-glyph { color: var(--white); }
 /* Survoler une forme de la liste l'encadre sur le dessin (voir `shape-list.js`). */
-.shape-list .layer-card:hover:not(:has(.layer-card:hover)) > .layer-row { box-shadow: inset 0 0 0 var(--hairline) var(--accent); }
+.shape-list .tree-item:hover:not(:has(.tree-item:hover)) > .tree-row { box-shadow: inset 0 0 0 var(--hairline) var(--accent); }
 /* Outil booléen rangé sous la forme qui l'emploie : un filet relie la
    branche à son parent, un coude à chaque outil. */
 .boolean-branch { position: relative; margin: var(--space-1) 0 0 var(--space-6); padding-left: var(--space-6); }
@@ -465,8 +465,8 @@ input.layer-name-input {
   bottom: 18px;
   border-left: var(--hairline) solid var(--line);
 }
-.boolean-branch > .layer-card { position: relative; }
-.boolean-branch > .layer-card::before {
+.boolean-branch > .tree-item { position: relative; }
+.boolean-branch > .tree-item::before {
   content: '';
   position: absolute;
   left: -16px;
@@ -474,15 +474,15 @@ input.layer-name-input {
   width: 12px;
   border-top: var(--hairline) solid var(--line);
 }
-.layer-card[data-template="true"] > .layer-row .layer-name { font-style: italic; opacity: var(--opacity-muted); }
+.tree-item[data-template="true"] > .tree-row .tree-name { font-style: italic; opacity: var(--opacity-muted); }
 
 /* Actions de ligne : au survol, au focus et sur la ligne active, jamais
    ailleurs — même un calque masqué, en 3D ou verrouillé (le nom estompé
    dit déjà qu'il est masqué ; le survol rend l'œil). */
 .row-actions { display: flex; gap: 0; opacity: 0; }
-.layer-row:hover .row-actions,
-.layer-row:focus-within .row-actions,
-.layer-card[data-active="true"] > .layer-row .row-actions { opacity: 1; }
+.tree-row:hover .row-actions,
+.tree-row:focus-within .row-actions,
+.tree-item[data-active="true"] > .tree-row .row-actions { opacity: 1; }
 
 .icon-btn {
   min-width: var(--control-xs);
@@ -495,7 +495,7 @@ input.layer-name-input {
 }
 .icon-btn:hover:not(:disabled) { opacity: 1; }
 .icon-btn.is-danger { color: var(--danger); }
-.layer-card[data-active="true"] > .layer-row .icon-btn.is-danger { color: inherit; }
+.tree-item[data-active="true"] > .tree-row .icon-btn.is-danger { color: inherit; }
 
 .add-shape {
   height: var(--control-md);
@@ -645,8 +645,10 @@ input.range-value {
 .segment input { width: 1px; height: 1px; }
 
 /* Couleur du calque. */
-.swatches,
-.swatch-list { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.swatches { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+/* Pastilles refaites à chaque rendu (`rebuildWithFocus`) : la liste ne sert
+   que de conteneur, elles se rangent dans la rangée avec la pastille libre. */
+.swatch-list { display: contents; }
 .swatch {
   position: relative;
   width: var(--control);
@@ -810,13 +812,13 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 
 /* Glisser-déposer dans l'arbre : trait d'insertion avant/après la ligne visée,
    contour quand une forme entre dans un autre calque. */
-.layer-row[draggable="true"] { cursor: grab; }
+.tree-row[draggable="true"] { cursor: grab; }
 /* Poignée discrète, pleine au survol de la ligne. */
 .drag-handle { display: flex; flex: none; opacity: 0.35; margin-inline-end: calc(-1 * var(--space-2)); }
-.layer-row:hover .drag-handle { opacity: var(--opacity-dim); }
-.layer-row[data-drop="before"] { box-shadow: inset 0 2px 0 var(--accent); }
-.layer-row[data-drop="after"] { box-shadow: inset 0 -2px 0 var(--accent); }
-.layer-row[data-drop="into"] { box-shadow: inset 0 0 0 var(--hairline) var(--accent); }
+.tree-row:hover .drag-handle { opacity: var(--opacity-dim); }
+.tree-row[data-drop="before"] { box-shadow: inset 0 2px 0 var(--accent); }
+.tree-row[data-drop="after"] { box-shadow: inset 0 -2px 0 var(--accent); }
+.tree-row[data-drop="into"] { box-shadow: inset 0 0 0 var(--hairline) var(--accent); }
 
 /* ---- Micro-animations ----
    Courtes (≤ 300 ms), jamais en boucle. RGAA 13.8 : la case « Animations »
@@ -849,7 +851,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 /* La ligne s'ouvre jusqu'à sa hauteur fixe, sans dépassement (une hauteur
    qui déborde puis revient se voit comme un sursaut) ; le rebond reste au
    glissé. La liste des formes logée dessous s'ouvre par son pli. */
-.layer-card[data-enter] > .layer-row {
+.tree-item[data-enter] > .tree-row {
   overflow: hidden;
   transform-origin: left center;
   animation:
@@ -880,10 +882,10 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 @keyframes was-outline { from { box-shadow: inset 0 0 0 var(--hairline) var(--line); } }
 @keyframes was-tint { from { background-color: var(--accent-tint); } }
 @keyframes was-plain { from { background-color: transparent; color: var(--text); box-shadow: none; } }
-.layer-card[data-was] > .layer-row { animation: was-plain var(--dur) var(--ease) backwards; }
-.layer-card:is([data-was="layer"], [data-was="active"]) > .layer-row { animation-name: was-accent; }
-.layer-card[data-was="parent"] > .layer-row { animation-name: was-outline; }
-.layer-card[data-was="selected"] > .layer-row { animation-name: was-tint; }
+.tree-item[data-was] > .tree-row { animation: was-plain var(--dur) var(--ease) backwards; }
+.tree-item:is([data-was="layer"], [data-was="active"]) > .tree-row { animation-name: was-accent; }
+.tree-item[data-was="parent"] > .tree-row { animation-name: was-outline; }
+.tree-item[data-was="selected"] > .tree-row { animation-name: was-tint; }
 
 /* Onglet ajouté : il s'ouvre en largeur depuis 0 et pousse « Nouveau » vers
    la droite, son nom glissant dedans. `--enter-w` = sa largeur mesurée
@@ -933,7 +935,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
   to { width: 0; opacity: 0; }
 }
 [data-leave] { overflow: hidden; pointer-events: none; }
-.layer-card[data-leave] { animation: row-out var(--dur) var(--ease) forwards; transform-origin: left center; }
+.tree-item[data-leave] { animation: row-out var(--dur) var(--ease) forwards; transform-origin: left center; }
 .stack > [data-leave] { animation: block-out var(--dur) var(--ease) forwards; transform-origin: top center; }
 .drawing-tab[data-leave] { animation: tab-out var(--dur) var(--ease) forwards; }
 
