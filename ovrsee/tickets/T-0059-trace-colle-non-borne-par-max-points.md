@@ -2,7 +2,7 @@
 {
   "id": "T-0059",
   "titre": "Tracé collé non borné par MAX_POINTS",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "xs",
   "tags": [

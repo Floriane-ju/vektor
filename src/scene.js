@@ -166,7 +166,7 @@ export const SHAPES = {
 export const DEFAULT_SHAPE = 'ellipse';
 
 /* Au-delà, un polygone ne se distingue plus d'un cercle. */
-export const MAX_SIDES = 64;
+const MAX_SIDES = 64;
 
 export const clampSides = (value) =>
   Math.min(MAX_SIDES, Math.max(3, Math.round(Number.isFinite(value) ? value : 6)));
@@ -194,7 +194,7 @@ export const clampTilt = (value) =>
   Math.min(MAX_TILT, Math.max(0, Number.isFinite(value) ? value : DEFAULT_PLANE.tilt));
 export const clampHeading = (value) => (((Number.isFinite(value) ? value : 0) % 360) + 360) % 360;
 export const clampPlaneSides = (value) => (Object.hasOwn(PLANE_SIDES, value) ? value : DEFAULT_PLANE.sides);
-export const MAX_HEIGHT = 1000;
+const MAX_HEIGHT = 1000;
 /* Centrée, une profondeur négative dessinerait la même chose : sa valeur absolue. */
 export const clampHeight = (value) => Math.min(MAX_HEIGHT, Math.abs(Number.isFinite(value) ? value : 0));
 
@@ -223,7 +223,6 @@ export const centerPoints = (absolute) => {
   return { x, y, points: absolute.map((p) => ({ x: p.x - x, y: p.y - y })) };
 };
 
-/** Tourne un vecteur de `degrees` : le repère d'une forme vers celui de l'écran. */
 /**
  * Patch d'une mise à l'échelle dans le repère de la forme (poignées du cadre),
  * autour de son centre. Forme uniforme : un seul facteur, celui qui a bougé ;
@@ -240,6 +239,7 @@ export const scaledPatch = (element, fx, fy) => {
   return { rx: element.rx * fx, ry: element.ry * fy };
 };
 
+/** Tourne un vecteur de `degrees` : le repère d'une forme vers celui de l'écran. */
 export const rotateVector = ({ x, y }, degrees) => {
   const angle = (degrees * Math.PI) / 180;
   const cos = Math.cos(angle);
@@ -275,7 +275,7 @@ export const DEFAULT_STROKE = '#7dd3c0';
  * on épaissit le trait. Tableau vide = trait plein.
  */
 export const LINECAPS = { butt: 'Net', round: 'Rond', square: 'Carré' };
-export const DEFAULT_LINECAP = 'butt';
+const DEFAULT_LINECAP = 'butt';
 /* Un point est un tiret de longueur nulle : sans bout rond, il ne se voit pas. */
 export const DASH_PRESETS = {
   solid: { label: 'Plein', dash: [] },
@@ -296,12 +296,9 @@ export const clampDash = (values) => {
   return dash.some((value) => value > 0) ? dash : [];
 };
 
-/** Saisie libre : nombres séparés par des espaces ou des virgules. */
-export const parseDash = (text) => clampDash(String(text).split(/[\s,]+/).filter(Boolean));
-
 /** Opérations booléennes entre une forme et ses outils, comme un pathfinder. */
 export const BOOLEAN_OPS = { union: 'Fusion', subtract: 'Découpe', intersect: 'Intersection' };
-export const DEFAULT_BOOLEAN_OP = 'intersect';
+const DEFAULT_BOOLEAN_OP = 'intersect';
 export const clampBooleanOp = (value) => (Object.hasOwn(BOOLEAN_OPS, value) ? value : DEFAULT_BOOLEAN_OP);
 
 export const clampLinecap = (value) => (Object.hasOwn(LINECAPS, value) ? value : DEFAULT_LINECAP);

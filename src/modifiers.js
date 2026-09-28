@@ -66,7 +66,7 @@ export const clampAxis = (degrees) => ((degrees % 180) + 180) % 180;
  * Croissance d'une spirale, en % par copie. Sous -100 % le facteur changerait
  * de signe ; au-dessus, `(1 + r)^i` déborde en Infinity bien avant `MAX_COPIES`.
  */
-export const GROWTH_BOUNDS = { min: -50, max: 100 };
+const GROWTH_BOUNDS = { min: -50, max: 100 };
 export const clampGrowth = (percent) =>
   Math.min(GROWTH_BOUNDS.max, Math.max(GROWTH_BOUNDS.min, Number.isFinite(percent) ? percent : 0));
 

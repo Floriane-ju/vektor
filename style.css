@@ -475,7 +475,6 @@ input.layer-name-input {
 .field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .field[hidden], .field-row[hidden], .group[hidden] { display: none; }
 .field > label,
-.field-label,
 .slider-head label,
 .segmented legend { font-size: var(--text-xs); line-height: 1; color: var(--text-dim); }
 

@@ -1552,14 +1552,14 @@ describe('orientation des copies', () => {
   });
 });
 
-import { parseDash, toggleElementVisibility } from '../src/scene.js';
+import { clampDash, toggleElementVisibility } from '../src/scene.js';
 
 describe('style de trait de la forme', () => {
-  it('lit la saisie libre, bornée', () => {
-    expect(parseDash('4, 2  1')).toEqual([4, 2, 1]);
-    expect(parseDash('4 -1 x 1e9')).toEqual([4, 0, 100]);
-    expect(parseDash('0 0')).toEqual([]);
-    expect(parseDash('')).toEqual([]);
+  it('borne le motif de tirets', () => {
+    expect(clampDash([4, 2, 1])).toEqual([4, 2, 1]);
+    expect(clampDash([4, -1, 'x', 1e9])).toEqual([4, 0, 100]);
+    expect(clampDash([0, 0])).toEqual([]);
+    expect(clampDash('4 2')).toEqual([]);
   });
 
   it('reste propre à chaque forme et survit à la sauvegarde', () => {

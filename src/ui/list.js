@@ -45,7 +45,7 @@ export const iconButton = ({
  *
  * Les clés suivent la forme `<rôle>-<identifiant>`.
  */
-export const restoreFocus = (container, focusKey, fallback) => {
+const restoreFocus = (container, focusKey, fallback) => {
   const id = focusKey.slice(focusKey.indexOf('-') + 1);
   const candidates = [
     container.querySelector(`[data-focus-key="${focusKey}"]`),

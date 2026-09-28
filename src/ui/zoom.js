@@ -7,7 +7,7 @@ const STEP = 1.25;
 /* Marge autour du dessin quand on ajuste la vue, en pixels écran. */
 const FIT_MARGIN = 32;
 
-export const clampZoom = (zoom) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+const clampZoom = (zoom) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 
 const button = (text, title, onClick) => {
   const node = document.createElement('button');

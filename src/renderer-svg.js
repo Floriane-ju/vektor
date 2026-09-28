@@ -371,7 +371,7 @@ const createGuides = (layer, element = null) => {
   return group;
 };
 
-export const polygonPoints = (cx, cy, radius, sides, inner) =>
+const polygonPoints = (cx, cy, radius, sides, inner) =>
   polygonVertices(cx, cy, radius, sides, inner)
     .map((p) => `${round(p.x)},${round(p.y)}`)
     .join(' ');
@@ -384,7 +384,7 @@ export const polygonPoints = (cx, cy, radius, sides, inner) =>
  * demi-arcs et se ferme, quel que soit le mode : ni rayon au centre ni corde
  * n'y auraient de sens.
  */
-export const arcPath = (cx, cy, radius, start, end, closure, place = (p) => p, mirrored = false) => {
+const arcPath = (cx, cy, radius, start, end, closure, place = (p) => p, mirrored = false) => {
   const xy = (p) => {
     const placed = place(p);
     return `${round(placed.x)},${round(placed.y)}`;
@@ -580,7 +580,7 @@ export const createNode = (child) => {
 
 /* Données `d` d'un contour projeté. Un point seul se trace en segment nul :
    le bout rond le peint. */
-export const projectedPath = (matrix, points, closed) => {
+const projectedPath = (matrix, points, closed) => {
   const xy = points.map((p) => {
     const q = project(matrix, p);
     return `${round(q.x)},${round(q.y)}`;

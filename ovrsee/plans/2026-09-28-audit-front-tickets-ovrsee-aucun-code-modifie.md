@@ -32,6 +32,15 @@
         "src/persistence.js",
         "test/core.test.js"
       ]
+    },
+    {
+      "sha": "cb4b8ba",
+      "date": "2026-09-28",
+      "files": [
+        "src/path.js",
+        "src/scene.js",
+        "test/core.test.js"
+      ]
     }
   ]
 }

@@ -13,7 +13,7 @@ export const t = (i, n) => (n <= 1 ? 0 : i / (n - 1));
  * dessin se relit à l'identique. Hachage entier (mélangeur de murmur3), pas
  * de générateur à état : chaque copie se tire seule, dans n'importe quel ordre.
  */
-export const noise = (i, seed = 0) => {
+const noise = (i, seed = 0) => {
   let h = Math.imul((seed | 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul((i | 0) + 1, 0xc2b2ae35);
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
@@ -51,7 +51,7 @@ export const CURVE_LABELS = {
 
 export const ramp = (curve, i, n, seed = 0) => (CURVES[curve] ?? t)(i, n, seed);
 
-export const lerp = (from, to, factor) => from + (to - from) * factor;
+const lerp = (from, to, factor) => from + (to - from) * factor;
 
 /* `#rrggbb` → [r, g, b]. */
 const channels = (hex) => [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16));

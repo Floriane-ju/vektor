@@ -5,7 +5,7 @@ import { icon, ICON_SIZE } from './icons.js';
 import { loadCollapsed, saveCollapsed } from './settings.js';
 
 let uid = 0;
-export const nextId = () => `prop-${++uid}`;
+const nextId = () => `prop-${++uid}`;
 
 export const el = (tag, className, text) => {
   const node = document.createElement(tag);
