@@ -140,6 +140,18 @@
         "src/ui/settings.js",
         "src/ui/zoom.js"
       ]
+    },
+    {
+      "sha": "aefd7cc",
+      "date": "2026-09-28",
+      "files": [
+        "CLAUDE.md",
+        "src/model.js",
+        "src/rendered.js",
+        "src/renderer-screen.js",
+        "src/renderer-svg.js",
+        "src/scene.js"
+      ]
     }
   ]
 }

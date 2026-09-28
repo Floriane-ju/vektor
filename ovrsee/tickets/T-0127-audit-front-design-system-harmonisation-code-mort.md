@@ -2,7 +2,7 @@
 {
   "id": "T-0127",
   "titre": "Audit front : design system, harmonisation, code mort",
-  "colonne": "backlog",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "l",
   "tags": [
