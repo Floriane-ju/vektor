@@ -1,11 +1,10 @@
 import { icon, ICON_SIZE } from './icons.js';
-import { switchField } from './fields.js';
+import { input, pillButton, select, switchField } from './fields.js';
 import { activePlane, getActiveLayer, POLAR_GRID, snapToGrid, snapToPolarGrid, STAGE } from '../scene.js';
 import { planeMatrix, unproject } from '../plane.js';
+import { readSettings, writeSettings } from '../persistence.js';
 
-/* Préférence d'écran, pas du dessin : hors de la scène, donc hors de
-   l'historique, du JSON et de l'export. */
-const SETTINGS_KEY = 'illu/settings';
+/* Préférence d'écran, rangée dans `illu/settings` (`readSettings`). */
 const GRID_TYPES = { square: 'Carrée', polar: 'Ronde' };
 const BOUNDS = { divisions: [2, 100], circles: [1, 50] };
 /* Plus dézoomée, la grille est trop dense : illisible et lente à dessiner. */
@@ -22,47 +21,15 @@ const clampSetting = (name, value) => {
 };
 
 const load = () => {
-  try {
-    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') ?? {};
-    return {
-      grid: raw.grid === true,
-      gridType: Object.hasOwn(GRID_TYPES, raw.gridType) ? raw.gridType : DEFAULTS.gridType,
-      divisions: clampSetting('divisions', raw.divisions ?? DEFAULTS.divisions),
-      circles: clampSetting('circles', raw.circles ?? DEFAULTS.circles),
-      motion: typeof raw.motion === 'boolean' ? raw.motion : null,
-    };
-  } catch {
-    return DEFAULTS;
-  }
+  const raw = readSettings();
+  return {
+    grid: raw.grid === true,
+    gridType: Object.hasOwn(GRID_TYPES, raw.gridType) ? raw.gridType : DEFAULTS.gridType,
+    divisions: clampSetting('divisions', raw.divisions ?? DEFAULTS.divisions),
+    circles: clampSetting('circles', raw.circles ?? DEFAULTS.circles),
+    motion: typeof raw.motion === 'boolean' ? raw.motion : null,
+  };
 };
-
-/* Le seau entier : la grille et les sections repliées du panneau y vivent
-   côte à côte, chacun ne réécrit que ses clés. */
-const readRaw = () => {
-  try {
-    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
-    return raw && typeof raw === 'object' ? raw : {};
-  } catch {
-    return {};
-  }
-};
-
-const save = (settings) => {
-  try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...readRaw(), ...settings }));
-  } catch {
-    /* Stockage indisponible (navigation privée) : le réglage vaut pour la session. */
-  }
-};
-
-/** Sections repliées du panneau de réglages : `{ [clé]: true }`. */
-export const loadCollapsed = () => {
-  const { collapsed } = readRaw();
-  if (!collapsed || typeof collapsed !== 'object') return {};
-  return Object.fromEntries(Object.entries(collapsed).filter(([, value]) => value === true));
-};
-
-export const saveCollapsed = (collapsed) => save({ collapsed });
 
 const round = (value) => Math.round(value * 100) / 100;
 
@@ -147,20 +114,18 @@ export const gridImage = (settings, color, plane = null, view = FLAT) => {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 };
 
-const field = (labelText, input) => {
+/* Ligne du panneau : libellé et contrôle côte à côte (le `field` des réglages
+   de droite les empile). */
+const settingsField = (labelText, control) => {
   const label = document.createElement('label');
   label.className = 'settings-field';
-  if (input.type === 'checkbox') label.append(input, labelText);
-  else label.append(labelText, input);
+  label.append(labelText, control);
   return label;
 };
 
 const numberInput = (id, name) => {
-  const input = document.createElement('input');
-  input.type = 'number';
-  input.id = id;
-  [input.min, input.max] = BOUNDS[name].map(String);
-  return input;
+  const [min, max] = BOUNDS[name].map(String);
+  return input('number', { id, min, max });
 };
 
 /**
@@ -186,29 +151,18 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
   title.id = 'settings-title';
   title.textContent = 'Paramètres';
 
-  const gridToggle = document.createElement('input');
-  gridToggle.type = 'checkbox';
-  gridToggle.id = 'settings-grid';
-
-  const gridType = document.createElement('select');
+  const gridToggle = input('checkbox', { id: 'settings-grid' });
+  const gridType = select(Object.entries(GRID_TYPES));
   gridType.id = 'settings-grid-type';
-  for (const [value, label] of Object.entries(GRID_TYPES)) {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = label;
-    gridType.append(option);
-  }
 
   /* RGAA 13.8 : tout mouvement de l'interface se coupe ici (`data-motion` sur
      la racine, voir `style.css`). */
   const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
-  const motionToggle = document.createElement('input');
-  motionToggle.type = 'checkbox';
-  motionToggle.id = 'settings-motion';
+  const motionToggle = input('checkbox', { id: 'settings-motion' });
 
   const divisions = numberInput('settings-divisions', 'divisions');
   const circles = numberInput('settings-circles', 'circles');
-  const circlesField = field('Cercles', circles);
+  const circlesField = settingsField('Cercles', circles);
 
   const apply = () => {
     gridToggle.checked = settings.grid;
@@ -235,7 +189,7 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
 
   const update = (patch) => {
     settings = { ...settings, ...patch };
-    save(settings);
+    writeSettings(settings);
     apply();
   };
 
@@ -248,8 +202,8 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
 
   panel.append(
     title,
-    field('Type', gridType),
-    field('Divisions', divisions),
+    settingsField('Type', gridType),
+    settingsField('Divisions', divisions),
     circlesField,
     switchField('Animations', motionToggle),
   );
@@ -261,12 +215,7 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
   toggle.title = 'Grille (aimante les points)';
   toggle.append(gridToggle, icon('grid', ICON_SIZE.md), 'Grille');
 
-  const open = document.createElement('button');
-  open.type = 'button';
-  open.className = 'pill-btn is-square';
-  open.textContent = '⚙';
-  open.title = 'Paramètres';
-  open.setAttribute('aria-label', 'Paramètres');
+  const open = pillButton('⚙', { title: 'Paramètres', label: 'Paramètres', className: 'is-square' });
   open.setAttribute('popovertarget', panel.id);
 
   const separator = document.createElement('span');

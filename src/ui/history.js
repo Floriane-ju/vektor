@@ -8,25 +8,17 @@
  * `input` et le ferme à son `change` (validation ou perte du focus).
  */
 
+import { pillButton } from './fields.js';
+
 /* Là, Cmd+Z appartient au texte en cours de saisie, pas à la scène. */
 const TEXT_ENTRY = 'input:is([type="text"], [type="number"], [type="search"]), textarea';
-
-const pillButton = (text, title, onClick) => {
-  const node = document.createElement('button');
-  node.type = 'button';
-  node.className = 'pill-btn';
-  node.textContent = text;
-  node.title = title;
-  node.addEventListener('click', onClick);
-  return node;
-};
 
 /* ponytail: boutons toujours actifs — annuler sans passé ne fait rien. Les
    griser demanderait au store d'exposer la taille de ses piles. */
 export const mountHistory = ({ store, container = null }) => {
   container?.append(
-    pillButton('Annuler', 'Annuler (⌘/Ctrl + Z)', () => store.undo()),
-    pillButton('Rétablir', 'Rétablir (⌘/Ctrl + Maj + Z)', () => store.redo()),
+    pillButton('Annuler', { title: 'Annuler (⌘/Ctrl + Z)', onClick: () => store.undo() }),
+    pillButton('Rétablir', { title: 'Rétablir (⌘/Ctrl + Maj + Z)', onClick: () => store.redo() }),
   );
 
   let pointer = null;

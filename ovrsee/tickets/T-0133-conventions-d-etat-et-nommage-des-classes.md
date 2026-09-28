@@ -2,7 +2,7 @@
 {
   "id": "T-0133",
   "titre": "Conventions d'état et nommage des classes",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "basse",
   "charge": "s",
   "tags": [

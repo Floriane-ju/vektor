@@ -1,7 +1,8 @@
 import { createScene, MAX_NAME_LENGTH, reserveIds } from '../scene.js';
 import { drawingName, loadLocal, removeLocal, saveDrawings, sceneKey } from '../persistence.js';
 import { icon, ICON_SIZE } from './icons.js';
-import { inlineRename, presence } from './list.js';
+import { pillButton } from './fields.js';
+import { inlineRename, presence, rebuildWithFocus } from './list.js';
 
 const hasShapes = (scene) => scene?.layers.some((layer) => layer.elements.length > 0) ?? false;
 
@@ -112,17 +113,15 @@ export const mountDrawingTabs = ({ store, container, status, drawings: initial, 
 
   const mark = presence();
   const draw = () => {
-    const focused = document.activeElement?.dataset?.focusKey;
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.className = 'pill-btn drawing-new';
-    add.dataset.focusKey = 'drawing-new';
-    add.append(icon('plus', ICON_SIZE.sm), 'Nouveau');
-    add.addEventListener('click', create);
-    const tabs = drawings.tabs.map(tabNode);
-    container.replaceChildren(...tabs, add);
+    let tabs = [];
+    rebuildWithFocus(container, () => {
+      const add = pillButton([icon('plus', ICON_SIZE.sm), 'Nouveau'], { className: 'drawing-new', onClick: create });
+      add.dataset.focusKey = 'drawing-new';
+      tabs = drawings.tabs.map(tabNode);
+      container.append(...tabs, add);
+      return add;
+    });
     mark(tabs.map((node, i) => [node, drawings.tabs[i].id]), null, container);
-    if (focused) container.querySelector(`[data-focus-key="${focused}"]`)?.focus();
   };
 
   container.setAttribute('role', 'tablist');

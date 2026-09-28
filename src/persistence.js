@@ -520,6 +520,37 @@ export const deserialize = (text) => {
 
 /* ---- Supports ---- */
 
+/* Préférences d'écran (grille, animations, sections repliées), pas du dessin :
+   hors de la scène, donc hors de l'historique, du JSON et de l'export. Un seul
+   seau, chacun n'y réécrit que ses clés. */
+const SETTINGS_KEY = 'illu/settings';
+
+export const readSettings = () => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}');
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+};
+
+export const writeSettings = (patch) => {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...readSettings(), ...patch }));
+  } catch {
+    /* Stockage indisponible (navigation privée) : le réglage vaut pour la session. */
+  }
+};
+
+/** Sections repliées du panneau de réglages : `{ [clé]: true }`. */
+export const loadCollapsed = () => {
+  const { collapsed } = readSettings();
+  if (!collapsed || typeof collapsed !== 'object') return {};
+  return Object.fromEntries(Object.entries(collapsed).filter(([, value]) => value === true));
+};
+
+export const saveCollapsed = (collapsed) => writeSettings({ collapsed });
+
 /** @returns {boolean} faux si l'écriture a échoué (quota plein, stockage refusé). */
 export const saveLocal = (scene, key = STORAGE_KEY) => {
   try {

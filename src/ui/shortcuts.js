@@ -10,6 +10,7 @@ import {
   SHAPES,
   translateElements,
 } from '../scene.js';
+import { pillButton } from './fields.js';
 
 /* Une touche par outil. `cursor` n'est pas une forme mais partage le sélecteur. */
 export const TOOL_KEYS = {
@@ -77,19 +78,17 @@ const mountHelp = (container) => {
   }
   const form = document.createElement('form');
   form.method = 'dialog';
-  const close = document.createElement('button');
-  close.className = 'pill-btn is-primary';
-  close.textContent = 'Fermer';
+  /* `submit` : le formulaire `method="dialog"` ferme la fenêtre. */
+  const close = pillButton('Fermer', { className: 'is-primary', type: 'submit' });
   form.append(close);
   dialog.append(title, list, form);
 
-  const open = document.createElement('button');
-  open.type = 'button';
-  open.className = 'pill-btn is-square';
-  open.textContent = '?';
-  open.title = 'Raccourcis clavier (?)';
-  open.setAttribute('aria-label', 'Raccourcis clavier');
-  open.addEventListener('click', () => dialog.showModal?.());
+  const open = pillButton('?', {
+    title: 'Raccourcis clavier (?)',
+    label: 'Raccourcis clavier',
+    className: 'is-square',
+    onClick: () => dialog.showModal?.(),
+  });
 
   const separator = document.createElement('span');
   separator.className = 'pill-sep';

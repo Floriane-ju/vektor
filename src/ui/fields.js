@@ -2,7 +2,7 @@
    formulaire, partagé par le panneau de droite et ses sections (répéter,
    interpolations, booléens), montées pour le calque comme pour la forme. */
 import { icon, ICON_SIZE } from './icons.js';
-import { loadCollapsed, saveCollapsed } from './settings.js';
+import { loadCollapsed, saveCollapsed } from '../persistence.js';
 
 let uid = 0;
 const nextId = () => `prop-${++uid}`;
@@ -131,6 +131,20 @@ export const textButton = (text, { label = null, focusKey, onClick, className = 
   }
   node.dataset.focusKey = focusKey;
   node.addEventListener('click', onClick);
+  return node;
+};
+
+/**
+ * Bouton pilule des barres flottantes. `content` : texte ou nœuds (icône
+ * comprise) ; `className` ajoute une variante (`is-square`, `is-primary`…).
+ */
+export const pillButton = (content, { title = null, label = null, className = null, onClick = null, type = 'button' } = {}) => {
+  const node = el('button', className ? `pill-btn ${className}` : 'pill-btn');
+  node.type = type;
+  node.append(...[content].flat());
+  if (title) node.title = title;
+  if (label) node.setAttribute('aria-label', label);
+  if (onClick) node.addEventListener('click', onClick);
   return node;
 };
 

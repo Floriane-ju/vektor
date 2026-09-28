@@ -2,6 +2,7 @@ import { addTraces, getActiveLayer } from '../scene.js';
 import { toPng, toSvgDocument } from '../renderer-svg.js';
 import { deserialize, download, serialize } from '../persistence.js';
 import { parseTrace } from '../path.js';
+import { pillButton } from './fields.js';
 import { icon, ICON_SIZE } from './icons.js';
 
 /* Plus grand côté de l'export PNG libre, et côté du PNG carré. */
@@ -141,12 +142,9 @@ export const mountExportMenu = ({ store, svgRoot, container, status }) => {
   menu.popover = 'auto';
   menu.append(...imageItems(svgRoot, status), ...project.items, pasteTraceItem(store, status));
 
-  const trigger = document.createElement('button');
-  trigger.type = 'button';
-  trigger.className = 'pill-btn is-primary';
+  const trigger = pillButton(['Exporter', icon('chevronDown', ICON_SIZE.xs)], { className: 'is-primary' });
   trigger.setAttribute('popovertarget', menu.id);
   trigger.setAttribute('aria-haspopup', 'menu');
-  trigger.append('Exporter', icon('chevronDown', ICON_SIZE.xs));
 
   container.append(trigger, menu, project.fileInput);
 };

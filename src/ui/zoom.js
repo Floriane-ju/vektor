@@ -1,5 +1,6 @@
 import { STAGE } from '../scene.js';
 import { drawingBounds } from '../renderer-svg.js';
+import { pillButton } from './fields.js';
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 8;
@@ -9,16 +10,8 @@ const FIT_MARGIN = 32;
 
 const clampZoom = (zoom) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 
-const button = (text, title, onClick) => {
-  const node = document.createElement('button');
-  node.type = 'button';
-  node.className = text.length === 1 ? 'pill-btn is-square' : 'pill-btn';
-  node.textContent = text;
-  node.title = title;
-  node.setAttribute('aria-label', title);
-  node.addEventListener('click', onClick);
-  return node;
-};
+const button = (text, title, onClick) =>
+  pillButton(text, { title, label: title, className: text.length === 1 ? 'is-square' : null, onClick });
 
 const zoomButtons = (label, { zoomIn, zoomOut, fit }) => {
   const group = document.createElement('div');

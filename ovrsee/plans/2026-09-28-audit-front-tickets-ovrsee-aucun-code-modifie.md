@@ -91,6 +91,20 @@
         "style.css",
         "test/style.test.js"
       ]
+    },
+    {
+      "sha": "7b742a9",
+      "date": "2026-09-28",
+      "files": [
+        "CLAUDE.md",
+        "src/ui/layer-panel.js",
+        "src/ui/list.js",
+        "src/ui/shape-list.js",
+        "style.css",
+        "test/app.test.js",
+        "test/rename.test.js",
+        "test/render.test.js"
+      ]
     }
   ]
 }
