@@ -435,13 +435,35 @@ const readPlane = (raw) =>
       }
     : null;
 
+/* Préfixe de chaque sorte d'id, comme `nextId` dans `scene.js`. */
+const ID_FORMATS = { L: /^L\d+$/, E: /^E\d+$/, I: /^I\d+$/ };
+
+/**
+ * Tous les ids de la scène, de toutes sortes, sont uniques et suivent leur
+ * préfixe : un calque et une forme de même id feraient router les piles de
+ * l'une vers l'autre (`mapOwner`), et `reserveIds` ne lit que ces préfixes.
+ */
+const checkIds = (layers) => {
+  const stack = (owner) => owner.interpolations.map((interpolation) => ['I', interpolation.id]);
+  const ids = layers.flatMap((layer) => [
+    ['L', layer.id],
+    ...stack(layer),
+    ...layer.elements.flatMap((element) => [['E', element.id], ...stack(element)]),
+  ]);
+  const bad = ids.find(([kind, id]) => !ID_FORMATS[kind].test(id));
+  if (bad) fail(`Identifiant inattendu : « ${bad[1]} ».`);
+  if (new Set(ids.map(([, id]) => id)).size !== ids.length) {
+    fail('Deux objets de la scène portent le même identifiant.');
+  }
+};
+
 const readLayer = (raw, index, legacy) => {
   if (raw == null || typeof raw !== 'object') fail(`Calque ${index} : objet attendu.`);
   if (typeof raw.id !== 'string' || raw.id === '') fail(`Calque ${index} : \`id\` manquant.`);
   const modifiers = readModifiers(raw, legacy);
   return createLayer({
     id: raw.id,
-    name: typeof raw.name === 'string' && raw.name !== '' ? raw.name : `Calque ${index + 1}`,
+    name: readName(raw.name).name ?? `Calque ${index + 1}`,
     visible: raw.visible === undefined ? true : Boolean(raw.visible),
     ...(raw.locked === true ? { locked: true } : {}),
     center: {
@@ -485,6 +507,7 @@ export const deserialize = (text) => {
   if (new Set(elementIds).size !== elementIds.length) {
     fail('Deux formes portent le même identifiant.');
   }
+  checkIds(layers);
   reserveIds(layers);
 
   const activeLayerId = layers.some((layer) => layer.id === raw.activeLayerId)

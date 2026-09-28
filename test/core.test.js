@@ -1093,6 +1093,40 @@ describe('persistance', () => {
     });
     expect(() => deserialize(duplicateElements)).toThrow(/formes portent le même/);
   });
+
+  it('rejette un id partagé entre calque, forme ou interpolation', () => {
+    /* Sinon `mapOwner` route les piles de la forme vers le calque. */
+    const crossed = (layerId, elementId) =>
+      JSON.stringify({
+        format: 'illu/scene@3',
+        layers: [{ id: layerId, elements: [{ id: elementId, type: 'ellipse', x: 0, y: 0 }] }],
+      });
+    expect(() => deserialize(crossed('E1', 'E1'))).toThrow(/identifiant/i);
+    expect(() => deserialize(crossed('L1', 'L1'))).toThrow(/identifiant/i);
+
+    const sharedInterpolation = JSON.stringify({
+      format: FORMAT,
+      layers: [
+        { id: 'L1', interpolations: [{ id: 'I1', property: 'opacity' }] },
+        { id: 'L2', interpolations: [{ id: 'I1', property: 'opacity' }] },
+      ],
+    });
+    expect(() => deserialize(sharedInterpolation)).toThrow(/identifiant/i);
+  });
+
+  it('rejette un id qui ne suit pas le préfixe de son type', () => {
+    const layer = (id) => JSON.stringify({ format: FORMAT, layers: [{ id }] });
+    expect(() => deserialize(layer('X1'))).toThrow(/identifiant/i);
+    expect(() => deserialize(layer('Lx'))).toThrow(/identifiant/i);
+    expect(deserialize(layer('L12')).layers[0].id).toBe('L12');
+  });
+
+  it('borne le nom d’un calque comme celui d’une forme', () => {
+    const named = (name) => deserialize(JSON.stringify({ format: FORMAT, layers: [{ id: 'L1', name }] })).layers[0].name;
+    expect(named('  Fond  ')).toBe('Fond');
+    expect(named('x'.repeat(MAX_NAME_LENGTH + 10))).toHaveLength(MAX_NAME_LENGTH);
+    expect(named('   ')).toBe('Calque 1');
+  });
 });
 
 describe('dessin contraint (Maj)', () => {

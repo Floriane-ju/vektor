@@ -2,7 +2,7 @@
 {
   "id": "T-0137",
   "titre": "Import : identifiants calque et forme non croisés",
-  "colonne": "backlog",
+  "colonne": "en-cours",
   "priorite": "haute",
   "charge": "s",
   "tags": [
@@ -11,7 +11,7 @@
   ],
   "cree": "2026-09-28",
   "maj": "2026-09-28",
-  "plan": null,
+  "plan": "2026-09-28-audit-front-tickets-ovrsee-aucun-code-modifie.md",
   "epic": "T-0056"
 }
 ---

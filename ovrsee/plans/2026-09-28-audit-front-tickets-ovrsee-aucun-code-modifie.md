@@ -12,6 +12,18 @@
         "style.css",
         "test/style.test.js"
       ]
+    },
+    {
+      "sha": "0eb676b",
+      "date": "2026-09-28",
+      "files": [
+        "src/renderer-svg.js",
+        "src/ui/gestures.js",
+        "src/ui/settings.js",
+        "src/ui/stroke-card.js",
+        "style.css",
+        "test/render.test.js"
+      ]
     }
   ]
 }

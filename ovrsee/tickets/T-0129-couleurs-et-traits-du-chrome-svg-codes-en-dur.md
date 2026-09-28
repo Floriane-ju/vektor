@@ -2,7 +2,7 @@
 {
   "id": "T-0129",
   "titre": "Couleurs et traits du chrome SVG codés en dur",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "s",
   "tags": [
