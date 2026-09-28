@@ -2,7 +2,7 @@
 {
   "id": "T-0136",
   "titre": "Code et styles orphelins",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "basse",
   "charge": "xs",
   "tags": [

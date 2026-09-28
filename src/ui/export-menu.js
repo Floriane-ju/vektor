@@ -58,8 +58,15 @@ const imageItems = (svgRoot, status) => {
     try {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': toPng(svgRoot, PNG_SQUARE, true) })]);
       status.show('PNG copié dans le presse-papier.');
-    } catch {
-      status.show('Presse-papier refusé par le navigateur — utiliser « Exporter en PNG ».', 'error');
+    } catch (error) {
+      /* Refus du presse-papier (`NotAllowedError`) ou échec du rendu, que la
+         promesse passée à `ClipboardItem` remonte telle quelle. */
+      status.show(
+        error?.name === 'NotAllowedError'
+          ? 'Presse-papier refusé par le navigateur — utiliser « Exporter en PNG ».'
+          : `Copie PNG impossible — ${error?.message ?? error}`,
+        'error',
+      );
     }
   });
   const pngItems = [

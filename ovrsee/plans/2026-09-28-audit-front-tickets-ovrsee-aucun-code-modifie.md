@@ -41,6 +41,21 @@
         "src/scene.js",
         "test/core.test.js"
       ]
+    },
+    {
+      "sha": "28b507d",
+      "date": "2026-09-28",
+      "files": [
+        "src/interpolate.js",
+        "src/modifiers.js",
+        "src/renderer-svg.js",
+        "src/scene.js",
+        "src/ui/fields.js",
+        "src/ui/list.js",
+        "src/ui/zoom.js",
+        "style.css",
+        "test/core.test.js"
+      ]
     }
   ]
 }

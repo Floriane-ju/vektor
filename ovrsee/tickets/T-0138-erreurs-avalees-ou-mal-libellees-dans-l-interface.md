@@ -2,7 +2,7 @@
 {
   "id": "T-0138",
   "titre": "Erreurs avalées ou mal libellées dans l'interface",
-  "colonne": "backlog",
+  "colonne": "en-cours",
   "priorite": "basse",
   "charge": "xs",
   "tags": [
@@ -11,7 +11,7 @@
   ],
   "cree": "2026-09-28",
   "maj": "2026-09-28",
-  "plan": null,
+  "plan": "2026-09-28-audit-front-tickets-ovrsee-aucun-code-modifie.md",
   "epic": "T-0127"
 }
 ---

@@ -23,7 +23,9 @@ export const mountDrawingTabs = ({ store, container, status, drawings: initial, 
 
   const update = (next) => {
     drawings = next;
-    saveDrawings(drawings);
+    if (!saveDrawings(drawings)) {
+      status.show('Liste des dessins non enregistrée — stockage local plein ou refusé.', 'error');
+    }
     draw();
   };
 
@@ -59,8 +61,9 @@ export const mountDrawingTabs = ({ store, container, status, drawings: initial, 
     const { tabs } = drawings;
     if (tabs.length < 2) return;
     const scene = id === drawings.active ? store.get() : (parked.get(id)?.state ?? loadLocal(sceneKey(id)).scene);
-    const { name } = tabs.find((tab) => tab.id === id);
-    if (hasShapes(scene) && !window.confirm(`Fermer « ${name} » ? Le dessin sera supprimé.`)) return;
+    const tab = tabs.find((candidate) => candidate.id === id);
+    if (!tab) return;
+    if (hasShapes(scene) && !window.confirm(`Fermer « ${tab.name} » ? Le dessin sera supprimé.`)) return;
     if (id === drawings.active) {
       const index = tabs.findIndex((tab) => tab.id === id);
       activate(tabs[index + 1]?.id ?? tabs[index - 1].id);

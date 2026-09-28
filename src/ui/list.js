@@ -93,6 +93,7 @@ export const settle = (node, name, value = '') => {
   const running = node.getAnimations?.({ subtree: true }) ?? [];
   Promise.all(running.map((animation) => animation.finished))
     .then(() => delete node.dataset[name])
+    /* Animation annulée (nœud retiré, liste refaite) : la marque part avec le nœud. */
     .catch(() => {});
 };
 

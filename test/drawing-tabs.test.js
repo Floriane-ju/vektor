@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { addLayer, createScene } from '../src/scene.js';
 import { loadDrawings, loadLocal, saveDrawings, sceneKey, serialize } from '../src/persistence.js';
 import { createStore } from '../src/store.js';
@@ -47,4 +47,26 @@ it('ouvre un dessin vierge, revient au premier avec sa scène', () => {
   expect(names()).toEqual(['Vektor 1']);
   expect(loadLocal(sceneKey('D2')).scene).toBeNull();
   expect(container.querySelector('.drawing-tab-close')).toBeNull();
+});
+
+it('signale une liste d’onglets qui ne s’enregistre pas', () => {
+  const container = document.createElement('div');
+  const shown = [];
+  mountDrawingTabs({
+    store: createStore(createScene()),
+    container,
+    status: { show: (message, kind) => shown.push(kind) },
+    drawings: loadDrawings(),
+    beforeSwitch() {},
+    afterSwitch() {},
+  });
+  const full = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+    throw new Error('quota');
+  });
+  try {
+    container.querySelector('.drawing-new').click();
+  } finally {
+    full.mockRestore();
+  }
+  expect(shown).toContain('error');
 });
