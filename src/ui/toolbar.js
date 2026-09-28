@@ -42,6 +42,7 @@ const mountShapePicker = (container, onChange) => {
   const group = document.createElement('fieldset');
   group.className = 'shape-picker';
   const legend = document.createElement('legend');
+  legend.className = 'visually-hidden';
   legend.textContent = 'Outil';
   group.append(legend);
 

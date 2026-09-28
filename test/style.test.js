@@ -28,3 +28,9 @@ it('durées, épaisseur de contour, anneau de focus et graisses en tokens', () =
   expect(rules.match(/\b\d+ms\b|\b\d*\.\d+s\b/g)).toBeNull();
   expect(rules.match(/1\.5px|outline:\s*2px|font(?:-weight)?:\s*[1-9]00\b/g)).toBeNull();
 });
+
+it('pas de !important hors le coupe-mouvement', () => {
+  const off = css.slice(css.indexOf(':root[data-motion="off"] *'));
+  const kill = off.slice(0, off.indexOf('}') + 1);
+  expect(css.replace(kill, '').match(/!important/g)).toBeNull();
+});

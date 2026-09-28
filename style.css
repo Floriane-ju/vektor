@@ -109,6 +109,16 @@ body {
   white-space: nowrap;
 }
 
+/* `hidden` sur un composant qui pose son propre `display` : la classe l'emporte
+   sur `[hidden]` du navigateur, la paire classe + attribut sur la classe. */
+.inspector-body[hidden],
+.field[hidden],
+.field-row[hidden],
+.group[hidden],
+.text-btn[hidden],
+.switch-field[hidden],
+.settings-field[hidden] { display: none; }
+
 /* ---- Contrôles de base ---- */
 
 button,
@@ -170,7 +180,6 @@ input[type="range"] {
 }
 
 /* Une forme se saisit pour la déplacer ; le vide trace un lasso. */
-#stage[data-tool="cursor"] { cursor: crosshair; }
 #stage[data-tool="cursor"] [data-element-id],
 #stage[data-tool="cursor"] [data-grab] { cursor: grab; }
 /* Pointeur dans un cadre de saisie : le reste du dessin s'efface un peu. */
@@ -269,7 +278,7 @@ input[type="range"] {
 }
 .pill-btn:hover:not(:disabled) { background: var(--bg-field); }
 .pill-btn.is-square { width: var(--control); padding: 0; justify-content: center; }
-.pill-btn.is-primary { background: var(--text); color: var(--ink); padding-right: var(--space-5); }
+.pill-btn.is-primary { padding-right: var(--space-5); }
 .pill-btn.is-primary:hover { background: var(--white); }
 
 /* ---- Onglets de dessins ---- */
@@ -302,9 +311,19 @@ input[type="range"] {
 
 /* Bascule : la case native, cachée, pilote l'aspect pressé de la pastille. */
 .pill-toggle { cursor: pointer; font: var(--weight-medium) var(--text-sm)/1 var(--font); padding: 0 var(--space-6); }
-.pill-toggle input { position: absolute; opacity: 0; pointer-events: none; }
-.pill-toggle:has(input:checked) { background: var(--text); color: var(--ink); }
-.pill-toggle:has(input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+
+/* Contrôle natif caché (bascule, outils, segments) : il garde le clavier et
+   l'exclusivité, son substitut visible porte l'état et le focus. */
+.pill-toggle input,
+.shape-picker input,
+.segment input { position: absolute; opacity: 0; pointer-events: none; }
+.pill-toggle:has(input:focus-visible),
+.shape-picker input:focus-visible + label,
+.segment:has(input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+/* Pressé : clair sur sombre. */
+.pill-btn.is-primary,
+.pill-toggle:has(input:checked),
+.segment:has(input:checked) { background: var(--text); color: var(--ink); }
 
 .zoom-controls { display: flex; align-items: center; gap: var(--space-2); }
 .zoom-level { min-width: 44px; text-align: center; font: var(--weight-medium) var(--text-sm)/1 var(--font); font-variant-numeric: tabular-nums; }
@@ -322,14 +341,6 @@ input[type="range"] {
   padding: 0;
   border: 0;
 }
-.shape-picker legend {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-.shape-picker input { position: absolute; opacity: 0; pointer-events: none; }
 .shape-picker label {
   width: var(--tool);
   height: var(--tool);
@@ -341,9 +352,15 @@ input[type="range"] {
 }
 .shape-picker label:hover { background: var(--bg-field); }
 .shape-picker input:checked + label { background: var(--accent); color: var(--ink); }
-.shape-picker input:focus-visible + label { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 
 /* ---- Panneaux ---- */
+
+/* Titres de panneau, de section, de fenêtre. */
+.panel-left > h2,
+.section-head h3,
+.stroke-palette h2,
+.settings h2,
+.shortcuts h2 { margin: 0; font: var(--weight-bold) var(--text-md)/1 var(--font); }
 
 .panel {
   top: var(--gutter-top);
@@ -353,7 +370,7 @@ input[type="range"] {
 }
 
 .panel-left { left: var(--float-inset); width: var(--panel-left-w); padding: var(--space-6) var(--space-5); }
-.panel-left > h2 { margin: 0; padding: 0 var(--space-4) var(--space-5); font: var(--weight-bold) var(--text-md)/1 var(--font); }
+.panel-left > h2 { padding: 0 var(--space-4) var(--space-5); }
 /* Tant que l'arbre ne l'a pas logée sous un calque, la liste ne s'affiche pas. */
 .panel-left > .shape-list { display: none; }
 
@@ -382,7 +399,8 @@ input[type="range"] {
 }
 .layer-row:hover { background: var(--bg-field); }
 
-.layer-card[data-selected="layer"] > .layer-row { background: var(--accent); color: var(--ink); }
+.layer-card[data-selected="layer"] > .layer-row,
+.shape-list .layer-card[data-active="true"] > .layer-row { background: var(--accent); color: var(--ink); }
 .layer-card[data-selected="parent"] > .layer-row { box-shadow: inset 0 0 0 var(--hairline) var(--line); }
 .layer-card[data-visible="false"] > .layer-row .layer-name { opacity: 0.5; }
 
@@ -427,7 +445,6 @@ input.layer-name-input {
 .shape-list { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-1) 0 var(--space-2) var(--space-9); }
 .shape-list .layer-row { height: var(--control); }
 .shape-list .layer-name { font-weight: var(--weight-regular); }
-.shape-list .layer-card[data-active="true"] > .layer-row { background: var(--accent); color: var(--ink); }
 .shape-list .layer-card[data-active="true"] .layer-name { font-weight: var(--weight-bold); }
 /* Les autres formes de la sélection : l’accent atténué. */
 .shape-list .layer-card[data-selected="true"] > .layer-row { background: var(--accent-tint); }
@@ -509,7 +526,6 @@ input.layer-name-input {
   flex-direction: column;
   gap: var(--space-6);
 }
-.inspector-body[hidden] { display: none; }
 
 .inspector-head { display: flex; flex-direction: column; gap: var(--space-4); }
 .inspector-kind { display: flex; align-items: center; gap: var(--space-4); font-size: var(--text-sm); color: var(--text-dim); }
@@ -520,7 +536,6 @@ input.layer-name-input {
 .inspector-section:has(> :not([hidden])) ~ .inspector-section:has(> :not([hidden])) { padding-top: var(--space-6); border-top: 1px solid var(--line); }
 
 .field { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
-.field[hidden], .field-row[hidden], .group[hidden] { display: none; }
 .field > label,
 .slider-head label,
 .segmented legend { font-size: var(--text-xs); line-height: 1; color: var(--text-dim); }
@@ -530,11 +545,13 @@ input.layer-name-input {
 .field-row.is-grid { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .field-row.is-grid > :first-child { grid-column: 1 / -1; }
 
-.slider-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
-.range-value {
-  width: 64px !important;
-  height: var(--control-sm) !important;
-  padding: 0 var(--space-4) !important;
+/* Entête : libellé à gauche, valeur ou action à droite. */
+.slider-head,
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
+input.range-value {
+  width: 64px;
+  height: var(--control-sm);
+  padding: 0 var(--space-4);
   text-align: right;
   font: var(--weight-bold) var(--text-sm)/1 var(--font);
   font-variant-numeric: tabular-nums;
@@ -547,8 +564,6 @@ input.layer-name-input {
 /* Vide, il garderait le `gap` du groupe et décentrerait le titre entre ses séparateurs. */
 .group > .stack:empty { display: none; }
 
-.section-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
-.section-head h3 { margin: 0; font: var(--weight-bold) var(--text-md)/1 var(--font); }
 /* Titre repliable : tout le titre est le bouton, chevron à gauche. */
 .section-toggle {
   display: flex;
@@ -578,7 +593,6 @@ input.layer-name-input {
 }
 .text-btn:hover:not(:disabled) { background: var(--bg-field); }
 .text-btn.is-dim { align-self: flex-start; color: var(--text-dim); }
-.text-btn[hidden] { display: none; }
 
 /* Interrupteur : une case native redessinée. */
 .switch-field {
@@ -589,7 +603,6 @@ input.layer-name-input {
   min-height: var(--control-md);
   cursor: pointer;
 }
-.switch-field[hidden] { display: none; }
 .switch {
   appearance: none;
   position: relative;
@@ -629,9 +642,7 @@ input.layer-name-input {
   font: var(--weight-medium) var(--text-sm)/1 var(--font);
   cursor: pointer;
 }
-.segment input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
-.segment:has(input:checked) { background: var(--text); color: var(--ink); }
-.segment:has(input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.segment input { width: 1px; height: 1px; }
 
 /* Couleur du calque. */
 .swatches,
@@ -678,7 +689,7 @@ input.layer-name-input {
 }
 .hex-row { display: flex; align-items: center; gap: var(--space-4); }
 .hex-row label { font-size: var(--text-xs); color: var(--text-dim); }
-.hex { width: 104px !important; }
+input.hex { width: 104px; }
 
 /* Carte du trait : pastille de la couleur courante, épaisseur à côté. */
 .stroke-current::before {
@@ -707,13 +718,8 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
   margin: 0;
   padding: var(--space-6);
   width: 16rem;
-  color: var(--text);
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
 }
 .stroke-palette:popover-open { display: flex; flex-direction: column; gap: var(--space-5); }
-.stroke-palette h2 { margin: 0; font: var(--weight-bold) var(--text-md)/1 var(--font); }
 
 /* Pile de modificateurs. */
 .modifier-block,
@@ -756,15 +762,22 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 
 /* ---- Menus et fenêtres ---- */
 
+/* Surface posée au-dessus du plan : palette, menu, paramètres, raccourcis. */
+.stroke-palette,
+.menu,
+.settings,
+.shortcuts {
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+
 .menu,
 .settings {
   position: fixed;
   margin: 0;
   padding: var(--space-4);
-  color: var(--text);
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
 }
 .menu { inset: var(--menu-offset) var(--float-inset) auto auto; min-width: 240px; }
 .menu:popover-open { display: flex; flex-direction: column; }
@@ -778,21 +791,13 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 .menu-item:hover { background: var(--bg-field); }
 
 .settings { inset: auto auto var(--menu-offset) var(--float-inset); min-width: 16rem; padding: var(--space-6) var(--space-7); }
-.settings h2 { margin: 0 0 var(--space-5); font: var(--weight-bold) var(--text-md)/1 var(--font); }
+.settings h2 { margin-bottom: var(--space-5); }
 .settings-field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); margin: 0 0 var(--space-4); }
-.settings-field[hidden] { display: none; }
 .settings-field :is(input[type="number"], select) { width: 7rem; }
 
-.shortcuts {
-  max-width: 28rem;
-  padding: var(--space-7) var(--space-8);
-  color: var(--text);
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-panel);
-}
+.shortcuts { max-width: 28rem; padding: var(--space-7) var(--space-8); }
 .shortcuts::backdrop { background: var(--backdrop); }
-.shortcuts h2 { margin: 0 0 var(--space-5); font: var(--weight-bold) var(--text-md)/1 var(--font); }
+.shortcuts h2 { margin-bottom: var(--space-5); }
 .shortcuts dl { display: grid; grid-template-columns: auto 1fr; gap: var(--space-3) var(--space-6); margin: 0 0 var(--space-6); }
 .shortcuts dd { margin: 0; color: var(--text-dim); }
 .shortcuts kbd {

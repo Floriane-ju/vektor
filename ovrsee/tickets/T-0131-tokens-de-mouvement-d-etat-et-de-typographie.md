@@ -2,7 +2,7 @@
 {
   "id": "T-0131",
   "titre": "Tokens de mouvement, d'état et de typographie",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "basse",
   "charge": "s",
   "tags": [
