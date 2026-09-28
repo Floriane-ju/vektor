@@ -2,7 +2,7 @@
 {
   "id": "T-0139",
   "titre": "Fichiers et fonctions au-delà des plafonds",
-  "colonne": "backlog",
+  "colonne": "en-cours",
   "priorite": "basse",
   "charge": "l",
   "tags": [
@@ -10,7 +10,7 @@
   ],
   "cree": "2026-09-28",
   "maj": "2026-09-28",
-  "plan": null,
+  "plan": "2026-09-28-audit-front-tickets-ovrsee-aucun-code-modifie.md",
   "epic": "T-0127"
 }
 ---

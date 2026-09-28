@@ -2,7 +2,7 @@
 {
   "id": "T-0135",
   "titre": "Géométrie et helpers SVG dupliqués",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "m",
   "tags": [

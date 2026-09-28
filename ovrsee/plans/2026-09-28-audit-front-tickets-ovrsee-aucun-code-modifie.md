@@ -120,6 +120,26 @@
         "src/ui/shortcuts.js",
         "src/ui/zoom.js"
       ]
+    },
+    {
+      "sha": "d8af267",
+      "date": "2026-09-28",
+      "files": [
+        "CLAUDE.md",
+        "src/hidden.js",
+        "src/math.js",
+        "src/modifiers.js",
+        "src/path.js",
+        "src/persistence.js",
+        "src/plane.js",
+        "src/renderer-plane.js",
+        "src/renderer-svg.js",
+        "src/scene.js",
+        "src/ui/gestures.js",
+        "src/ui/scrub.js",
+        "src/ui/settings.js",
+        "src/ui/zoom.js"
+      ]
     }
   ]
 }
