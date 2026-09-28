@@ -20,7 +20,7 @@ import {
   updateModifier,
 } from '../scene.js';
 import { axisDirection, MIRROR_AXIS } from '../modifiers.js';
-import { clearHover, elementsInBox } from '../renderer-svg.js';
+import { CHROME, clearHover, elementsInBox } from '../renderer-svg.js';
 
 /**
  * Gestes au pointeur sur le plan de travail. Chaque geste commencé est un
@@ -230,7 +230,7 @@ const lassoFrame = (svgRoot, box) => {
   node.dataset.hover = '';
   node.setAttribute('fill', 'none');
   node.setAttribute('stroke', 'currentColor');
-  node.setAttribute('stroke-dasharray', '4 4');
+  node.setAttribute('stroke-dasharray', CHROME.sketchDash);
   node.setAttribute('vector-effect', 'non-scaling-stroke');
   node.setAttribute('pointer-events', 'none');
   svgRoot.append(node);
@@ -358,7 +358,7 @@ const ghostSegment = (svgRoot, from, to) => {
   }
   ghost.dataset.hover = '';
   ghost.setAttribute('stroke', 'currentColor');
-  ghost.setAttribute('stroke-dasharray', '4 4');
+  ghost.setAttribute('stroke-dasharray', CHROME.sketchDash);
   ghost.setAttribute('pointer-events', 'none');
   svgRoot.append(ghost);
 };

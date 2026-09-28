@@ -8,6 +8,7 @@
   --stage: #1b1b1b;
   --line: #484848;
   --grid: #303030;
+  --guide: #a2a8b4;     /* repères du plan : gris neutre, jamais l'accent d'un trait */
   --text: #fcfaf3;      /* 13.4:1 sur --bg-panel */
   --text-dim: #aaaaaa;  /* 6.0:1  sur --bg-panel */
   --accent: #ee4722;    /* calque sélectionné, outil actif */

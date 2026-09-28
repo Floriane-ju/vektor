@@ -14,7 +14,9 @@ import { el } from './fields.js';
  */
 
 /* Pastilles de base (l'accent et le blanc du thème) ; les couleurs du dessin
-   s'y ajoutent, cf. `swatchColors`. */
+   s'y ajoutent, cf. `swatchColors`. Données du dessin, pas de l'interface : un
+   hex s'enregistre dans la forme et s'exporte, un `var()` non — d'où la copie
+   de `--accent`/`--text`, à tenir à jour avec eux. */
 const PALETTE = [
   ['#ee4722', 'Accent'],
   ['#fcfaf3', 'Blanc'],

@@ -16,6 +16,23 @@ import { createPlaneDouble, drawPlane, occlude } from './renderer-plane.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+/* Chrome d'écran (repères, cadres, poignées, lasso) : couleurs du thème
+   (`style.css`), posées en `style` — un attribut de présentation ne lit pas
+   `var()`. Épaisseurs à l'écran (`non-scaling-stroke`) et tirets. */
+export const CHROME = {
+  accent: 'var(--accent)',
+  knob: 'var(--stage)',
+  guide: 'var(--guide)',
+  width: '1.5',
+  handleWidth: '2',
+  guideWidth: '1',
+  guideOpacity: '0.45',
+  hoverOpacity: '0.6',
+  guideDash: '6 6',
+  frameDash: '6 4',
+  sketchDash: '4 4',
+};
+
 /* Une copie rendue : rang de la copie du calque, puis de la copie propre de la forme. */
 const copyKey = (id, { copy, own = 0 }) => `${id}:${copy}:${own}`;
 
@@ -220,9 +237,9 @@ const createHandles = (scene) => {
 
   const group = document.createElementNS(SVG_NS, 'g');
   group.dataset.handles = element.id;
-  group.setAttribute('fill', '#1b1b1b');
-  group.setAttribute('stroke', '#ee4722');
-  group.setAttribute('stroke-width', '2');
+  group.style.fill = CHROME.knob;
+  group.style.stroke = CHROME.accent;
+  group.setAttribute('stroke-width', CHROME.handleWidth);
   group.setAttribute('vector-effect', 'non-scaling-stroke');
   const transform = [planeTransform(layer), element.rotation ? rotateAbout(element.rotation, element) : '']
     .filter(Boolean)
@@ -332,10 +349,10 @@ const createGuides = (layer, element = null) => {
   group.setAttribute('fill', 'none');
   /* Gris neutre : un repère ne doit pas se confondre avec un trait dessiné,
      dont l'accent est la couleur par défaut. */
-  group.setAttribute('stroke', '#a2a8b4');
-  group.setAttribute('stroke-width', '1');
-  group.setAttribute('stroke-opacity', '0.45');
-  group.setAttribute('stroke-dasharray', '6 6');
+  group.style.stroke = CHROME.guide;
+  group.setAttribute('stroke-width', CHROME.guideWidth);
+  group.setAttribute('stroke-opacity', CHROME.guideOpacity);
+  group.setAttribute('stroke-dasharray', CHROME.guideDash);
   /* Le trait garde son épaisseur à l'écran quel que soit le zoom : un repère
      qui grossit avec le dessin finit par le cacher. */
   group.setAttribute('vector-effect', 'non-scaling-stroke');
@@ -741,14 +758,8 @@ const createBoolean = (child, steps) => {
 };
 
 /* Cadre de sélection : écart à la forme, en unités du dessin ; son trait garde
-   la même épaisseur à l'écran quel que soit le zoom. Les couleurs viennent de
-   l'interface (`style.css`) : un attribut de présentation ne lit pas `var()`. */
+   la même épaisseur à l'écran quel que soit le zoom. */
 const SELECTION_GAP = 8;
-const FRAME_COLORS = {
-  selection: 'var(--accent, #ee4722)',
-  layer: 'var(--accent, #ee4722)',
-  hover: 'var(--accent, #ee4722)',
-};
 /* Échantillons d'un contour courbe : l'écart à la vraie boîte reste sous le
    pixel pour les rayons du plan. */
 const CURVE_SAMPLES = 64;
@@ -845,12 +856,12 @@ const frame = (box, marker) => {
   });
   node.dataset[marker === 'layer' ? 'selection' : marker] = marker;
   node.setAttribute('fill', 'none');
-  node.setAttribute('stroke-width', '1.5');
-  node.setAttribute('stroke-dasharray', '6 4');
+  node.setAttribute('stroke-width', CHROME.width);
+  node.setAttribute('stroke-dasharray', CHROME.frameDash);
   node.setAttribute('vector-effect', 'non-scaling-stroke');
   node.setAttribute('pointer-events', 'none');
-  node.style.stroke = FRAME_COLORS[marker];
-  if (marker === 'hover') node.setAttribute('stroke-opacity', '0.6');
+  node.style.stroke = CHROME.accent;
+  if (marker === 'hover') node.setAttribute('stroke-opacity', CHROME.hoverOpacity);
   return node;
 };
 
@@ -927,9 +938,9 @@ const createTransformHandles = (scene, svgRoot) => {
   const at = (rank, low, high) => low + ((high - low) * rank) / 2;
   const group = document.createElementNS(SVG_NS, 'g');
   group.dataset.transform = element.id;
-  group.setAttribute('fill', '#1b1b1b');
-  group.setAttribute('stroke', 'var(--accent, #ee4722)');
-  group.setAttribute('stroke-width', '1.5');
+  group.style.fill = CHROME.knob;
+  group.style.stroke = CHROME.accent;
+  group.setAttribute('stroke-width', CHROME.width);
   group.setAttribute('vector-effect', 'non-scaling-stroke');
   const top = { x: (x0 + x2) / 2, y: y0 };
   const stem = guideLine(top.x, top.y, top.x, top.y - ROTATE_OFFSET);

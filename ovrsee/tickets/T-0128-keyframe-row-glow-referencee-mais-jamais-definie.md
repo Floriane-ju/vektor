@@ -2,7 +2,7 @@
 {
   "id": "T-0128",
   "titre": "Keyframe row-glow référencée mais jamais définie",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "xs",
   "tags": [

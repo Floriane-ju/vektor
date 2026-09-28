@@ -580,6 +580,19 @@ describe('outil curseur', () => {
     expect(toSvgDocument(svg)).not.toContain('data-transform');
   });
 
+  it('le chrome d’écran prend ses couleurs du thème, en style', () => {
+    const { svg } = mountWithShape();
+    on(svg.querySelector('ellipse'), 'pointerdown', 100, 100);
+    on(svg, 'pointerup', 100, 100);
+    /* Un attribut de présentation ne lit pas `var()` : la couleur passe par `style`. */
+    const chrome = [...svg.querySelectorAll('[data-transform], [data-selection]')];
+    expect(chrome.length).toBeGreaterThan(0);
+    for (const node of chrome) {
+      expect(node.getAttribute('stroke') ?? '').not.toMatch(/var\(|#/);
+      expect(node.style.stroke).toBe('var(--accent)');
+    }
+  });
+
   it('les poignées du cadre s’aimantent à la grille', () => {
     const grid = ({ x, y }) => ({ x: Math.round(x / 20) * 20, y: Math.round(y / 20) * 20 });
     const { store, svg } = mountWithShape({}, grid);

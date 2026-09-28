@@ -174,7 +174,7 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
   const currentPlane = () => (store ? activePlane(getActiveLayer(store.get())) : null);
   let plane = currentPlane();
   const visible = () => view?.visible() ?? FLAT;
-  const color = getComputedStyle(document.documentElement).getPropertyValue('--grid').trim() || '#303030';
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--grid').trim() || 'gray'; /* sans feuille de style (tests) */
 
   const panel = document.createElement('div');
   panel.id = 'settings-panel';

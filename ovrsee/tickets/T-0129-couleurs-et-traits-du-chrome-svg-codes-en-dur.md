@@ -2,7 +2,7 @@
 {
   "id": "T-0129",
   "titre": "Couleurs et traits du chrome SVG codés en dur",
-  "colonne": "backlog",
+  "colonne": "en-cours",
   "priorite": "haute",
   "charge": "s",
   "tags": [
@@ -12,7 +12,7 @@
   ],
   "cree": "2026-09-28",
   "maj": "2026-09-28",
-  "plan": null,
+  "plan": "2026-09-28-audit-front-tickets-ovrsee-aucun-code-modifie.md",
   "epic": "T-0127"
 }
 ---
