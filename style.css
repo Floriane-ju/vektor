@@ -64,6 +64,25 @@
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-fast: 120ms;
   --dur: 220ms;
+  --dur-slow: 300ms;    /* plafond des micro-animations (RGAA 13.8 : courtes) */
+  --dur-glow: 480ms;    /* éclat d'une ligne apparue, après son ouverture */
+  --stagger: 40ms;      /* décalage entre lignes apparues ensemble */
+  --scale-leave: 0.96;  /* ligne ou bloc qui glisse en entrant ou en partant */
+  --scale-pop: 0.97;    /* popover, bloc qui éclôt */
+  --scale-press: 0.92;  /* bouton enfoncé */
+  --scale-press-tool: 0.88;
+  /* État. */
+  --opacity-disabled: 0.45;
+  --opacity-muted: 0.75; /* action discrète, nom de gabarit */
+  --opacity-dim: 0.8;    /* dessin en retrait, poignée au survol */
+  --hairline: 1.5px;     /* contour d'état, filet de l'arbre */
+  --focus-ring: 2px solid var(--select);
+  --focus-offset: 2px;
+  --accent-tint: color-mix(in srgb, var(--accent) 30%, transparent);
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-bold: 600;
+  --z-float: 1;
   color-scheme: dark;
 }
 
@@ -78,7 +97,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font: 400 var(--text-md)/1.4 var(--font);
+  font: var(--weight-regular) var(--text-md)/1.4 var(--font);
 }
 
 .visually-hidden {
@@ -95,7 +114,7 @@ body {
 button,
 select,
 input {
-  font: 500 var(--text-md)/1 var(--font);
+  font: var(--weight-medium) var(--text-md)/1 var(--font);
   color: var(--text);
   background: var(--bg-field);
   border: 0;
@@ -113,11 +132,11 @@ input:is([type="number"], [type="text"]) {
 }
 
 :is(button, select, input, label, [tabindex]):focus-visible {
-  outline: 2px solid var(--select);
-  outline-offset: 2px;
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
 }
 
-:disabled { opacity: 0.45; cursor: not-allowed; }
+:disabled { opacity: var(--opacity-disabled); cursor: not-allowed; }
 
 /* Glisser horizontal pour régler la valeur (ui/scrub.js) ; focalisé, on tape. */
 input[type="number"]:not(:focus, :disabled) { cursor: ew-resize; }
@@ -155,7 +174,7 @@ input[type="range"] {
 #stage[data-tool="cursor"] [data-element-id],
 #stage[data-tool="cursor"] [data-grab] { cursor: grab; }
 /* Pointeur dans un cadre de saisie : le reste du dessin s'efface un peu. */
-#stage[data-focus] > [data-layer-id] { opacity: 0.8; }
+#stage[data-focus] > [data-layer-id] { opacity: var(--opacity-dim); }
 
 /* Le repère d'un pivot se saisit pour le déplacer. */
 #stage[data-tool="cursor"] [data-pivot] [data-grip] { cursor: move; }
@@ -178,13 +197,13 @@ input[type="range"] {
 
 .float {
   position: fixed;
-  z-index: 1;
+  z-index: var(--z-float);
   background: var(--bg-panel);
 }
 
 .topbar {
   position: fixed;
-  z-index: 1;
+  z-index: var(--z-float);
   left: var(--space-9);
   top: var(--float-inset);
   /* Ne passe pas sous la carte du trait et les actions, à droite. */
@@ -198,7 +217,7 @@ input[type="range"] {
 .brand {
   flex: none;
   margin: 0;
-  font: 600 var(--text-xl)/1 var(--font);
+  font: var(--weight-bold) var(--text-xl)/1 var(--font);
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -222,7 +241,7 @@ input[type="range"] {
 }
 
 /* Carte du trait puis actions, alignées à droite : la carte suit la largeur de la barre. */
-.top-right { position: fixed; z-index: 1; right: var(--float-inset); top: var(--float-inset); display: flex; gap: var(--space-4); }
+.top-right { position: fixed; z-index: var(--z-float); right: var(--float-inset); top: var(--float-inset); display: flex; gap: var(--space-4); }
 .top-right > .float { position: static; }
 .tools {
   left: calc((var(--gutter-left) + 100vw - var(--gutter-right)) / 2);
@@ -276,19 +295,19 @@ input[type="range"] {
 .drawing-tab-close { margin-right: var(--space-4); opacity: 0; }
 .drawing-tab:hover .drawing-tab-close,
 .drawing-tab[data-active="true"] .drawing-tab-close,
-.drawing-tab-close:focus-visible { opacity: 0.75; }
+.drawing-tab-close:focus-visible { opacity: var(--opacity-muted); }
 .drawing-tab .drawing-tab-close:hover { opacity: 1; }
 .drawing-new { flex: none; color: var(--text-dim); }
 .drawing-new:hover { color: var(--text); }
 
 /* Bascule : la case native, cachée, pilote l'aspect pressé de la pastille. */
-.pill-toggle { cursor: pointer; font: 500 var(--text-sm)/1 var(--font); padding: 0 var(--space-6); }
+.pill-toggle { cursor: pointer; font: var(--weight-medium) var(--text-sm)/1 var(--font); padding: 0 var(--space-6); }
 .pill-toggle input { position: absolute; opacity: 0; pointer-events: none; }
 .pill-toggle:has(input:checked) { background: var(--text); color: var(--ink); }
-.pill-toggle:has(input:focus-visible) { outline: 2px solid var(--select); outline-offset: 2px; }
+.pill-toggle:has(input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 
 .zoom-controls { display: flex; align-items: center; gap: var(--space-2); }
-.zoom-level { min-width: 44px; text-align: center; font: 500 var(--text-sm)/1 var(--font); font-variant-numeric: tabular-nums; }
+.zoom-level { min-width: 44px; text-align: center; font: var(--weight-medium) var(--text-sm)/1 var(--font); font-variant-numeric: tabular-nums; }
 
 .icon { display: inline-flex; }
 
@@ -322,7 +341,7 @@ input[type="range"] {
 }
 .shape-picker label:hover { background: var(--bg-field); }
 .shape-picker input:checked + label { background: var(--accent); color: var(--ink); }
-.shape-picker input:focus-visible + label { outline: 2px solid var(--select); outline-offset: 2px; }
+.shape-picker input:focus-visible + label { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 
 /* ---- Panneaux ---- */
 
@@ -334,7 +353,7 @@ input[type="range"] {
 }
 
 .panel-left { left: var(--float-inset); width: var(--panel-left-w); padding: var(--space-6) var(--space-5); }
-.panel-left > h2 { margin: 0; padding: 0 var(--space-4) var(--space-5); font: 600 var(--text-md)/1 var(--font); }
+.panel-left > h2 { margin: 0; padding: 0 var(--space-4) var(--space-5); font: var(--weight-bold) var(--text-md)/1 var(--font); }
 /* Tant que l'arbre ne l'a pas logée sous un calque, la liste ne s'affiche pas. */
 .panel-left > .shape-list { display: none; }
 
@@ -364,7 +383,7 @@ input[type="range"] {
 .layer-row:hover { background: var(--bg-field); }
 
 .layer-card[data-selected="layer"] > .layer-row { background: var(--accent); color: var(--ink); }
-.layer-card[data-selected="parent"] > .layer-row { box-shadow: inset 0 0 0 1.5px var(--line); }
+.layer-card[data-selected="parent"] > .layer-row { box-shadow: inset 0 0 0 var(--hairline) var(--line); }
 .layer-card[data-visible="false"] > .layer-row .layer-name { opacity: 0.5; }
 
 .chevron {
@@ -391,7 +410,7 @@ input[type="range"] {
   padding: var(--space-2) 0;
   background: none;
   color: inherit;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
 }
 /* Calque suspendu : alerte toujours visible, hors des actions au survol. */
 .suspended-mark { display: inline-flex; flex-shrink: 0; color: var(--danger); }
@@ -401,23 +420,23 @@ input.layer-name-input {
   flex-grow: 1;
   height: var(--control-sm);
   padding: 0 var(--space-3);
-  font-weight: 600;
+  font-weight: var(--weight-bold);
 }
 
 /* Formes du calque déplié. */
 .shape-list { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-1) 0 var(--space-2) var(--space-9); }
 .shape-list .layer-row { height: var(--control); }
-.shape-list .layer-name { font-weight: 400; }
+.shape-list .layer-name { font-weight: var(--weight-regular); }
 .shape-list .layer-card[data-active="true"] > .layer-row { background: var(--accent); color: var(--ink); }
-.shape-list .layer-card[data-active="true"] .layer-name { font-weight: 600; }
+.shape-list .layer-card[data-active="true"] .layer-name { font-weight: var(--weight-bold); }
 /* Les autres formes de la sélection : l’accent atténué. */
-.shape-list .layer-card[data-selected="true"] > .layer-row { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.shape-list .layer-card[data-selected="true"] > .layer-row { background: var(--accent-tint); }
 /* L'aperçu porte la couleur de la forme ; en blanc sur l'accent de la ligne
    sélectionnée. */
 .shape-glyph { color: var(--shape-color, currentColor); }
 .shape-list .layer-card[data-active="true"] > .layer-row > .shape-glyph { color: var(--white); }
 /* Survoler une forme de la liste l'encadre sur le dessin (voir `shape-list.js`). */
-.shape-list .layer-card:hover:not(:has(.layer-card:hover)) > .layer-row { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.shape-list .layer-card:hover:not(:has(.layer-card:hover)) > .layer-row { box-shadow: inset 0 0 0 var(--hairline) var(--accent); }
 /* Outil booléen rangé sous la forme qui l'emploie : un filet relie la
    branche à son parent, un coude à chaque outil. */
 .boolean-branch { position: relative; margin: var(--space-1) 0 0 var(--space-6); padding-left: var(--space-6); }
@@ -427,7 +446,7 @@ input.layer-name-input {
   left: 0;
   top: -2px;
   bottom: 18px;
-  border-left: 1.5px solid var(--line);
+  border-left: var(--hairline) solid var(--line);
 }
 .boolean-branch > .layer-card { position: relative; }
 .boolean-branch > .layer-card::before {
@@ -436,9 +455,9 @@ input.layer-name-input {
   left: -16px;
   top: 18px;
   width: 12px;
-  border-top: 1.5px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
-.layer-card[data-template="true"] > .layer-row .layer-name { font-style: italic; opacity: 0.75; }
+.layer-card[data-template="true"] > .layer-row .layer-name { font-style: italic; opacity: var(--opacity-muted); }
 
 /* Actions de ligne : au survol, au focus et sur la ligne active, jamais
    ailleurs — même un calque masqué, en 3D ou verrouillé (le nom estompé
@@ -455,7 +474,7 @@ input.layer-name-input {
   line-height: 1;
   background: none;
   color: inherit;
-  opacity: 0.75;
+  opacity: var(--opacity-muted);
 }
 .icon-btn:hover:not(:disabled) { opacity: 1; }
 .icon-btn.is-danger { color: var(--danger); }
@@ -466,7 +485,7 @@ input.layer-name-input {
   padding: 0 var(--space-4);
   background: transparent;
   color: var(--text-dim);
-  font: 400 var(--text-sm)/1 var(--font);
+  font: var(--weight-regular) var(--text-sm)/1 var(--font);
   text-align: left;
 }
 .add-shape:hover:not(:disabled) { color: var(--text); }
@@ -494,7 +513,7 @@ input.layer-name-input {
 
 .inspector-head { display: flex; flex-direction: column; gap: var(--space-4); }
 .inspector-kind { display: flex; align-items: center; gap: var(--space-4); font-size: var(--text-sm); color: var(--text-dim); }
-.inspector-title { margin: 0; font: 600 var(--text-lg)/1.1 var(--font); overflow-wrap: anywhere; }
+.inspector-title { margin: 0; font: var(--weight-bold) var(--text-lg)/1.1 var(--font); overflow-wrap: anywhere; }
 
 .inspector-section { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
 .inspector-section:not(:has(> :not([hidden]))) { display: none; }
@@ -517,7 +536,7 @@ input.layer-name-input {
   height: var(--control-sm) !important;
   padding: 0 var(--space-4) !important;
   text-align: right;
-  font: 600 var(--text-sm)/1 var(--font);
+  font: var(--weight-bold) var(--text-sm)/1 var(--font);
   font-variant-numeric: tabular-nums;
   background: transparent;
 }
@@ -529,7 +548,7 @@ input.layer-name-input {
 .group > .stack:empty { display: none; }
 
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
-.section-head h3 { margin: 0; font: 600 var(--text-md)/1 var(--font); }
+.section-head h3 { margin: 0; font: var(--weight-bold) var(--text-md)/1 var(--font); }
 /* Titre repliable : tout le titre est le bouton, chevron à gauche. */
 .section-toggle {
   display: flex;
@@ -541,9 +560,9 @@ input.layer-name-input {
   font: inherit;
   text-align: left;
 }
-.section-toggle .icon { display: flex; color: var(--text-dim); transition: transform 0.15s; }
+.section-toggle .icon { display: flex; color: var(--text-dim); transition: transform var(--dur-fast); }
 .section-toggle[aria-expanded="false"] .icon { transform: rotate(-90deg); }
-.section-summary { font-weight: 400; font-size: var(--text-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.section-summary { font-weight: var(--weight-regular); font-size: var(--text-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .section-toggle[aria-expanded="true"] .section-summary { display: none; }
 /* Repliée, seul l'entête reste — sans son bouton d'ajout, dont l'effet ne se verrait pas. */
 .group.is-collapsed > :not(.section-head), .group.is-collapsed .section-head .text-btn { display: none; }
@@ -591,7 +610,7 @@ input.layer-name-input {
   height: 18px;
   border-radius: var(--pill);
   background: var(--text-dim);
-  transition: left 0.12s;
+  transition: left var(--dur-fast);
 }
 .switch:checked { background: var(--text); }
 .switch:checked::before { left: 19px; background: var(--ink); }
@@ -607,12 +626,12 @@ input.layer-name-input {
   align-items: center;
   justify-content: center;
   border-radius: var(--pill);
-  font: 500 var(--text-sm)/1 var(--font);
+  font: var(--weight-medium) var(--text-sm)/1 var(--font);
   cursor: pointer;
 }
 .segment input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 .segment:has(input:checked) { background: var(--text); color: var(--ink); }
-.segment:has(input:focus-visible) { outline: 2px solid var(--select); outline-offset: 2px; }
+.segment:has(input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 
 /* Couleur du calque. */
 .swatches,
@@ -646,7 +665,7 @@ input.layer-name-input {
   border-radius: var(--pill);
   background: var(--text-dim);
 }
-.swatch.is-custom { box-shadow: inset 0 0 0 1.5px var(--text-dim); font: 500 var(--text-lg)/1 var(--font); cursor: pointer; }
+.swatch.is-custom { box-shadow: inset 0 0 0 var(--hairline) var(--text-dim); font: var(--weight-medium) var(--text-lg)/1 var(--font); cursor: pointer; }
 .swatch.is-custom::before { display: none; }
 .swatch.is-custom input {
   position: absolute;
@@ -668,7 +687,7 @@ input.layer-name-input {
   height: 22px;
   border-radius: var(--pill);
   background: var(--swatch, transparent);
-  box-shadow: inset 0 0 0 1.5px var(--line);
+  box-shadow: inset 0 0 0 var(--hairline) var(--line);
 }
 /* Sélection de plusieurs couleurs : le mot à la place de la pastille. */
 .stroke-current[data-mixed]::before {
@@ -694,7 +713,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
   border-radius: var(--radius-panel);
 }
 .stroke-palette:popover-open { display: flex; flex-direction: column; gap: var(--space-5); }
-.stroke-palette h2 { margin: 0; font: 600 var(--text-md)/1 var(--font); }
+.stroke-palette h2 { margin: 0; font: var(--weight-bold) var(--text-md)/1 var(--font); }
 
 /* Pile de modificateurs. */
 .modifier-block,
@@ -759,7 +778,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 .menu-item:hover { background: var(--bg-field); }
 
 .settings { inset: auto auto var(--menu-offset) var(--float-inset); min-width: 16rem; padding: var(--space-6) var(--space-7); }
-.settings h2 { margin: 0 0 var(--space-5); font: 600 var(--text-md)/1 var(--font); }
+.settings h2 { margin: 0 0 var(--space-5); font: var(--weight-bold) var(--text-md)/1 var(--font); }
 .settings-field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); margin: 0 0 var(--space-4); }
 .settings-field[hidden] { display: none; }
 .settings-field :is(input[type="number"], select) { width: 7rem; }
@@ -773,12 +792,12 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
   border-radius: var(--radius-panel);
 }
 .shortcuts::backdrop { background: var(--backdrop); }
-.shortcuts h2 { margin: 0 0 var(--space-5); font: 600 var(--text-md)/1 var(--font); }
+.shortcuts h2 { margin: 0 0 var(--space-5); font: var(--weight-bold) var(--text-md)/1 var(--font); }
 .shortcuts dl { display: grid; grid-template-columns: auto 1fr; gap: var(--space-3) var(--space-6); margin: 0 0 var(--space-6); }
 .shortcuts dd { margin: 0; color: var(--text-dim); }
 .shortcuts kbd {
   padding: var(--space-1) var(--space-3);
-  font: 500 var(--text-xs)/1.4 var(--font);
+  font: var(--weight-medium) var(--text-xs)/1.4 var(--font);
   background: var(--bg-field);
   border-radius: var(--radius-sm);
 }
@@ -789,10 +808,10 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 .layer-row[draggable="true"] { cursor: grab; }
 /* Poignée discrète, pleine au survol de la ligne. */
 .drag-handle { display: flex; flex: none; opacity: 0.35; margin-inline-end: calc(-1 * var(--space-2)); }
-.layer-row:hover .drag-handle { opacity: 0.8; }
+.layer-row:hover .drag-handle { opacity: var(--opacity-dim); }
 .layer-row[data-drop="before"] { box-shadow: inset 0 2px 0 var(--accent); }
 .layer-row[data-drop="after"] { box-shadow: inset 0 -2px 0 var(--accent); }
-.layer-row[data-drop="into"] { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.layer-row[data-drop="into"] { box-shadow: inset 0 0 0 var(--hairline) var(--accent); }
 
 /* ---- Micro-animations ----
    Courtes (≤ 300 ms), jamais en boucle. RGAA 13.8 : la case « Animations »
@@ -814,7 +833,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
   60% { opacity: 1; }
 }
 @keyframes row-slide {
-  from { transform: translateY(-6px) scale(0.96); }
+  from { transform: translateY(-6px) scale(var(--scale-leave)); }
 }
 /* Éclat bref une fois la ligne ouverte : `filter` plutôt qu'un fond, pour
    éclaircir quel que soit l'état (accent, contour, simple). */
@@ -831,8 +850,8 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
   animation:
     row-in var(--dur) var(--ease) backwards,
     row-slide var(--dur) var(--ease-out) backwards,
-    row-glow 480ms var(--ease) backwards;
-  animation-delay: calc(var(--enter-i, 0) * 40ms);
+    row-glow var(--dur-glow) var(--ease) backwards;
+  animation-delay: calc(var(--enter-i, 0) * var(--stagger));
 }
 
 /* Pli de la liste des formes d'un calque (`ui/layer-panel.js`) : changer de
@@ -853,8 +872,8 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 /* Sélection qui change : la ligne part de son ancien aspect (`data-was`,
    `stateFade`) vers le nouveau — elle est neuve, une transition n'y ferait rien. */
 @keyframes was-accent { from { background-color: var(--accent); color: var(--ink); } }
-@keyframes was-outline { from { box-shadow: inset 0 0 0 1.5px var(--line); } }
-@keyframes was-tint { from { background-color: color-mix(in srgb, var(--accent) 30%, transparent); } }
+@keyframes was-outline { from { box-shadow: inset 0 0 0 var(--hairline) var(--line); } }
+@keyframes was-tint { from { background-color: var(--accent-tint); } }
 @keyframes was-plain { from { background-color: transparent; color: var(--text); box-shadow: none; } }
 .layer-card[data-was] > .layer-row { animation: was-plain var(--dur) var(--ease) backwards; }
 .layer-card:is([data-was="layer"], [data-was="active"]) > .layer-row { animation-name: was-accent; }
@@ -867,7 +886,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 /* Étage de répétition, interpolation, opération booléenne ajoutés : le bloc
    descend en place et s'éclaire, comme une ligne de l'arbre. */
 @keyframes block-in {
-  from { height: 0; padding-block: 0; margin-block: 0; border-width: 0; opacity: 0; transform: translateY(-8px) scale(0.97); }
+  from { height: 0; padding-block: 0; margin-block: 0; border-width: 0; opacity: 0; transform: translateY(-8px) scale(var(--scale-pop)); }
   to { height: var(--enter-h); }
 }
 .stack > [data-enter] {
@@ -875,7 +894,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
   transform-origin: top center;
   animation:
     block-in var(--dur) var(--ease) backwards,
-    row-glow 480ms var(--ease) backwards;
+    row-glow var(--dur-glow) var(--ease) backwards;
 }
 
 @keyframes tab-in {
@@ -888,9 +907,9 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 }
 .drawing-tab[data-enter] {
   overflow: hidden;
-  animation: tab-in 300ms var(--ease) backwards;
+  animation: tab-in var(--dur-slow) var(--ease) backwards;
 }
-.drawing-tab[data-enter] > * { animation: tab-slide 300ms var(--ease) backwards; }
+.drawing-tab[data-enter] > * { animation: tab-slide var(--dur-slow) var(--ease) backwards; }
 
 /* ---- Sorties ----
    Ligne disparue, remise en place le temps de s'effacer (`presence` dans
@@ -898,20 +917,20 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
    `--leave-w`) et glisse en s'estompant ; les voisines se resserrent. */
 @keyframes row-out {
   from { height: var(--leave-h); }
-  to { height: 0; opacity: 0; transform: translateX(-12px) scale(0.96); }
+  to { height: 0; opacity: 0; transform: translateX(-12px) scale(var(--scale-leave)); }
 }
 @keyframes block-out {
   from { height: var(--leave-h); }
-  to { height: 0; padding-block: 0; margin-block: 0; border-width: 0; opacity: 0; transform: scale(0.96); }
+  to { height: 0; padding-block: 0; margin-block: 0; border-width: 0; opacity: 0; transform: scale(var(--scale-leave)); }
 }
 @keyframes tab-out {
   from { width: var(--leave-w); }
   to { width: 0; opacity: 0; }
 }
 [data-leave] { overflow: hidden; pointer-events: none; }
-.layer-card[data-leave] { animation: row-out 220ms var(--ease) forwards; transform-origin: left center; }
-.stack > [data-leave] { animation: block-out 220ms var(--ease) forwards; transform-origin: top center; }
-.drawing-tab[data-leave] { animation: tab-out 240ms var(--ease) forwards; }
+.layer-card[data-leave] { animation: row-out var(--dur) var(--ease) forwards; transform-origin: left center; }
+.stack > [data-leave] { animation: block-out var(--dur) var(--ease) forwards; transform-origin: top center; }
+.drawing-tab[data-leave] { animation: tab-out var(--dur) var(--ease) forwards; }
 
 @keyframes status-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -922,7 +941,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 .menu,
 .settings,
 .stroke-palette {
-  --pop-from: translateY(-6px) scale(0.97);
+  --pop-from: translateY(-6px) scale(var(--scale-pop));
   opacity: 0;
   transform: var(--pop-from);
   transition:
@@ -931,7 +950,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
     display var(--dur) allow-discrete,
     overlay var(--dur) allow-discrete;
 }
-.settings { --pop-from: translateY(6px) scale(0.97); transform-origin: bottom left; }
+.settings { --pop-from: translateY(6px) scale(var(--scale-pop)); transform-origin: bottom left; }
 .menu { transform-origin: top right; }
 :is(.menu, .settings, .stroke-palette):popover-open {
   opacity: 1;
@@ -947,18 +966,18 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
     color var(--dur) var(--ease),
     transform var(--dur-fast) var(--ease-out);
 }
-.shape-picker label:active { transform: scale(0.88); }
+.shape-picker label:active { transform: scale(var(--scale-press-tool)); }
 @keyframes tool-pop {
   from { transform: scale(0.8); }
 }
-.shape-picker input:checked + label { animation: tool-pop 280ms var(--ease-out); }
+.shape-picker input:checked + label { animation: tool-pop var(--dur-slow) var(--ease-out); }
 
 /* Appui : le bouton s'enfonce. */
 :is(.pill-btn, .icon-btn, .add-layer, .add-shape, .menu-item, .text-btn, .chevron) {
   transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 :is(.pill-btn, .icon-btn, .add-layer, .add-shape, .menu-item, .text-btn, .chevron):active:not(:disabled) {
-  transform: scale(0.92);
+  transform: scale(var(--scale-press));
 }
 .row-actions,
 .drawing-tab,

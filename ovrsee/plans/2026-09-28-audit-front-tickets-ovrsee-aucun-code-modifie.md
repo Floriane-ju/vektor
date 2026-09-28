@@ -66,6 +66,14 @@
         "src/ui/list.js",
         "test/drawing-tabs.test.js"
       ]
+    },
+    {
+      "sha": "243acb4",
+      "date": "2026-09-28",
+      "files": [
+        "style.css",
+        "test/style.test.js"
+      ]
     }
   ]
 }

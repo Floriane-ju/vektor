@@ -23,3 +23,8 @@ it('espacements sans px bruts hors :root', () => {
     .filter((decl) => /(?<![\w.-])[1-9]\d*px/.test(decl));
   expect(raw).toEqual([]);
 });
+
+it('durées, épaisseur de contour, anneau de focus et graisses en tokens', () => {
+  expect(rules.match(/\b\d+ms\b|\b\d*\.\d+s\b/g)).toBeNull();
+  expect(rules.match(/1\.5px|outline:\s*2px|font(?:-weight)?:\s*[1-9]00\b/g)).toBeNull();
+});

@@ -2,7 +2,7 @@
 {
   "id": "T-0130",
   "titre": "Échelle d'espacement et hauteurs de contrôle en tokens",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "m",
   "tags": [
