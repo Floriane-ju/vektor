@@ -788,6 +788,12 @@ input.stroke-width { width: 100px; padding: 0 6px; text-align: right; }
 @keyframes row-slide {
   from { transform: translateY(-6px) scale(0.96); }
 }
+/* Éclat bref une fois la ligne ouverte : `filter` plutôt qu'un fond, pour
+   éclaircir quel que soit l'état (accent, contour, simple). */
+@keyframes row-glow {
+  45% { filter: none; }
+  65% { filter: brightness(1.45); }
+}
 /* La ligne s'ouvre jusqu'à sa hauteur fixe, sans dépassement (une hauteur
    qui déborde puis revient se voit comme un sursaut) ; le rebond reste au
    glissé. La liste des formes logée dessous s'ouvre par son pli. */
