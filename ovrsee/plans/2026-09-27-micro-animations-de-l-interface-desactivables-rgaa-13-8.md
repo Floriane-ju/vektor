@@ -1,9 +1,9 @@
 ---
 {
-  "status": "open",
+  "status": "closed",
   "title": "Micro-animations de l'interface, désactivables (RGAA 13.8)",
   "opened": "2026-09-27",
-  "closed": null,
+  "closed": "2026-09-27",
   "commits": [
     {
       "sha": "b6c042f",
@@ -24,6 +24,11 @@
         "test/app.test.js",
         "test/drawing-tabs.test.js"
       ]
+    },
+    {
+      "sha": "f8d5bfd",
+      "date": "2026-09-27",
+      "files": []
     }
   ]
 }
