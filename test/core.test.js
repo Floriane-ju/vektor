@@ -55,8 +55,8 @@ import {
 } from '../src/scene.js';
 import { deserialize, FORMAT, serialize } from '../src/persistence.js';
 import { createStore, HISTORY_LIMIT } from '../src/store.js';
-import { parseTrace } from '../src/path.js';
-import { MAX_POINTS, RANGE_BOUNDS, SHAPES } from '../src/scene.js';
+import { MAX_TRACES, parseTrace } from '../src/path.js';
+import { centerPoints, MAX_POINTS, RANGE_BOUNDS, SHAPES } from '../src/scene.js';
 
 const SHAPES_DEFAULT_POINTS = SHAPES.polyline.defaults.points;
 import { addLayer, createScene, setActiveElement } from '../src/scene.js';
@@ -1255,6 +1255,25 @@ describe('lecture d’un tracé collé', () => {
   it('refuse un tracé qui dépasse le plafond de sommets', () => {
     const d = `M0 0 ${Array.from({ length: MAX_POINTS }, (_, i) => `L${i} 1`).join(' ')}`;
     expect(() => parseTrace(d)).toThrow(/sommets/);
+  });
+
+  it('borne aussi une liste de points collée, et refuse l’infini', () => {
+    const list = Array.from({ length: MAX_POINTS + 1 }, (_, i) => `${i},0`).join(' ');
+    expect(() => parseTrace(list)).toThrow(/sommets/);
+    expect(() => parseTrace(`<polyline points="${list}"/>`)).toThrow(/sommets/);
+    expect(() => parseTrace('0 0 1e999 1')).toThrow(/nombre/);
+    expect(() => parseTrace('M0 0 L1e999 1')).toThrow();
+  });
+
+  it('borne le nombre de sous-tracés collés d’un bloc', () => {
+    const d = Array.from({ length: MAX_TRACES + 1 }, (_, i) => `M${i} 0 l1 1`).join(' ');
+    expect(() => parseTrace(d)).toThrow(/sous-tracés/);
+    expect(parseTrace(d.split(' M').slice(0, MAX_TRACES).join(' M'))).toHaveLength(MAX_TRACES);
+  });
+
+  it('centre un très grand tracé sans dépasser la pile d’appels', () => {
+    const points = Array.from({ length: 200_000 }, (_, i) => ({ x: i, y: -i }));
+    expect(centerPoints(points)).toMatchObject({ x: 99_999.5, y: -99_999.5 });
   });
 
   it('refuse ce qui ne trace pas de segment', () => {

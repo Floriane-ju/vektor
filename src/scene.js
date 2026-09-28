@@ -208,10 +208,18 @@ export const MAX_POINTS = 5000;
  * modificateurs prennent pour pivot.
  */
 export const centerPoints = (absolute) => {
-  const xs = absolute.map((p) => p.x);
-  const ys = absolute.map((p) => p.y);
-  const x = (Math.min(...xs) + Math.max(...xs)) / 2;
-  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+  /* Pas de `Math.min(...xs)` : au-delà de ~100 000 sommets, la pile d'appels déborde. */
+  const box = absolute.reduce(
+    (acc, p) => ({
+      minX: Math.min(acc.minX, p.x),
+      maxX: Math.max(acc.maxX, p.x),
+      minY: Math.min(acc.minY, p.y),
+      maxY: Math.max(acc.maxY, p.y),
+    }),
+    { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
+  );
+  const x = (box.minX + box.maxX) / 2;
+  const y = (box.minY + box.maxY) / 2;
   return { x, y, points: absolute.map((p) => ({ x: p.x - x, y: p.y - y })) };
 };
 

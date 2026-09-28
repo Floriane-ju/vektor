@@ -24,6 +24,14 @@
         "style.css",
         "test/render.test.js"
       ]
+    },
+    {
+      "sha": "3edefb8",
+      "date": "2026-09-28",
+      "files": [
+        "src/persistence.js",
+        "test/core.test.js"
+      ]
     }
   ]
 }

@@ -19,6 +19,11 @@ import { MAX_POINTS } from './scene.js';
 const NUMBER = /-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi;
 const TOKEN = /[a-z]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi;
 
+/* Sous-tracés d'un seul collage : chacun devient une forme (`addTraces`).
+   ponytail: plafond fixe, un labyrinthe en compte des dizaines ; à relever si
+   un vrai dessin collé le dépasse. */
+export const MAX_TRACES = 500;
+
 const CURVE_STEPS = 16;
 const ARC_STEP = Math.PI / 16;
 
@@ -188,13 +193,22 @@ const parseD = (d) => {
 
   const drawn = paths.filter((path) => path.points.length >= 2);
   if (drawn.length === 0) fail('Le chemin ne trace aucun segment.');
-  if (drawn.some((path) => path.points.length > MAX_POINTS)) {
-    fail(`Tracé de plus de ${MAX_POINTS} sommets, courbes échantillonnées comprises.`);
-  }
   return drawn;
 };
 
-export const parseTrace = (text) => {
+/* Bornes communes à tout ce qui se colle, `d` comme `points`. */
+const bounded = (traces) => {
+  if (traces.length > MAX_TRACES) fail(`Plus de ${MAX_TRACES} sous-tracés d'un coup.`);
+  if (traces.some((trace) => trace.points.length > MAX_POINTS)) {
+    fail(`Tracé de plus de ${MAX_POINTS} sommets, courbes échantillonnées comprises.`);
+  }
+  if (!traces.every((trace) => trace.points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y)))) {
+    fail('Coordonnée hors des nombres représentables.');
+  }
+  return traces;
+};
+
+const readTrace = (text) => {
   const source = String(text ?? '').trim();
   if (source === '') fail('Rien à importer.');
   const d = attribute(source, 'd');
@@ -203,3 +217,5 @@ export const parseTrace = (text) => {
   if (points !== undefined) return parsePoints(points, /<\s*polygon\b/i.test(source));
   return /^[a-z]/i.test(source) ? parseD(source) : parsePoints(source, false);
 };
+
+export const parseTrace = (text) => bounded(readTrace(text));

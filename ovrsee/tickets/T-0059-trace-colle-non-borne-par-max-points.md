@@ -2,7 +2,7 @@
 {
   "id": "T-0059",
   "titre": "Tracé collé non borné par MAX_POINTS",
-  "colonne": "backlog",
+  "colonne": "en-cours",
   "priorite": "haute",
   "charge": "xs",
   "tags": [
@@ -11,7 +11,7 @@
   ],
   "cree": "2026-09-24",
   "maj": "2026-09-28",
-  "plan": null,
+  "plan": "2026-09-28-audit-front-tickets-ovrsee-aucun-code-modifie.md",
   "epic": "T-0056"
 }
 ---

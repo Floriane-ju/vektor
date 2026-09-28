@@ -2,7 +2,7 @@
 {
   "id": "T-0137",
   "titre": "Import : identifiants calque et forme non croisés",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "haute",
   "charge": "s",
   "tags": [
