@@ -105,6 +105,21 @@
         "test/rename.test.js",
         "test/render.test.js"
       ]
+    },
+    {
+      "sha": "76e4d04",
+      "date": "2026-09-28",
+      "files": [
+        "CLAUDE.md",
+        "src/persistence.js",
+        "src/ui/drawing-tabs.js",
+        "src/ui/export-menu.js",
+        "src/ui/fields.js",
+        "src/ui/history.js",
+        "src/ui/settings.js",
+        "src/ui/shortcuts.js",
+        "src/ui/zoom.js"
+      ]
     }
   ]
 }

@@ -3,6 +3,7 @@ import { input, pillButton, select, switchField } from './fields.js';
 import { activePlane, getActiveLayer, POLAR_GRID, snapToGrid, snapToPolarGrid, STAGE } from '../scene.js';
 import { planeMatrix, unproject } from '../plane.js';
 import { readSettings, writeSettings } from '../persistence.js';
+import { boundsOf, clamp } from '../math.js';
 
 /* Préférence d'écran, rangée dans `illu/settings` (`readSettings`). */
 const GRID_TYPES = { square: 'Carrée', polar: 'Ronde' };
@@ -17,7 +18,7 @@ const DEFAULTS = { grid: false, gridType: 'square', divisions: 10, circles: 8, m
 const clampSetting = (name, value) => {
   const [min, max] = BOUNDS[name];
   const n = Math.round(Number(value));
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : DEFAULTS[name];
+  return Number.isFinite(n) ? clamp(n, min, max) : DEFAULTS[name];
 };
 
 const load = () => {
@@ -31,7 +32,8 @@ const load = () => {
   };
 };
 
-const round = (value) => Math.round(value * 100) / 100;
+/* Au centième : nombre, pour les coordonnées de la grille (celui du rendu rend une chaîne). */
+const round2 = (value) => Math.round(value * 100) / 100;
 
 const FLAT = { x0: 0, y0: 0, x1: STAGE.width, y1: STAGE.height };
 
@@ -43,7 +45,7 @@ const MAX_LINES = 1000;
 const steps = (from, to, cell) => {
   const first = Math.floor(from / cell) + 1;
   const count = Math.min(MAX_LINES, Math.ceil(to / cell) - first);
-  return Array.from({ length: Math.max(0, count) }, (_, i) => round((first + i) * cell));
+  return Array.from({ length: Math.max(0, count) }, (_, i) => round2((first + i) * cell));
 };
 
 /* Boîte, dans le repère du plan, des coins de la zone visible ramenés de l'écran. */
@@ -51,9 +53,8 @@ const unfolded = (plane, view = FLAT) => {
   if (!plane) return view;
   const matrix = planeMatrix(plane);
   const corners = [view.x0, view.x1].flatMap((x) => [view.y0, view.y1].map((y) => unproject(matrix, { x, y })));
-  const xs = corners.map((p) => p.x);
-  const ys = corners.map((p) => p.y);
-  return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+  const box = boundsOf(corners);
+  return { x0: box.minX, y0: box.minY, x1: box.maxX, y1: box.maxY };
 };
 
 /* Nombre de cercles de la grille ronde : `circles` jusqu'au bord du plan,
@@ -64,7 +65,7 @@ const ringCount = (circles, bounds) => {
   const reach = Math.max(
     ...[bounds.x0, bounds.x1].flatMap((x) => [bounds.y0, bounds.y1].map((y) => Math.hypot(x - center.x, y - center.y))),
   );
-  return Math.min(MAX_LINES, Math.max(circles, Math.ceil((reach * circles) / radius)));
+  return clamp(Math.ceil((reach * circles) / radius), circles, MAX_LINES);
 };
 
 /**
@@ -76,8 +77,8 @@ const gridPath = ({ gridType, divisions, circles }, bounds = FLAT) => {
   if (gridType === 'square') {
     const { x0, y0, x1, y1 } = bounds;
     return [
-      ...steps(x0, x1, STAGE.width / divisions).map((x) => `M${x} ${round(y0)}V${round(y1)}`),
-      ...steps(y0, y1, STAGE.height / divisions).map((y) => `M${round(x0)} ${y}H${round(x1)}`),
+      ...steps(x0, x1, STAGE.width / divisions).map((x) => `M${x} ${round2(y0)}V${round2(y1)}`),
+      ...steps(y0, y1, STAGE.height / divisions).map((y) => `M${round2(x0)} ${y}H${round2(x1)}`),
     ].join('');
   }
   const { center, radius: unit } = POLAR_GRID;
@@ -85,13 +86,13 @@ const gridPath = ({ gridType, divisions, circles }, bounds = FLAT) => {
   const radius = (unit * count) / circles;
   const arcs = [];
   for (let k = 1; k <= count; k++) {
-    const r = round((unit * k) / circles);
+    const r = round2((unit * k) / circles);
     arcs.push(`M${center.x - r} ${center.y}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`);
   }
   for (let j = 0; j < divisions; j++) {
     const angle = (2 * Math.PI * j) / divisions;
     arcs.push(
-      `M${center.x} ${center.y}L${round(center.x + radius * Math.sin(angle))} ${round(center.y - radius * Math.cos(angle))}`,
+      `M${center.x} ${center.y}L${round2(center.x + radius * Math.sin(angle))} ${round2(center.y - radius * Math.cos(angle))}`,
     );
   }
   return arcs.join('');
@@ -107,9 +108,9 @@ const gridPath = ({ gridType, divisions, circles }, bounds = FLAT) => {
 export const gridImage = (settings, color, plane = null, view = FLAT) => {
   const m = plane && planeMatrix(plane);
   const bounds = unfolded(plane, view);
-  const transform = m ? ` transform="matrix(${[m.a, m.b, m.c, m.d, m.e, m.f].map(round).join(' ')})"` : '';
+  const transform = m ? ` transform="matrix(${[m.a, m.b, m.c, m.d, m.e, m.f].map(round2).join(' ')})"` : '';
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${[view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0].map(round).join(' ')}" preserveAspectRatio="none">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${[view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0].map(round2).join(' ')}" preserveAspectRatio="none">` +
     `<path d="${gridPath(settings, bounds)}"${transform} fill="none" stroke="${color}" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 };

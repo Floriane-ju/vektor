@@ -1,5 +1,6 @@
 import { extrusion, outlinePath, planeBand, planeDouble, project, silhouette } from './plane.js';
 import { SHAPES } from './scene.js';
+import { boundsOf, radians } from './math.js';
 
 /*
  * Profondeur réelle dans un calque 3D : suppression des lignes cachées.
@@ -20,11 +21,11 @@ import { SHAPES } from './scene.js';
  */
 
 const EPSILON = 1e-6;
+/* Tronçon de segment (en fraction de sa longueur) trop court pour compter. */
+const SPAN_EPSILON = 1e-9;
 /* Interstice (px) sous lequel deux passages cachés se rejoignent, et morceau
    visible sous lequel il disparaît. */
 const GAP = 0.1;
-
-const radians = (value) => (value * Math.PI) / 180;
 
 /* Point du plan à la hauteur `h`, à l'écran, avec sa profondeur `z`. */
 const lifter = (child) => {
@@ -39,17 +40,8 @@ const lifter = (child) => {
     });
 };
 
-const boxOf = (points) => {
-  let [minX, minY, maxX, maxY] = [Infinity, Infinity, -Infinity, -Infinity];
-  for (const p of points) {
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
-  return [minX, minY, maxX, maxY];
-};
-const overlaps = (p, q) => p[0] <= q[2] && q[0] <= p[2] && p[1] <= q[3] && q[1] <= p[3];
+
+const overlaps = (p, q) => p.minX <= q.maxX && q.minX <= p.maxX && p.minY <= q.maxY && q.minY <= p.maxY;
 
 /**
  * Face plane `rings` (contours à l'écran avec profondeur, pair-impair : un
@@ -70,7 +62,7 @@ const face = (child, rings, fill, occludes) => {
   const A = ((b.z - a.z) * (c.y - a.y) - (c.z - a.z) * (b.y - a.y)) / area;
   const B = ((c.z - a.z) * (b.x - a.x) - (b.z - a.z) * (c.x - a.x)) / area;
   const depth = all.reduce((sum, p) => sum + p.z, 0) / all.length;
-  return { child, rings, box: boxOf(all), A, B, C: a.z - A * a.x - B * a.y, fill, occludes, depth };
+  return { child, rings, box: boundsOf(all), A, B, C: a.z - A * a.x - B * a.y, fill, occludes, depth };
 };
 
 /* Coins d'une bande (`planeBand`) fermée en un contour : bouts et coins du
@@ -179,14 +171,14 @@ const hiddenBy = (a, b, face) => {
   const cuts = [lo, ...crossings(a, b, face.rings).filter((t) => t > lo && t < hi), hi].sort((p, q) => p - q);
   const spans = [];
   for (let k = 1; k < cuts.length; k++) {
-    if (cuts[k] - cuts[k - 1] > 1e-9 && contains(face.rings, at((cuts[k] + cuts[k - 1]) / 2))) spans.push([cuts[k - 1], cuts[k]]);
+    if (cuts[k] - cuts[k - 1] > SPAN_EPSILON && contains(face.rings, at((cuts[k] + cuts[k - 1]) / 2))) spans.push([cuts[k - 1], cuts[k]]);
   }
   return spans;
 };
 
 /* Morceaux visibles [u0, u1] du segment a→b. */
 const visiblePieces = (a, b, faces) => {
-  const reach = boxOf([a, b]);
+  const reach = boundsOf([a, b]);
   const length = Math.hypot(b.x - a.x, b.y - a.y);
   const gap = length > 0 ? GAP / length : 0;
   const hidden = faces

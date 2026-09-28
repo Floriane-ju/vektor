@@ -1,4 +1,5 @@
 import { clampCount } from './interpolate.js';
+import { clamp, radians, wrapAngle } from './math.js';
 
 /**
  * Un modificateur est une transformation de point paramétrée par l'indice de
@@ -47,9 +48,9 @@ const step = (point, i, n, center, { stepX = 60, stepY = 0 } = {}) => ({
 /* Cosinus et sinus d'un angle en degrés, sans le résidu flottant de π : un
    axe à 90° reste exactement vertical. */
 const unit = (degrees) => {
-  const radians = (degrees * Math.PI) / 180;
+  const angle = radians(degrees);
   const snap = (value) => (Math.abs(value) < 1e-12 ? 0 : value);
-  return { x: snap(Math.cos(radians)), y: snap(Math.sin(radians)) };
+  return { x: snap(Math.cos(angle)), y: snap(Math.sin(angle)) };
 };
 
 /**
@@ -60,7 +61,7 @@ const unit = (degrees) => {
 export const MIRROR_AXIS = { mirrorH: 90, mirrorV: 0 };
 
 /** Un axe n'a pas de sens : 190° et 10° sont le même. */
-export const clampAxis = (degrees) => ((degrees % 180) + 180) % 180;
+export const clampAxis = (degrees) => wrapAngle(degrees, 180);
 
 /**
  * Croissance d'une spirale, en % par copie. Sous -100 % le facteur changerait
@@ -68,7 +69,7 @@ export const clampAxis = (degrees) => ((degrees % 180) + 180) % 180;
  */
 const GROWTH_BOUNDS = { min: -50, max: 100 };
 export const clampGrowth = (percent) =>
-  Math.min(GROWTH_BOUNDS.max, Math.max(GROWTH_BOUNDS.min, Number.isFinite(percent) ? percent : 0));
+  clamp(Number.isFinite(percent) ? percent : 0, GROWTH_BOUNDS.min, GROWTH_BOUNDS.max);
 
 /* ponytail: plafond du facteur cumulé, pour qu'aucune coordonnée non finie
    n'atteigne le SVG (100 % × 2000 copies = 2^2000). Au-delà, les copies
@@ -101,7 +102,7 @@ const mirror = (type) => (point, i, n, center, { axis } = {}) => {
   return {
     x: center.x + dx * cos + dy * sin,
     y: center.y + dx * sin - dy * cos,
-    angle: ((((2 * degrees + 180) % 360) + 360) % 360) * (Math.PI / 180),
+    angle: radians(wrapAngle(2 * degrees + 180)),
     flip: true,
   };
 };
@@ -135,7 +136,7 @@ const MIN_GROWTH = 1e-6;
  */
 const evenTurn = (i, angleStep, factor) => {
   if (factor === 1) return { angle: i * angleStep, growth: 1 };
-  const growth = Math.min(MAX_GROWTH, Math.max(MIN_GROWTH, 1 + i * (factor - 1)));
+  const growth = clamp(1 + i * (factor - 1), MIN_GROWTH, MAX_GROWTH);
   return { angle: (angleStep * Math.log(growth)) / Math.log(factor), growth };
 };
 
@@ -166,7 +167,7 @@ const spiral = turning(growingTurn, evenTurn);
    chaque pas angulaire — linéaire en angle, spires équidistantes. */
 const linearTurn = (i, angleStep, factor) => ({
   angle: i * angleStep,
-  growth: Math.min(MAX_GROWTH, Math.max(MIN_GROWTH, 1 + i * (factor - 1))),
+  growth: clamp(1 + i * (factor - 1), MIN_GROWTH, MAX_GROWTH),
 });
 
 /* Longueur d'arc de `R = u`, `θ = u/c` (à facteur près), primitive de √(u²+c²). */
@@ -192,7 +193,7 @@ const evenLinearTurn = (i, angleStep, factor) => {
   const start = archArc(1, c);
   const target = start + i * (archArc(1 + g, c) - start);
   let lo = MIN_GROWTH;
-  let hi = Math.min(MAX_GROWTH, Math.max(1, 1 + i * g));
+  let hi = clamp(1 + i * g, 1, MAX_GROWTH);
   if (target <= archArc(lo, c)) hi = lo;
   for (let k = 0; k < 50 && hi - lo > 1e-12; k += 1) {
     const mid = (lo + hi) / 2;

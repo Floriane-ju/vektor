@@ -2,7 +2,7 @@
 {
   "id": "T-0135",
   "titre": "Géométrie et helpers SVG dupliqués",
-  "colonne": "backlog",
+  "colonne": "en-cours",
   "priorite": "moyenne",
   "charge": "m",
   "tags": [
@@ -11,7 +11,7 @@
   ],
   "cree": "2026-09-28",
   "maj": "2026-09-28",
-  "plan": null,
+  "plan": "2026-09-28-audit-front-tickets-ovrsee-aucun-code-modifie.md",
   "epic": "T-0127"
 }
 ---

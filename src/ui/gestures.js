@@ -20,7 +20,8 @@ import {
   updateModifier,
 } from '../scene.js';
 import { axisDirection, MIRROR_AXIS } from '../modifiers.js';
-import { CHROME, clearHover, elementsInBox } from '../renderer-svg.js';
+import { CHROME, clearHover, elementsInBox, svgNode } from '../renderer-svg.js';
+import { boundsOf } from '../math.js';
 
 /**
  * Gestes au pointeur sur le plan de travail. Chaque geste commencé est un
@@ -224,15 +225,18 @@ const moveGesture = (ctx, event, id) => {
    suivant et l'export effacent d'eux-mêmes. */
 const lassoFrame = (svgRoot, box) => {
   clearHover(svgRoot);
-  const node = document.createElementNS(svgRoot.namespaceURI, 'rect');
-  const attrs = { x: box.minX, y: box.minY, width: box.maxX - box.minX, height: box.maxY - box.minY };
-  for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, String(value));
+  const node = svgNode('rect', {
+    x: box.minX,
+    y: box.minY,
+    width: box.maxX - box.minX,
+    height: box.maxY - box.minY,
+    fill: 'none',
+    stroke: 'currentColor',
+    'stroke-dasharray': CHROME.sketchDash,
+    'vector-effect': 'non-scaling-stroke',
+    'pointer-events': 'none',
+  });
   node.dataset.hover = '';
-  node.setAttribute('fill', 'none');
-  node.setAttribute('stroke', 'currentColor');
-  node.setAttribute('stroke-dasharray', CHROME.sketchDash);
-  node.setAttribute('vector-effect', 'non-scaling-stroke');
-  node.setAttribute('pointer-events', 'none');
   svgRoot.append(node);
 };
 
@@ -247,12 +251,7 @@ const lassoGesture = (ctx, event) => {
     const point = screenPoint(next);
     if (!moved && Math.hypot(point.x - start.x, point.y - start.y) < DRAG_THRESHOLD) return;
     moved = true;
-    const box = {
-      minX: Math.min(start.x, point.x),
-      minY: Math.min(start.y, point.y),
-      maxX: Math.max(start.x, point.x),
-      maxY: Math.max(start.y, point.y),
-    };
+    const box = boundsOf([start, point]);
     const layer = getActiveLayer(store.get());
     const hits = layer?.locked ? [] : elementsInBox(svgRoot, layer, box);
     store.apply(selectElements, [...base, ...hits.filter((id) => !base.includes(id))]);
@@ -352,14 +351,16 @@ export const drawGesture = (ctx, event, layer, tool) => {
    le survol pour que le rendu suivant et l'export l'effacent d'eux-mêmes. */
 const ghostSegment = (svgRoot, from, to) => {
   clearHover(svgRoot);
-  const ghost = document.createElementNS(svgRoot.namespaceURI, 'line');
-  for (const [name, value] of Object.entries({ x1: from.x, y1: from.y, x2: to.x, y2: to.y })) {
-    ghost.setAttribute(name, String(value));
-  }
+  const ghost = svgNode('line', {
+    x1: from.x,
+    y1: from.y,
+    x2: to.x,
+    y2: to.y,
+    stroke: 'currentColor',
+    'stroke-dasharray': CHROME.sketchDash,
+    'pointer-events': 'none',
+  });
   ghost.dataset.hover = '';
-  ghost.setAttribute('stroke', 'currentColor');
-  ghost.setAttribute('stroke-dasharray', CHROME.sketchDash);
-  ghost.setAttribute('pointer-events', 'none');
   svgRoot.append(ghost);
 };
 

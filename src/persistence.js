@@ -31,6 +31,7 @@ import {
   SHAPES,
   STAGE,
 } from './scene.js';
+import { clamp } from './math.js';
 
 /* La clé ne suit pas la version du format : la changer orphelinerait
    l'autosave déjà posée chez les utilisateurs, alors que `deserialize` sait
@@ -163,14 +164,13 @@ const num = (value, fallback) =>
     ? Number(value)
     : fallback;
 
-const clamp = (value, { min, max, identity }) =>
-  Math.min(max, Math.max(min, num(value, identity)));
+const clampTo = (value, { min, max, identity }) => clamp(num(value, identity), min, max);
 
 /** Une plage absente ou partielle se replie sur la valeur neutre, jamais sur une borne. */
 const readRange = (ranges, key) => {
   const bounds = RANGE_BOUNDS[key];
   const raw = Array.isArray(ranges?.[key]) ? ranges[key] : [];
-  return [clamp(raw[0], bounds), clamp(raw[1], bounds)];
+  return [clampTo(raw[0], bounds), clampTo(raw[1], bounds)];
 };
 
 /**
@@ -197,7 +197,7 @@ const readInterpolation = (raw, stackSize) => {
   const colors = range.slice(0, 2);
   const read = bounds.color
     ? colors.length === 2 && colors.every(isHexColor) ? colors.map((value) => value.toLowerCase()) : [...bounds.defaultRange]
-    : [clamp(range[0], bounds), clamp(range[1], bounds)];
+    : [clampTo(range[0], bounds), clampTo(range[1], bounds)];
   return createInterpolation({
     ...(typeof raw?.id === 'string' && raw.id !== '' ? { id: raw.id } : {}),
     property,

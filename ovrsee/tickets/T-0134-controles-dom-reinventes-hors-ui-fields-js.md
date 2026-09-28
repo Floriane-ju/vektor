@@ -2,7 +2,7 @@
 {
   "id": "T-0134",
   "titre": "Contrôles DOM réinventés hors ui/fields.js",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "charge": "m",
   "tags": [

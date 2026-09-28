@@ -1,5 +1,5 @@
 import { hiddenLines } from './hidden.js';
-import { extrusion, occluder, planeBand, shifted } from './plane.js';
+import { extrusionOf, occluder, planeBand, shifted } from './plane.js';
 import { createNode, maskId, MASK_REGION, round, svgNode } from './renderer-svg.js';
 import { SHAPES } from './scene.js';
 
@@ -41,22 +41,26 @@ export const createPlaneDouble = (child, [outer, inner], closed = true) => {
   return group;
 };
 
-const extrusionOf = (child) => {
-  const v = child.plane && child.height ? extrusion(child.plane, child.height * (child.scale ?? 1)) : null;
-  return v && Math.hypot(v.x, v.y) > 1e-6 ? v : null;
+/* Extrusion visible d'une copie, `null` sans profondeur ou vue de face. */
+const FLAT_EXTRUSION = 1e-6;
+const depthOf = (child) => {
+  const v = child.plane && child.height ? extrusionOf(child) : null;
+  return v && Math.hypot(v.x, v.y) > FLAT_EXTRUSION ? v : null;
 };
 
 /* Centrée sur le plan : une profondeur de 10 va de -5 à 5. */
 const centred = (child, v) => ({ ...child, matrix: shifted(child.matrix, { x: -v.x / 2, y: -v.y / 2 }) });
 
-/* Tracé d'écran en données `d` ; un tour complet se referme. */
+/* Tracé d'écran en données `d` ; un tour complet (bouts confondus à
+   `SAME_POINT` près) se referme. */
+const SAME_POINT = 1e-9;
 const screenPath = (points, closed) =>
   `M${points.map((p) => `${round(p.x)},${round(p.y)}`).join(' L')}${closed ? ' Z' : ''}`;
 const runPath = (runs) =>
   runs
     .map((run) => {
       const [first, last] = [run[0], run.at(-1)];
-      const loop = run.length > 2 && Math.abs(first.x - last.x) < 1e-9 && Math.abs(first.y - last.y) < 1e-9;
+      const loop = run.length > 2 && Math.abs(first.x - last.x) < SAME_POINT && Math.abs(first.y - last.y) < SAME_POINT;
       return screenPath(loop ? run.slice(0, -1) : run.length === 1 ? [first, first] : run, loop);
     })
     .join(' ');
@@ -118,7 +122,7 @@ export const drawPlane = (children) => {
   const parts = children
     .filter((child) => child.opaque !== false)
     .map((child) => {
-      const v = extrusionOf(child);
+      const v = depthOf(child);
       return v && occluder(centred(child, v), v);
     })
     .filter(Boolean)

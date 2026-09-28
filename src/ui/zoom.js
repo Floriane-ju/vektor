@@ -1,6 +1,7 @@
 import { STAGE } from '../scene.js';
 import { drawingBounds } from '../renderer-svg.js';
 import { pillButton } from './fields.js';
+import { clamp } from '../math.js';
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 8;
@@ -8,7 +9,7 @@ const STEP = 1.25;
 /* Marge autour du dessin quand on ajuste la vue, en pixels écran. */
 const FIT_MARGIN = 32;
 
-const clampZoom = (zoom) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+const clampZoom = (zoom) => clamp(zoom, MIN_ZOOM, MAX_ZOOM);
 
 const button = (text, title, onClick) =>
   pillButton(text, { title, label: title, className: text.length === 1 ? 'is-square' : null, onClick });

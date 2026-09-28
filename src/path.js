@@ -15,6 +15,7 @@
  */
 
 import { MAX_POINTS } from './scene.js';
+import { radians } from './math.js';
 
 const NUMBER = /-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi;
 const TOKEN = /[a-z]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi;
@@ -31,7 +32,7 @@ const fail = (message) => {
   throw new Error(message);
 };
 
-const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+const lerpPoint = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
 
 /* Sommets d'une Bézier (quadratique ou cubique) après son départ : de Casteljau,
    le dernier est exactement le point d'arrivée. */
@@ -39,7 +40,7 @@ const bezier = (controls) =>
   Array.from({ length: CURVE_STEPS }, (_, k) => {
     let level = controls;
     const t = (k + 1) / CURVE_STEPS;
-    while (level.length > 1) level = level.slice(1).map((point, j) => lerp(level[j], point, t));
+    while (level.length > 1) level = level.slice(1).map((point, j) => lerpPoint(level[j], point, t));
     return level[0];
   });
 
@@ -52,7 +53,7 @@ const arc = (from, [rxIn, ryIn, degrees, large, sweep], to) => {
   let rx = Math.abs(rxIn);
   let ry = Math.abs(ryIn);
   if (rx === 0 || ry === 0) return [to];
-  const phi = (degrees * Math.PI) / 180;
+  const phi = radians(degrees);
   const [cos, sin] = [Math.cos(phi), Math.sin(phi)];
   const [dx, dy] = [(from.x - to.x) / 2, (from.y - to.y) / 2];
   const x1 = cos * dx + sin * dy;

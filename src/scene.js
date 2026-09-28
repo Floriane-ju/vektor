@@ -1,5 +1,6 @@
 import { applyStack, clampAxis, clampGrowth, copyCount, createModifier, effectiveCount, MAX_COPIES, stackCopies } from './modifiers.js';
 import { clampCount, ramp, stackValues } from './interpolate.js';
+import { boundsOf, clamp, radians, wrapAngle } from './math.js';
 
 export const STAGE = { width: 900, height: 900 };
 
@@ -169,14 +170,14 @@ export const DEFAULT_SHAPE = 'ellipse';
 const MAX_SIDES = 64;
 
 export const clampSides = (value) =>
-  Math.min(MAX_SIDES, Math.max(3, Math.round(Number.isFinite(value) ? value : 6)));
+  clamp(Math.round(Number.isFinite(value) ? value : 6), 3, MAX_SIDES);
 
 export const ARC_CLOSURES = { open: 'Ouvert', chord: 'Corde', sector: 'Secteur' };
 
 /* Un tour dans chaque sens : `end - start` suffit à dire l'étendue, au-delà le
    même dessin sous un nombre sans borne. */
 export const clampAngle = (value, fallback = 0) =>
-  Math.min(360, Math.max(-360, Number.isFinite(value) ? value : fallback));
+  clamp(Number.isFinite(value) ? value : fallback, -360, 360);
 
 /* Plan 3D d'un calque. Défaut : inclinaison et orientation à 45°. `sides` =
    flancs de l'extrusion : traits seuls, ou peints de la couleur pleine de la forme. */
@@ -191,8 +192,8 @@ export const DEFAULT_DEPTH = 80;
 /* 90° verrait le plan par la tranche : la projection ne s'inverserait plus. */
 export const MAX_TILT = 89;
 export const clampTilt = (value) =>
-  Math.min(MAX_TILT, Math.max(0, Number.isFinite(value) ? value : DEFAULT_PLANE.tilt));
-export const clampHeading = (value) => (((Number.isFinite(value) ? value : 0) % 360) + 360) % 360;
+  clamp(Number.isFinite(value) ? value : DEFAULT_PLANE.tilt, 0, MAX_TILT);
+export const clampHeading = (value) => wrapAngle(Number.isFinite(value) ? value : 0);
 export const clampPlaneSides = (value) => (Object.hasOwn(PLANE_SIDES, value) ? value : DEFAULT_PLANE.sides);
 const MAX_HEIGHT = 1000;
 /* Centrée, une profondeur négative dessinerait la même chose : sa valeur absolue. */
@@ -208,16 +209,7 @@ export const MAX_POINTS = 5000;
  * modificateurs prennent pour pivot.
  */
 export const centerPoints = (absolute) => {
-  /* Pas de `Math.min(...xs)` : au-delà de ~100 000 sommets, la pile d'appels déborde. */
-  const box = absolute.reduce(
-    (acc, p) => ({
-      minX: Math.min(acc.minX, p.x),
-      maxX: Math.max(acc.maxX, p.x),
-      minY: Math.min(acc.minY, p.y),
-      maxY: Math.max(acc.maxY, p.y),
-    }),
-    { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity },
-  );
+  const box = boundsOf(absolute);
   const x = (box.minX + box.maxX) / 2;
   const y = (box.minY + box.maxY) / 2;
   return { x, y, points: absolute.map((p) => ({ x: p.x - x, y: p.y - y })) };
@@ -241,7 +233,7 @@ export const scaledPatch = (element, fx, fy) => {
 
 /** Tourne un vecteur de `degrees` : le repère d'une forme vers celui de l'écran. */
 export const rotateVector = ({ x, y }, degrees) => {
-  const angle = (degrees * Math.PI) / 180;
+  const angle = radians(degrees);
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
   return { x: x * cos - y * sin, y: x * sin + y * cos };
@@ -253,7 +245,7 @@ export const absolutePoints = (element) =>
   element.points.map((p) => ({ x: element.x + p.x, y: element.y + p.y }));
 
 /** `inner` en % : 100 = polygone convexe, 0 = étoile réduite à ses rayons. */
-export const clampInner = (value) => Math.min(100, Math.max(0, Number.isFinite(value) ? value : 100));
+export const clampInner = (value) => clamp(Number.isFinite(value) ? value : 100, 0, 100);
 
 /**
  * L'épaisseur du trait appartient à la forme : un même calque peut mêler un
@@ -291,7 +283,7 @@ export const clampDash = (values) => {
     .map(Number)
     .filter(Number.isFinite)
     .slice(0, MAX_DASH_LENGTH)
-    .map((value) => Math.min(MAX_DASH_VALUE, Math.max(0, value)));
+    .map((value) => clamp(value, 0, MAX_DASH_VALUE));
   /* Que des zéros : SVG trace plein, autant le dire. */
   return dash.some((value) => value > 0) ? dash : [];
 };
@@ -308,7 +300,7 @@ export const clampLinecap = (value) => (Object.hasOwn(LINECAPS, value) ? value :
    l'échelle de la copie, comme l'épaisseur. */
 export const DEFAULT_OUTLINE_GAP = 1.5;
 const MAX_OUTLINE_GAP = 100;
-export const clampGap = (value) => Math.min(MAX_OUTLINE_GAP, Math.max(0, Number.isFinite(value) ? value : DEFAULT_OUTLINE_GAP));
+export const clampGap = (value) => clamp(Number.isFinite(value) ? value : DEFAULT_OUTLINE_GAP, 0, MAX_OUTLINE_GAP);
 
 const counters = { L: 0, E: 0, I: 0 };
 const nextId = (prefix) => `${prefix}${++counters[prefix]}`;
@@ -1275,6 +1267,6 @@ export const updateInterpolationRange = (scene, ownerId, id, index, value) =>
     const range = [...interpolation.range];
     /* Mêmes bornes que l'import : la valeur saisie survit au rechargement. */
     const { min, max, color } = RANGE_BOUNDS[interpolation.property];
-    range[index] = color ? value : Math.min(max, Math.max(min, value));
+    range[index] = color ? value : clamp(value, min, max);
     return { ...interpolation, range };
   });

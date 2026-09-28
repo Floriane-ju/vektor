@@ -1,3 +1,5 @@
+import { clamp } from '../math.js';
+
 /**
  * Glisser horizontal sur les champs numériques, comme dans Figma : à droite
  * la valeur monte d'un `step` tous les `PX_PER_STEP` pixels, à gauche elle
@@ -21,7 +23,7 @@ export const scrubValue = (input, start, dx, shift) => {
   const raw = start + Math.round(dx / PX_PER_STEP) * step * (shift ? SHIFT_FACTOR : 1);
   const min = input.min === '' ? -Infinity : Number(input.min);
   const max = input.max === '' ? Infinity : Number(input.max);
-  return String(Number(Math.min(max, Math.max(min, raw)).toFixed(decimals(step))));
+  return String(Number(clamp(raw, min, max).toFixed(decimals(step))));
 };
 
 export const mountScrub = () => {

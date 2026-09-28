@@ -1,5 +1,6 @@
 import polygonClipping from 'polygon-clipping';
 import { clampExtent, SHAPES, STAGE } from './scene.js';
+import { radians, wrapAngle } from './math.js';
 
 /**
  * Plan 3D d'un calque : le motif, composé à plat par la pile de modificateurs,
@@ -12,10 +13,10 @@ import { clampExtent, SHAPES, STAGE } from './scene.js';
  * dessin.
  */
 
-const radians = (value) => (value * Math.PI) / 180;
 const ORIGIN = { x: STAGE.width / 2, y: STAGE.height / 2 };
 
-/* Échantillons d'un contour courbe projeté : même finesse que les boîtes. */
+/* Échantillons d'un contour courbe (tracé projeté, boîte de sélection) :
+   l'écart à la vraie courbe reste sous le pixel pour les rayons du plan. */
 const CURVE_SAMPLES = 64;
 
 /**
@@ -52,6 +53,24 @@ export const extrusion = ({ tilt, heading }, height) => {
   return { x: length * Math.sin(radians(heading)), y: -length * Math.cos(radians(heading)) };
 };
 
+/** Extrusion d'une copie rendue : sa profondeur à son échelle. */
+export const extrusionOf = (child) => extrusion(child.plane, child.height * (child.scale ?? 1));
+
+/**
+ * Pose d'un point dans le repère d'une copie : reflet (`flip`) puis rotation
+ * propre, autour de son centre — comme `createNode` les pose en `transform`.
+ */
+export const placer = (child) => {
+  const { x, y } = child;
+  const rotation = radians(child.rotation ?? 0);
+  const [cos, sin] = [Math.cos(rotation), Math.sin(rotation)];
+  return (p) => {
+    const dx = child.flip ? x - p.x : p.x - x;
+    const dy = p.y - y;
+    return { x: x + dx * cos - dy * sin, y: y + dx * sin + dy * cos };
+  };
+};
+
 /**
  * Sommets d'un polygone régulier, le premier en haut. Sous 100 % de `inner`,
  * un sommet creux s'intercale entre deux sommets : l'étoile. À 100 % il
@@ -81,13 +100,7 @@ export const outlinePath = (child) => {
   const rx = clampExtent(child.type, child.rx * scale);
   const ry = clampExtent(child.type, child.ry * scale);
   const { x, y } = child;
-  const rotation = radians(child.rotation ?? 0);
-  const [cos, sin] = [Math.cos(rotation), Math.sin(rotation)];
-  const place = (p) => {
-    const dx = child.flip ? x - p.x : p.x - x;
-    const dy = p.y - y;
-    return { x: x + dx * cos - dy * sin, y: y + dx * sin + dy * cos };
-  };
+  const place = placer(child);
   /* 0° en haut, sens horaire, comme l'arc et le premier sommet du polygone. */
   const around = (from, span, radiusX, radiusY, count) =>
     Array.from({ length: count }, (_, i) => {
@@ -126,7 +139,7 @@ export const outlinePath = (child) => {
         return { points: around(child.start, 360, rx, rx, CURVE_SAMPLES).map(place), closed: true, corners: [] };
       }
       /* Un arc à rebours court quand même en sens horaire, comme `arcPath`. */
-      const sweep = ((span % 360) + 360) % 360;
+      const sweep = wrapAngle(span);
       const arc = around(child.start, sweep, rx, rx, CURVE_SAMPLES + 1);
       const points = (child.closure === 'sector' ? [...arc, { x, y }] : arc).map(place);
       const ends = child.closure === 'sector' ? [0, arc.length - 1, arc.length] : [0, arc.length - 1];

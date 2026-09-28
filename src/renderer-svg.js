@@ -11,7 +11,8 @@ import {
   STAGE,
 } from './scene.js';
 import { axisDirection } from './modifiers.js';
-import { booleanPieces, extrusion, outlinePath, planeBand, planeDouble, planeMatrix, polygonVertices, project, shifted } from './plane.js';
+import { booleanPieces, extrusionOf, outlinePath, placer, planeBand, planeDouble, planeMatrix, polygonVertices, project, shifted } from './plane.js';
+import { boundsOf, radians, wrapAngle } from './math.js';
 import { createPlaneDouble, drawPlane, occlude } from './renderer-plane.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -52,7 +53,7 @@ const drawLayer = (layer) => {
   const entry = { layer, group: null, drawn: [], occluders: new Map(), bounds: new Map(), dots: new Map(), box: null, frame: null };
   if (children.length === 0) return entry;
 
-  const group = document.createElementNS(SVG_NS, 'g');
+  const group = svgNode('g');
   group.dataset.layerId = layer.id;
   const planar = Boolean(activePlane(layer));
   const volumes = [];
@@ -235,7 +236,7 @@ const createHandles = (scene) => {
   const layer = scene.layers.find((candidate) => candidate.elements.includes(element));
   if (!element || SHAPES[element.type].geometry !== 'polyline' || !layer?.visible) return null;
 
-  const group = document.createElementNS(SVG_NS, 'g');
+  const group = svgNode('g');
   group.dataset.handles = element.id;
   group.style.fill = CHROME.knob;
   group.style.stroke = CHROME.accent;
@@ -256,11 +257,9 @@ const createHandles = (scene) => {
 /* Demi-longueur des branches de la croix qui marque un centre. */
 const GUIDE_MARK = 14;
 
-const guideNode = (geometry, attrs) => {
-  const node = document.createElementNS(SVG_NS, geometry);
-  for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, round(value));
-  return node;
-};
+/* `svgNode` aux coordonnées arrondies, comme le reste du dessin. */
+const guideNode = (geometry, attrs) =>
+  svgNode(geometry, Object.fromEntries(Object.entries(attrs).map(([name, value]) => [name, round(value)])));
 
 const guideLine = (x1, y1, x2, y2) => guideNode('line', { x1, y1, x2, y2 });
 
@@ -344,7 +343,7 @@ const createGuides = (layer, element = null) => {
     : [];
   if (marked.length === 0) return null;
 
-  const group = document.createElementNS(SVG_NS, 'g');
+  const group = svgNode('g');
   group.dataset.guides = marked.map(({ modifier }) => modifier.type).join(' ');
   group.setAttribute('fill', 'none');
   /* Gris neutre : un repère ne doit pas se confondre avec un trait dessiné,
@@ -361,7 +360,7 @@ const createGuides = (layer, element = null) => {
   if (activePlane(layer)) group.setAttribute('transform', planeTransform(layer));
   group.append(
     ...marked.map(({ modifier, index, owner }) => {
-      const pivot = document.createElementNS(SVG_NS, 'g');
+      const pivot = svgNode('g');
       pivot.dataset.pivot = String(index);
       if (owner !== layer) pivot.dataset.pivotOwner = owner.id;
       pivot.append(...GUIDES[modifier.type](pivotOf(layer, index, owner), modifier));
@@ -390,7 +389,7 @@ const arcPath = (cx, cy, radius, start, end, closure, place = (p) => p, mirrored
     return `${round(placed.x)},${round(placed.y)}`;
   };
   const at = (degrees) => {
-    const angle = (degrees * Math.PI) / 180;
+    const angle = radians(degrees);
     return xy({ x: cx + radius * Math.sin(angle), y: cy - radius * Math.cos(angle) });
   };
   const r = `${round(radius)},${round(radius)}`;
@@ -401,7 +400,7 @@ const arcPath = (cx, cy, radius, start, end, closure, place = (p) => p, mirrored
     return `M${at(start)} A${r} 0 0 ${clockwise} ${at(start + 180)} A${r} 0 0 ${clockwise} ${at(start)} Z`;
   }
   /* Un arc à rebours (270 → 90) court quand même en sens horaire. */
-  const sweep = ((span % 360) + 360) % 360;
+  const sweep = wrapAngle(span);
   const arc = `M${at(start)} A${r} 0 ${sweep > 180 ? 1 : 0} ${clockwise} ${at(start + sweep)}`;
   if (closure === 'sector') return `${arc} L${xy({ x: cx, y: cy })} Z`;
   return closure === 'chord' ? `${arc} Z` : arc;
@@ -417,7 +416,7 @@ export const areaPath = (child) => {
   if (child.matrix) {
     const { points, closed } = outlinePath(child);
     /* L'aplat suit la face avant : celle du haut, à une demi-profondeur du plan. */
-    const v = child.height ? extrusion(child.plane, child.height * (child.scale ?? 1)) : null;
+    const v = child.height ? extrusionOf(child) : null;
     const matrix = v ? shifted(child.matrix, { x: v.x / 2, y: v.y / 2 }) : child.matrix;
     return closed && points.length > 2 ? projectedPath(matrix, points, true) : null;
   }
@@ -425,13 +424,7 @@ export const areaPath = (child) => {
   const rx = clampExtent(child.type, child.rx * scale);
   const ry = clampExtent(child.type, child.ry * scale);
   const { x, y } = child;
-  const rotation = degrees(child.rotation ?? 0);
-  const [cos, sin] = [Math.cos(rotation), Math.sin(rotation)];
-  const place = (p) => {
-    const dx = child.flip ? x - p.x : p.x - x;
-    const dy = p.y - y;
-    return { x: x + dx * cos - dy * sin, y: y + dx * sin + dy * cos };
-  };
+  const place = placer(child);
   const polygon = (points) =>
     `M${points.map((p) => {
       const placed = place(p);
@@ -499,7 +492,7 @@ export const createNode = (child) => {
   const tag = child.matrix
     ? 'path'
     : ({ dot: 'line', arc: 'path', polyline: child.closed ? 'polygon' : 'polyline' }[geometry] ?? geometry);
-  const node = document.createElementNS(SVG_NS, tag);
+  const node = svgNode(tag);
   node.dataset.elementId = child.id;
   if (child.origin) node.dataset.origin = '';
   let strokeWidth = child.strokeWidth;
@@ -760,80 +753,23 @@ const createBoolean = (child, steps) => {
 /* Cadre de sélection : écart à la forme, en unités du dessin ; son trait garde
    la même épaisseur à l'écran quel que soit le zoom. */
 const SELECTION_GAP = 8;
-/* Échantillons d'un contour courbe : l'écart à la vraie boîte reste sous le
-   pixel pour les rayons du plan. */
-const CURVE_SAMPLES = 64;
-
-const degrees = (value) => (value * Math.PI) / 180;
-
-/* Points du contour d'une copie rendue, avant rotation et reflet. */
-const outlinePoints = (child) => {
-  const scale = child.scale ?? 1;
-  const rx = clampExtent(child.type, child.rx * scale);
-  const ry = clampExtent(child.type, child.ry * scale);
-  const { x, y } = child;
-  const around = (from, to, radiusX, radiusY) =>
-    Array.from({ length: CURVE_SAMPLES + 1 }, (_, i) => {
-      const angle = degrees(from + ((to - from) * i) / CURVE_SAMPLES);
-      return { x: x + radiusX * Math.sin(angle), y: y - radiusY * Math.cos(angle) };
-    });
-  switch (SHAPES[child.type].geometry) {
-    case 'dot':
-      return [{ x, y }];
-    case 'line':
-    case 'rect':
-      return [
-        { x: x - rx, y: y - ry },
-        { x: x + rx, y: y + ry },
-        { x: x - rx, y: y + ry },
-        { x: x + rx, y: y - ry },
-      ];
-    case 'polyline':
-      return child.points.map((p) => ({ x: x + p.x * scale, y: y + p.y * scale }));
-    case 'polygon':
-      /* Les sommets creux d'une étoile sont dans l'enveloppe des pointes. */
-      return Array.from({ length: child.sides }, (_, i) => {
-        const angle = -Math.PI / 2 + (i * Math.PI * 2) / child.sides;
-        return { x: x + rx * Math.cos(angle), y: y + rx * Math.sin(angle) };
-      });
-    case 'arc': {
-      const span = Math.abs(child.end - child.start) >= 360 ? 360 : (((child.end - child.start) % 360) + 360) % 360;
-      const points = around(child.start, child.start + span, rx, rx);
-      return child.closure === 'sector' ? [...points, { x, y }] : points;
-    }
-    default:
-      return around(0, 360, rx, ry);
-  }
-};
-
 /**
- * Boîte englobante d'une copie rendue, dans le repère du plan : contour
- * reflété puis tourné comme le fait `createNode`, élargi d'une demi-épaisseur.
+ * Boîte englobante d'une copie rendue, dans le repère du plan : son contour
+ * (`outlinePath`, reflété et tourné comme le pose `createNode`), projeté et
+ * extrudé en 3D, élargi d'une demi-épaisseur.
  */
 export const childBounds = (child) => {
-  const rotation = degrees(child.rotation ?? 0);
-  const [cos, sin] = [Math.cos(rotation), Math.sin(rotation)];
-  let placed = outlinePoints(child).map((p) => {
-    const dx = child.flip ? child.x - p.x : p.x - child.x;
-    const dy = p.y - child.y;
-    return { x: child.x + dx * cos - dy * sin, y: child.y + dx * sin + dy * cos };
-  });
+  let placed = outlinePath(child).points;
   if (child.matrix) {
     placed = placed.map((p) => project(child.matrix, p));
-    const v = child.height ? extrusion(child.plane, child.height * (child.scale ?? 1)) : null;
+    const v = child.height ? extrusionOf(child) : null;
     if (v) placed = [-0.5, 0.5].flatMap((k) => placed.map((p) => ({ x: p.x + v.x * k, y: p.y + v.y * k })));
   }
   const dot = SHAPES[child.type].geometry === 'dot';
   const width = child.strokeWidth * (dot ? (child.scale ?? 1) : 1);
   const half = child.outlined && !dot ? width + ((child.gap ?? 0) * (child.scale ?? 1)) / 2 : width / 2;
-  const xs = placed.map((p) => p.x);
-  const ys = placed.map((p) => p.y);
-  return {
-    minX: Math.min(...xs) - half,
-    minY: Math.min(...ys) - half,
-    maxX: Math.max(...xs) + half,
-    maxY: Math.max(...ys) + half,
-  };
+  const box = boundsOf(placed);
+  return { minX: box.minX - half, minY: box.minY - half, maxX: box.maxX + half, maxY: box.maxY + half };
 };
 
 /* Deux boîtes réunies : sans étalement, pour qu'une réduction sur des milliers
@@ -902,7 +838,7 @@ const createSelection = (scene, svgRoot, entries) => {
   /* Plusieurs formes : un cadre chacune, regroupés pour que survol et export
      les traitent comme un seul `[data-selection]`. */
   if (ids.length > 1) {
-    const group = document.createElementNS(SVG_NS, 'g');
+    const group = svgNode('g');
     group.dataset.selection = 'selection';
     for (const id of ids) {
       const box = sourceBounds.get(svgRoot)?.get(id);
@@ -936,7 +872,7 @@ const createTransformHandles = (scene, svgRoot) => {
   const [x0, y0] = [box.minX - SELECTION_GAP, box.minY - SELECTION_GAP];
   const [x2, y2] = [box.maxX + SELECTION_GAP, box.maxY + SELECTION_GAP];
   const at = (rank, low, high) => low + ((high - low) * rank) / 2;
-  const group = document.createElementNS(SVG_NS, 'g');
+  const group = svgNode('g');
   group.dataset.transform = element.id;
   group.style.fill = CHROME.knob;
   group.style.stroke = CHROME.accent;
