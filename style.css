@@ -232,7 +232,7 @@ input[type="range"] {
   gap: var(--space-4);
 }
 
-/* Logo en masque : il prend la couleur du texte, un seul fichier sert aussi de favicon. */
+/* Logo en masque : il prend la couleur du texte (blanc) ; le même fichier, en accent rouge, sert de favicon. */
 .brand::before {
   content: '';
   width: 1em;
