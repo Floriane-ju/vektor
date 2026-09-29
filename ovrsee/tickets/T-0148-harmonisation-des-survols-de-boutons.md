@@ -2,7 +2,7 @@
 {
   "id": "T-0148",
   "titre": "Harmonisation des survols de boutons",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui", "design-system"],
   "cree": "2026-09-29",
