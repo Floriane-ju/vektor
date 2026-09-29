@@ -2,7 +2,7 @@
 {
   "id": "T-0147",
   "titre": "Actions de ligne au survol seul",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui"],
   "cree": "2026-09-29",
@@ -17,5 +17,5 @@ Les actions des lignes de l'arbre (calques, formes) restaient visibles sur la li
 
 ## Critères d'acceptation
 
-- [ ] Actions visibles au survol de la ligne ; cachées sur une ligne sélectionnée non survolée, y compris juste après un clic.
-- [ ] Clavier : visibles quand le focus (visible) est dans la ligne.
+- [x] Actions visibles au survol de la ligne ; cachées sur une ligne sélectionnée non survolée, y compris juste après un clic.
+- [x] Clavier : visibles quand le focus (visible) est dans la ligne.
