@@ -121,9 +121,11 @@ export const sectionHead = (title, addButton = null) => {
   return head;
 };
 
-/* Bouton texte d'une section ; `label` = infobulle et nom accessible. */
-export const textButton = (text, { label = null, focusKey, onClick, className = 'text-btn' }) => {
-  const node = el('button', className, text);
+/* Bouton texte d'une section ; `content` : texte ou nœuds (icône comprise),
+   `label` = infobulle et nom accessible. */
+export const textButton = (content, { label = null, focusKey, onClick, className = 'text-btn' }) => {
+  const node = el('button', className);
+  node.append(...[content].flat());
   node.type = 'button';
   if (label) {
     node.setAttribute('aria-label', label);
@@ -148,7 +150,7 @@ export const pillButton = (content, { title = null, label = null, className = nu
   return node;
 };
 
-export const addButtonFor = (label, focusKey, onClick) => textButton('+ Ajouter', { label, focusKey, onClick });
+export const addButtonFor = (label, focusKey, onClick) => textButton([icon('plus', ICON_SIZE.md), 'Ajouter'], { label, focusKey, onClick });
 
 /**
  * Curseur doublé d'un champ numérique : le curseur pour le geste, le champ
@@ -188,7 +190,7 @@ export const collapsible = (section, head, key) => {
   const button = el('button', 'section-toggle');
   button.type = 'button';
   const summary = el('span', 'section-summary');
-  button.append(icon('chevronDown', ICON_SIZE.sm), el('span', 'section-title', title.textContent), summary);
+  button.append(icon('chevronDown', ICON_SIZE.md), el('span', 'section-title', title.textContent), summary);
   title.replaceChildren(button);
   const refresh = () => {
     const open = collapsed[key] !== true;

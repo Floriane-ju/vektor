@@ -1,6 +1,7 @@
 import { currentStyle, getActiveElement, mixedStyle, setStyle } from '../scene.js';
 import { rebuildWithFocus, whenChanged } from './list.js';
 import { el } from './fields.js';
+import { icon, ICON_SIZE } from './icons.js';
 
 /**
  * Carte du trait, en haut à droite : couleur et épaisseur de la sélection
@@ -84,7 +85,8 @@ const colorPalette = (store, setStroke) => {
   picker.type = 'color';
   picker.setAttribute('aria-label', 'Autre couleur');
   picker.addEventListener('input', () => setStroke({ stroke: picker.value }));
-  const custom = el('label', 'swatch is-custom', '+');
+  const custom = el('label', 'swatch is-custom');
+  custom.append(icon('plus', ICON_SIZE.md));
   custom.title = 'Autre couleur';
   custom.append(picker);
 

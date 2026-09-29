@@ -1,7 +1,6 @@
-/* Pictogrammes des outils et des formes, en trait `currentColor` : la couleur
-   suit le texte du bouton, pressé ou non. Tracés repris de la maquette E. */
+/* Seuls pictogrammes sur mesure : les outils de forme, en trait `currentColor`
+   (la couleur suit le texte du bouton, pressé ou non). Tracés de la maquette E. */
 const PATHS = {
-  cursor: '<path d="M5 3 L16 11 L11 12 L14 18 L12 19 L9 13 L5 16 Z" fill="currentColor" stroke="none"/>',
   arc: '<path d="M3 13 A7 7 0 0 1 17 13 Z" stroke-linejoin="round"/>',
   ellipse: '<ellipse cx="10" cy="10" rx="8" ry="5"/>',
   polygon: '<path d="M10 2.5 L17 7.5 L14.5 16 L5.5 16 L3 7.5 Z" stroke-linejoin="round"/>',
@@ -9,34 +8,50 @@ const PATHS = {
   line: '<line x1="4" y1="16" x2="16" y2="4" stroke-linecap="round"/>',
   point: '<circle cx="10" cy="10" r="3.5" fill="currentColor" stroke="none"/>',
   polyline: '<path d="M3 15 L7 6 L11 13 L17 4" stroke-linejoin="round" stroke-linecap="round"/>',
-  grid: '<rect x="2.5" y="2.5" width="15" height="15"/><path d="M7.5 2.5V17.5M12.5 2.5V17.5M2.5 7.5H17.5M2.5 12.5H17.5"/>',
-  eye: '<path d="M2 10 C5 4.5 15 4.5 18 10 C15 15.5 5 15.5 2 10 Z" stroke-linejoin="round"/><circle cx="10" cy="10" r="2.5"/>',
-  eyeOff: '<path d="M2 10 C5 4.5 15 4.5 18 10 C15 15.5 5 15.5 2 10 Z" stroke-linejoin="round"/><path d="M4 16 L16 4" stroke-linecap="round"/>',
-  /* Plan 3D du calque : un cube, barré quand le calque est à plat. */
-  cube: '<path d="M10 2.5 L16.5 6.25 V13.75 L10 17.5 L3.5 13.75 V6.25 Z M3.5 6.25 L10 10 L16.5 6.25 M10 10 V17.5" stroke-linejoin="round"/>',
-  cubeOff:
-    '<path d="M10 2.5 L16.5 6.25 V13.75 L10 17.5 L3.5 13.75 V6.25 Z" stroke-linejoin="round"/><path d="M4 16 L16 4" stroke-linecap="round"/>',
-  /* Verrou du calque : cadenas fermé, ouvert quand le calque est libre. */
-  lock: '<rect x="4" y="9" width="12" height="8.5" rx="1.5"/><path d="M6.5 9 V6.5 A3.5 3.5 0 0 1 13.5 6.5 V9"/>',
-  lockOff: '<rect x="4" y="9" width="12" height="8.5" rx="1.5"/><path d="M6.5 9 V6.5 A3.5 3.5 0 0 1 13.2 5"/>',
-  /* Calque suspendu (trop de copies) : triangle d'alerte. */
-  warning: '<path d="M10 3 L18 17 H2 Z" stroke-linejoin="round"/><path d="M10 8 V12 M10 14.5 V14.6" stroke-linecap="round"/>',
-  chevronDown: '<path d="M5 8 L10 13 L15 8" stroke-linecap="round" stroke-linejoin="round"/>',
-  /* Poignée de glisser-déposer : deux colonnes de trois points. */
-  grip: [7, 13].flatMap((x) => [5, 10, 15].map((y) => `<circle cx="${x}" cy="${y}" r="1.4" fill="currentColor" stroke="none"/>`)).join(''),
-  plus: '<path d="M10 4 V16 M4 10 H16" stroke-linecap="round"/>',
-  close: '<path d="M5.5 5.5 L14.5 14.5 M14.5 5.5 L5.5 14.5" stroke-linecap="round"/>',
-  chevronRight: '<path d="M8 5 L13 10 L8 15" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
-/* Tailles d'icône, en pixels : chevrons des arbres et menus, boutons de ligne,
-   aperçu d'une forme dans la liste, outils de la barre. */
-export const ICON_SIZE = { xs: 12, sm: 14, md: 16, glyph: 18, lg: 20 };
+/* Toute autre icône vient de la typo Material Symbols Rounded (style.css) :
+   nom interne → ligature. Jamais de glyphe ASCII/Unicode à la place. */
+const SYMBOLS = {
+  cursor: 'arrow_selector_tool',
+  grid: 'grid_on',
+  eye: 'visibility',
+  eyeOff: 'visibility_off',
+  /* Plan 3D du calque : barré quand le calque est à plat. */
+  cube: 'view_in_ar',
+  cubeOff: 'view_in_ar_off',
+  lock: 'lock',
+  lockOff: 'lock_open',
+  /* Calque suspendu (trop de copies). */
+  warning: 'warning',
+  chevronDown: 'expand_more',
+  chevronRight: 'chevron_right',
+  /* Poignée de glisser-déposer. */
+  grip: 'drag_indicator',
+  plus: 'add',
+  minus: 'remove',
+  close: 'close',
+  up: 'arrow_upward',
+  down: 'arrow_downward',
+  duplicate: 'content_copy',
+  settings: 'settings',
+  help: 'help',
+};
+
+/* Tailles d'icône, en pixels, 16 au minimum : chevrons, boutons de ligne et
+   des barres, aperçu d'une forme dans la liste, outils de la barre. */
+export const ICON_SIZE = { md: 16, glyph: 18, lg: 20 };
 
 export const icon = (name, size = ICON_SIZE.lg) => {
   const wrap = document.createElement('span');
   wrap.className = 'icon';
   wrap.setAttribute('aria-hidden', 'true');
+  if (!(name in PATHS)) {
+    wrap.classList.add('is-symbol');
+    wrap.style.setProperty('--icon-size', `${Math.max(size, ICON_SIZE.md)}px`);
+    wrap.textContent = SYMBOLS[name] ?? '';
+    return wrap;
+  }
   wrap.innerHTML =
     `<svg width="${size}" height="${size}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8">` +
     `${PATHS[name] ?? ''}</svg>`;

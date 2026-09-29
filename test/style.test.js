@@ -34,3 +34,10 @@ it('pas de !important hors le coupe-mouvement', () => {
   const kill = off.slice(0, off.indexOf('}') + 1);
   expect(css.replace(kill, '').match(/!important/g)).toBeNull();
 });
+
+/* Firefox laisse `:active` collé après un clic : un appui sans `:hover`
+   altère le bouton au repos (réduit de --scale-press). */
+it('un état appuyé ne vaut que sous le pointeur', () => {
+  const selectors = [...css.matchAll(/([^{}]*:active[^{}]*)\{/g)].flatMap((match) => match[1].split(/,(?![^(]*\))/));
+  expect(selectors.filter((selector) => selector.includes(':active') && !selector.includes(':hover'))).toEqual([]);
+});

@@ -9,6 +9,7 @@ import {
 } from '../scene.js';
 import { MODIFIER_LABELS } from '../modifiers.js';
 import { CURVE_LABELS, randomSeed } from '../interpolate.js';
+import { icon, ICON_SIZE } from './icons.js';
 import { iconButton, presence, rebuildWithFocus } from './list.js';
 import { collapsible, countLabel, el, field, input, row, sectionHead, select, textButton } from './fields.js';
 
@@ -139,7 +140,7 @@ const block = (ctx, interpolation, modifiers) => {
     ),
     iconButton({
       label: `Supprimer l'interpolation ${RANGE_LABELS[interpolation.property]}`,
-      text: '×',
+      icon: 'close',
       focusKey: `delete-interpolation${ctx.key}${interpolation.id}`,
       danger: true,
       onClick: () => ctx.apply(removeInterpolation, interpolation.id),
@@ -176,7 +177,7 @@ export const interpolationSection = ({ store, ownerOf, key = '' }) => {
   };
 
   const host = el('div', 'stack');
-  const addButton = textButton('+ Ajouter', {
+  const addButton = textButton([icon('plus', ICON_SIZE.md), 'Ajouter'], {
     label: 'Ajouter une interpolation',
     focusKey: `add-interpolation${key}`,
     onClick: () => ctx.apply(addInterpolation),

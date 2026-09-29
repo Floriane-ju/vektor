@@ -25,12 +25,11 @@ const selectLayer = (store, id) => store.apply((scene) => setActiveElement(setAc
 const visibilityButton = (store, layer) => {
   const button = iconButton({
     label: layer.visible ? `Masquer ${layer.name}` : `Afficher ${layer.name}`,
-    text: '',
+    icon: layer.visible ? 'eye' : 'eyeOff',
     focusKey: `visible-${layer.id}`,
     pressed: layer.visible,
     onClick: () => store.apply(toggleVisibility, layer.id),
   });
-  button.append(icon(layer.visible ? 'eye' : 'eyeOff', ICON_SIZE.sm));
   return button;
 };
 
@@ -39,12 +38,11 @@ const lockButton = (store, layer) => {
   const locked = layer.locked === true;
   const button = iconButton({
     label: locked ? `Déverrouiller ${layer.name}` : `Verrouiller ${layer.name}`,
-    text: '',
+    icon: locked ? 'lock' : 'lockOff',
     focusKey: `lock-${layer.id}`,
     pressed: locked,
     onClick: () => store.apply(toggleLock, layer.id),
   });
-  button.append(icon(locked ? 'lock' : 'lockOff', ICON_SIZE.sm));
   return button;
 };
 
@@ -53,18 +51,17 @@ const planeButton = (store, layer) => {
   const on = activePlane(layer) !== null;
   const button = iconButton({
     label: on ? `Mettre ${layer.name} à plat` : `Passer ${layer.name} en 3D`,
-    text: '',
+    icon: on ? 'cube' : 'cubeOff',
     focusKey: `plane-${layer.id}`,
     pressed: on,
     onClick: () => store.apply(togglePlane, layer.id),
   });
-  button.append(icon(on ? 'cube' : 'cubeOff', ICON_SIZE.sm));
   return button;
 };
 
 /* Trop de copies : le calque n'est plus dessiné, l'arbre le dit. */
 const suspendedMark = (layer) => {
-  const mark = icon('warning', ICON_SIZE.sm);
+  const mark = icon('warning', ICON_SIZE.md);
   mark.classList.add('suspended-mark');
   mark.removeAttribute('aria-hidden');
   mark.setAttribute('role', 'img');
@@ -84,13 +81,13 @@ const layerActions = ({ store, remove }, layer) => {
     lockButton(store, layer),
     iconButton({
       label: `Dupliquer ${layer.name}`,
-      text: '⧉',
+      icon: 'duplicate',
       focusKey: `duplicate-${layer.id}`,
       onClick: () => store.apply(duplicateLayer, layer.id),
     }),
     iconButton({
       label: `Supprimer ${layer.name}`,
-      text: '×',
+      icon: 'close',
       focusKey: `delete-${layer.id}`,
       danger: true,
       onClick: () => remove(layer),
@@ -108,7 +105,7 @@ const layerChevron = ({ store, toggle }, layer, isActive, isOpen) => {
   chevron.dataset.focusKey = `chevron-${layer.id}`;
   chevron.setAttribute('aria-label', `${isOpen ? 'Replier' : 'Déplier'} ${layer.name}`);
   chevron.setAttribute('aria-expanded', String(isOpen));
-  chevron.append(icon(isOpen ? 'chevronDown' : 'chevronRight', ICON_SIZE.xs));
+  chevron.append(icon(isOpen ? 'chevronDown' : 'chevronRight', ICON_SIZE.md));
   chevron.addEventListener('click', () => {
     if (isActive) toggle(layer.id, isOpen);
     else store.apply(setActiveLayer, layer.id);
@@ -263,7 +260,7 @@ export const mountLayerPanel = ({ store, container, status, children = null }) =
         const add = document.createElement('button');
         add.type = 'button';
         add.className = 'add-layer';
-        add.textContent = '+ Ajouter un calque';
+        add.append(icon('plus', ICON_SIZE.md), 'Ajouter un calque');
         add.dataset.focusKey = 'add-layer';
         add.addEventListener('click', () => store.apply(addLayer));
 

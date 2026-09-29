@@ -214,9 +214,9 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
   const toggle = document.createElement('label');
   toggle.className = 'pill-btn pill-toggle';
   toggle.title = 'Grille (aimante les points)';
-  toggle.append(gridToggle, icon('grid', ICON_SIZE.md), 'Grille');
+  toggle.append(gridToggle, icon('grid', ICON_SIZE.lg), 'Grille');
 
-  const open = pillButton('⚙', { title: 'Paramètres', label: 'Paramètres', className: 'is-square' });
+  const open = pillButton(icon('settings', ICON_SIZE.lg), { title: 'Paramètres', label: 'Paramètres', className: 'is-square' });
   open.setAttribute('popovertarget', panel.id);
 
   const separator = document.createElement('span');

@@ -1,3 +1,4 @@
+import { icon, ICON_SIZE } from './icons.js';
 import {
   duplicateElements,
   duplicateLayer,
@@ -83,7 +84,7 @@ const mountHelp = (container) => {
   form.append(close);
   dialog.append(title, list, form);
 
-  const open = pillButton('?', {
+  const open = pillButton(icon('help', ICON_SIZE.lg), {
     title: 'Raccourcis clavier (?)',
     label: 'Raccourcis clavier',
     className: 'is-square',

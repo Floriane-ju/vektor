@@ -1,6 +1,7 @@
 import { STAGE } from '../scene.js';
 import { drawingBounds } from '../renderer-svg.js';
 import { pillButton } from './fields.js';
+import { icon, ICON_SIZE } from './icons.js';
 import { clamp } from '../math.js';
 
 const MIN_ZOOM = 0.1;
@@ -11,16 +12,17 @@ const FIT_MARGIN = 32;
 
 const clampZoom = (zoom) => clamp(zoom, MIN_ZOOM, MAX_ZOOM);
 
-const button = (text, title, onClick) =>
-  pillButton(text, { title, label: title, className: text.length === 1 ? 'is-square' : null, onClick });
+/* Icône seule → bouton carré ; sinon libellé texte. */
+const button = (content, title, onClick) =>
+  pillButton(content, { title, label: title, className: typeof content === 'string' ? null : 'is-square', onClick });
 
 const zoomButtons = (label, { zoomIn, zoomOut, fit }) => {
   const group = document.createElement('div');
   group.className = 'zoom-controls';
   group.append(
-    button('−', 'Dézoomer', zoomOut),
+    button(icon('minus', ICON_SIZE.lg), 'Dézoomer', zoomOut),
     label,
-    button('+', 'Zoomer', zoomIn),
+    button(icon('plus', ICON_SIZE.lg), 'Zoomer', zoomIn),
     button('Ajuster', 'Cadrer le dessin', fit),
   );
   return group;

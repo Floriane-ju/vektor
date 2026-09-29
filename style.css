@@ -1,6 +1,25 @@
 /* Thème « E sombre » : plan de travail plein écran, panneaux flottants arrondis,
    un accent chaud pour le calque, un bleu pour la forme. Contrastes visés : AA
    (4.5:1) sur tout le texte, mesurés contre --bg-panel. */
+
+/* Seule source d'icônes de l'interface (ui/icons.js), graisse --weight-icon.
+   `block` : jamais le nom de la ligature en clair pendant le chargement. */
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  src: url('/fonts/material-symbols-rounded.ttf') format('truetype');
+  font-weight: 100 700;
+  font-display: block;
+}
+
+/* Police du texte, livrée : Firefox refuse une police seulement installée sur
+   la machine (protection contre le pistage) et retombait sur le repli système. */
+@font-face {
+  font-family: 'General Sans';
+  src: url('/fonts/general-sans.ttf') format('truetype');
+  font-weight: 200 700;
+  font-display: swap;
+}
+
 :root {
   --bg: #121212;
   --bg-panel: #282828;
@@ -27,7 +46,7 @@
   --text-xs: 12px;      /* légendes, résumés, touches */
   --text-sm: 13px;      /* boutons secondaires, segments */
   --text-md: 14px;      /* corps, titres de section */
-  --text-lg: 20px;      /* titre de l'inspecteur, glyphe « + » */
+  --text-lg: 20px;      /* titre de l'inspecteur */
   --text-xl: 28px;      /* marque */
   --font: 'General Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
   /* Espacement : une échelle, rien entre ses crans. */
@@ -82,6 +101,10 @@
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-bold: 600;
+  --weight-icon: 200;   /* Material Symbols */
+  /* Un dessin Material occupe 20 des 24 unités de son cadratin : police
+     agrandie d'autant pour que le dessin fasse la taille demandée. */
+  --icon-ink: 1.2;
   --z-float: 1;
   color-scheme: dark;
 }
@@ -328,7 +351,27 @@ input[type="range"] {
 .zoom-controls { display: flex; align-items: center; gap: var(--space-2); }
 .zoom-level { min-width: 44px; text-align: center; font: var(--weight-medium) var(--text-sm)/1 var(--font); font-variant-numeric: tabular-nums; }
 
-.icon { display: inline-flex; }
+.icon { display: inline-flex; flex-shrink: 0; }
+.icon.is-symbol {
+  font-family: 'Material Symbols Rounded';
+  font-weight: var(--weight-icon);
+  font-style: normal;
+  /* Boîte à la taille nominale, dessin à la même taille (--icon-ink). */
+  width: var(--icon-size);
+  height: var(--icon-size);
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  font-size: calc(var(--icon-size) * var(--icon-ink));
+  font-variation-settings: 'FILL' 0, 'GRAD' 0, 'opsz' 20;
+  font-feature-settings: 'liga';
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
 
 /* ---- Outils ---- */
 
@@ -498,6 +541,9 @@ input.rename-input {
 .tree-item[data-active="true"] > .tree-row .icon-btn.is-danger { color: inherit; }
 
 .add-shape {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   height: var(--control-md);
   padding: 0 var(--space-4);
   background: transparent;
@@ -508,6 +554,10 @@ input.rename-input {
 .add-shape:hover:not(:disabled) { color: var(--text); }
 
 .add-layer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   width: 100%;
   height: var(--row-h);
   margin-top: var(--space-4);
@@ -585,6 +635,9 @@ input.range-value {
 .copy-count[data-tone="error"] { color: var(--danger); }
 
 .text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   height: var(--control-sm);
   padding: 0 var(--space-4);
   border-radius: var(--pill);
@@ -678,7 +731,7 @@ input.range-value {
   border-radius: var(--pill);
   background: var(--text-dim);
 }
-.swatch.is-custom { box-shadow: inset 0 0 0 var(--hairline) var(--text-dim); font: var(--weight-medium) var(--text-lg)/1 var(--font); cursor: pointer; }
+.swatch.is-custom { box-shadow: inset 0 0 0 var(--hairline) var(--text-dim); cursor: pointer; }
 .swatch.is-custom::before { display: none; }
 .swatch.is-custom input {
   position: absolute;
@@ -973,17 +1026,19 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
     color var(--dur) var(--ease),
     transform var(--dur-fast) var(--ease-out);
 }
-.shape-picker label:active { transform: scale(var(--scale-press-tool)); }
+.shape-picker label:active:hover { transform: scale(var(--scale-press-tool)); }
 @keyframes tool-pop {
   from { transform: scale(0.8); }
 }
 .shape-picker input:checked + label { animation: tool-pop var(--dur-slow) var(--ease-out); }
 
-/* Appui : le bouton s'enfonce. */
+/* Appui : le bouton s'enfonce — seulement sous le pointeur (`:hover`) : Firefox
+   laisse `:active` collé sur un bouton après un clic (vu sur Paramètres), qui
+   restait alors réduit au repos. */
 :is(.pill-btn, .icon-btn, .add-layer, .add-shape, .menu-item, .text-btn, .chevron) {
   transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
-:is(.pill-btn, .icon-btn, .add-layer, .add-shape, .menu-item, .text-btn, .chevron):active:not(:disabled) {
+:is(.pill-btn, .icon-btn, .add-layer, .add-shape, .menu-item, .text-btn, .chevron):active:hover:not(:disabled) {
   transform: scale(var(--scale-press));
 }
 .row-actions,

@@ -36,7 +36,7 @@ const block = (apply, layer, element, step, index) => {
     toolSelect(apply, layer, element, step, index),
     iconButton({
       label: `Retirer l'opération ${index + 1}`,
-      text: '×',
+      icon: 'close',
       focusKey: `delete-boolean${index}`,
       danger: true,
       onClick: () => apply(removeBoolean, index),

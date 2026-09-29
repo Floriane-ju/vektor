@@ -104,7 +104,7 @@ export const mountDrawingTabs = ({ store, container, status, drawings: initial, 
       remove.className = 'icon-btn drawing-tab-close';
       remove.setAttribute('aria-label', `Fermer ${tab.name}`);
       remove.title = 'Fermer le dessin';
-      remove.append(icon('close', ICON_SIZE.xs));
+      remove.append(icon('close', ICON_SIZE.md));
       remove.addEventListener('click', () => close(tab.id));
       wrap.append(remove);
     }
@@ -115,7 +115,7 @@ export const mountDrawingTabs = ({ store, container, status, drawings: initial, 
   const draw = () => {
     let tabs = [];
     rebuildWithFocus(container, () => {
-      const add = pillButton([icon('plus', ICON_SIZE.sm), 'Nouveau'], { className: 'drawing-new', onClick: create });
+      const add = pillButton([icon('plus', ICON_SIZE.md), 'Nouveau'], { className: 'drawing-new', onClick: create });
       add.dataset.focusKey = 'drawing-new';
       tabs = drawings.tabs.map(tabNode);
       container.append(...tabs, add);

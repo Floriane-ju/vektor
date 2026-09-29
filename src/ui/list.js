@@ -12,7 +12,7 @@ import { MAX_NAME_LENGTH } from '../scene.js';
 
 export const iconButton = ({
   label,
-  text,
+  icon: name,
   onClick,
   focusKey,
   danger = false,
@@ -22,7 +22,7 @@ export const iconButton = ({
   const node = document.createElement('button');
   node.type = 'button';
   node.className = danger ? 'icon-btn is-danger' : 'icon-btn';
-  node.textContent = text;
+  node.append(icon(name, ICON_SIZE.md));
   node.dataset.focusKey = focusKey;
   node.setAttribute('aria-label', label);
   node.title = label;
@@ -285,7 +285,7 @@ const clearDrop = () => {
 
 /** Poignée de glisser-déposer, posée en tête de ligne : la ligne entière se saisit. */
 export const dragHandle = () => {
-  const node = icon('grip', ICON_SIZE.sm);
+  const node = icon('grip', ICON_SIZE.md);
   node.classList.add('drag-handle');
   node.title = 'Glisser pour réordonner (Alt + ↑/↓ au clavier)';
   return node;

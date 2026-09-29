@@ -124,23 +124,22 @@ const shapeLine = ({ store, remove }, layer, element, isSelected) => {
   row.append(dragHandle(), glyph, name, actions);
   const eye = iconButton({
     label: element.hidden ? `Afficher ${name.textContent}` : `Masquer ${name.textContent}`,
-    text: '',
+    icon: element.hidden ? 'eyeOff' : 'eye',
     focusKey: `visible-${element.id}`,
     pressed: !element.hidden,
     onClick: () => store.apply(toggleElementVisibility, element.id),
   });
-  eye.append(icon(element.hidden ? 'eyeOff' : 'eye', ICON_SIZE.sm));
   actions.append(
     eye,
     iconButton({
       label: `Dupliquer ${name.textContent}`,
-      text: '⧉',
+      icon: 'duplicate',
       focusKey: `duplicate-${element.id}`,
       onClick: () => store.apply(duplicateElement, element.id, DUPLICATE_OFFSET),
     }),
     iconButton({
       label: `Supprimer ${name.textContent}`,
-      text: '×',
+      icon: 'close',
       focusKey: `delete-${element.id}`,
       danger: true,
       onClick: () => remove(element, name.textContent),
@@ -203,7 +202,7 @@ const signature = (scene) => {
 const addShapeButton = ({ store, getTool, status }, layer) => {
   const add = document.createElement('button');
   add.type = 'button';
-  add.textContent = '+ Ajouter une forme';
+  add.append(icon('plus', ICON_SIZE.md), 'Ajouter une forme');
   add.dataset.focusKey = 'add-shape';
   add.disabled = !layer;
   add.addEventListener('click', () => {

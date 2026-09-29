@@ -142,7 +142,7 @@ export const mountExportMenu = ({ store, svgRoot, container, status }) => {
   menu.popover = 'auto';
   menu.append(...imageItems(svgRoot, status), ...project.items, pasteTraceItem(store, status));
 
-  const trigger = pillButton(['Exporter', icon('chevronDown', ICON_SIZE.xs)], { className: 'is-primary' });
+  const trigger = pillButton(['Exporter', icon('chevronDown', ICON_SIZE.md)], { className: 'is-primary' });
   trigger.setAttribute('popovertarget', menu.id);
   trigger.setAttribute('aria-haspopup', 'menu');
 
