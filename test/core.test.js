@@ -239,6 +239,22 @@ describe('modificateurs', () => {
     expect(shrink.every(({ x, y, angle: a }) => [x, y, a].every(Number.isFinite))).toBe(true);
   });
 
+  it('spirale : la longueur fixe l’étendue, les copies la densifient', () => {
+    for (const type of ['spiral', 'archimedes']) {
+      const options = { angleStep: 0.5, radiusStep: 20, length: 4 };
+      const sparse = copies(type, { x: 10, y: 0 }, 3, options);
+      const dense = copies(type, { x: 10, y: 0 }, 9, options);
+      expect(dense.at(-1).x).toBeCloseTo(sparse.at(-1).x);
+      expect(dense.at(-1).y).toBeCloseTo(sparse.at(-1).y);
+      expect(dense[4].x).toBeCloseTo(sparse[1].x);
+    }
+  });
+
+  it('spirale d’avant @35 : longueur relue à copies − 1', () => {
+    const file = JSON.stringify({ format: 'vektor/scene@34', layers: [{ id: 'L1', elements: [], modifiers: [{ type: 'spiral', n: 7 }] }] });
+    expect(deserialize(file).layers[0].modifiers[0].length).toBe(6);
+  });
+
   it('archimedes : rayon linéaire en angle', () => {
     const children = copies('archimedes', { x: 10, y: 0 }, 4, { angleStep: Math.PI / 2, radiusStep: 50 });
     expect(children.map(dist)).toEqual([10, 15, 20, 25].map((d) => expect.closeTo(d)));
@@ -879,8 +895,8 @@ describe('persistance', () => {
         createElement('rect', 200, 100, { rx: 30, ry: 15 }),
       ],
       modifiers: [
-        { type: 'spiral', n: 12, stepX: 25, stepY: -10, angleStep: 0.3, radiusStep: 8 },
-        { type: 'mirrorV', n: 2, stepX: 60, stepY: 0, angleStep: 0.4, radiusStep: 12 },
+        { type: 'spiral', n: 12, stepX: 25, stepY: -10, angleStep: 0.3, radiusStep: 8, length: 11 },
+        { type: 'mirrorV', n: 2, stepX: 60, stepY: 0, angleStep: 0.4, radiusStep: 12, length: 1 },
       ],
       interpolations: [
         createInterpolation({ property: 'opacity', range: [1, 0.2], binding: 1 }),
@@ -2334,7 +2350,7 @@ describe('répétition linéaire des points', () => {
 
   it('lissé, une spirale suit la spirale exacte entre les copies', () => {
     const [arc] = getRenderedChildren(
-      pointLayer([createModifier({ type: 'spiral', n: 5, angleStep: 1.2, radiusStep: 40, linear: true, smooth: true })]),
+      pointLayer([createModifier({ type: 'spiral', n: 5, length: 4, angleStep: 1.2, radiusStep: 40, linear: true, smooth: true })]),
     );
     /* Spirale logarithmique : r = 10·1,4^(θ/1,2), sans ondulation entre copies. */
     for (const [x, y] of vertices(arc)) {
@@ -2590,7 +2606,7 @@ describe('formes nommables', () => {
   });
 
   it('le format est bumpé, l’ancien reste lisible', () => {
-    expect(FORMAT).toBe('vektor/scene@34');
+    expect(FORMAT).toBe('vektor/scene@35');
     const raw = JSON.parse(serialize(withShapes()));
     raw.format = 'vektor/scene@29';
     expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);

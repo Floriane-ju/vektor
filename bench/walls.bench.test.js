@@ -9,7 +9,7 @@ import { createElement, createLayer } from '../src/scene.js';
 import { createModifier } from '../src/modifiers.js';
 
 it.skipIf(!process.env.BENCH)('banc : ruban de spirale lissée × axial 12', { timeout: 60000 }, () => {
-  const spiral = createModifier({ type: 'spiral', n: 16, angleStep: 0.6, radiusStep: 8, linear: true, smooth: true });
+  const spiral = createModifier({ type: 'spiral', n: 16, length: 15, angleStep: 0.6, radiusStep: 8, linear: true, smooth: true });
   const point = createElement('point', 520, 450, { strokeWidth: 6, height: 60, outlined: true, gap: 14, modifiers: [spiral] });
   const layer = createLayer({
     center: { x: 450, y: 450 },

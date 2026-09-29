@@ -76,6 +76,13 @@ export const clampGrowth = (percent) =>
    restent empilées au bord — elles sont de toute façon hors du plan. */
 const MAX_GROWTH = 1e6;
 
+/**
+ * Longueur d'une spirale, en pas : elle s'arrête au pas `length`, et ses
+ * copies s'y répartissent — en ajouter densifie la spirale sans l'étendre.
+ * Absente (étage d'avant `@35`), la spirale couvre un pas par copie.
+ */
+export const clampLength = (steps) => Math.max(0, Number.isFinite(steps) ? steps : 0);
+
 export const axisAngle = (modifier) =>
   Number.isFinite(modifier.axis) ? modifier.axis : MIRROR_AXIS[modifier.type];
 
@@ -150,8 +157,9 @@ const evenTurn = (i, angleStep, factor) => {
  * (la version précédente) poussait chaque forme dans sa propre direction et
  * disloquait le groupe copie après copie.
  */
-const turning = (grow, even) => (point, i, n, center, { angleStep = 0.4, radiusStep = 12, evenSpacing = false } = {}) => {
-  const { angle, growth } = (evenSpacing ? even : grow)(i, angleStep, 1 + clampGrowth(radiusStep) / 100);
+const turning = (grow, even) => (point, i, n, center, { angleStep = 0.4, radiusStep = 12, evenSpacing = false, length = n - 1 } = {}) => {
+  const at = n > 1 ? (i * clampLength(length)) / (n - 1) : 0;
+  const { angle, growth } = (evenSpacing ? even : grow)(at, angleStep, 1 + clampGrowth(radiusStep) / 100);
   const rotated = rotateAround(point, center, angle);
   return {
     x: center.x + (rotated.x - center.x) * growth,
@@ -264,6 +272,7 @@ export const createModifier = (overrides = {}) => ({
   stepY: 0,
   angleStep: 0.4,
   radiusStep: 12,
+  length: 5,
   ...overrides,
 });
 

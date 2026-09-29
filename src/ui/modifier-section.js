@@ -67,13 +67,15 @@ const stageNumbers = (bindStage) => {
     field('Pas angulaire (rad)', numberInput('0.001', 'angleStep')),
     field('Croissance (%)', numberInput('0.1', 'radiusStep')),
   );
+  /* Étendue fixe de la spirale : « Copies » n'y ajoute que de la densité. */
+  const lengthField = field('Longueur (pas)', numberInput('0.1', 'length'));
   /* Angle de l'axe d'un miroir : 90° vertical, 0° horizontal, entre les deux
      les symétries diagonales. */
   const axisField = field(
     "Angle de l'axe (°)",
     bindStage(input('number', { step: '1' }), axisAngle, (value) => ({ axis: value })),
   );
-  return { stepRow, spiralRow, axisField };
+  return { stepRow, spiralRow, lengthField, axisField };
 };
 
 /* Entête d'un étage : son type, et les boutons monter, descendre, supprimer.
@@ -135,6 +137,7 @@ const showStage = (parts, modifier, owner, forElement) => {
   parts.countField.hidden = Object.hasOwn(FIXED_COPIES, modifier.type);
   parts.stepRow.hidden = modifier.type !== 'step';
   parts.spiralRow.hidden = modifier.type !== 'spiral' && modifier.type !== 'archimedes';
+  parts.lengthField.hidden = parts.spiralRow.hidden;
   parts.evenField.hidden = parts.spiralRow.hidden;
   parts.axisField.hidden = !Object.hasOwn(MIRROR_AXIS, modifier.type);
   /* Un pas ne tourne rien, un point tourné reste identique : rien à orienter. */
@@ -174,6 +177,7 @@ const stageBlock = ({ store, current, forElement }, index, stackSize) => {
     countField,
     parts.stepRow,
     parts.spiralRow,
+    parts.lengthField,
     parts.evenField,
     parts.axisField,
     parts.orientField,

@@ -1,4 +1,4 @@
-import { clampAxis, clampGrowth, createModifier } from './modifiers.js';
+import { clampAxis, clampGrowth, clampLength, createModifier } from './modifiers.js';
 import { clampCount } from './interpolate.js';
 import { clamp } from './math.js';
 import { activePlane, centerPoints, clampHeading, clampPlaneSides, clampTilt, DEFAULT_BOOLEAN_OP, DEFAULT_DEPTH, DEFAULT_PLANE, DEFAULT_LINECAP, DEFAULT_OUTLINE_GAP, DEFAULT_STROKE, DEFAULT_STROKE_WIDTH, RANGE_BOUNDS, rotateVector, SHAPES, STAGE } from './model.js';
@@ -738,6 +738,7 @@ export const updateModifier = (scene, id, index, patch) =>
         ...(center ? { center } : {}),
         ...(keepAxis ? { axis: clampAxis(axis) } : {}),
         ...('radiusStep' in modifier ? { radiusStep: clampGrowth(modifier.radiusStep) } : {}),
+        ...('length' in modifier ? { length: clampLength(modifier.length) } : {}),
       };
     }),
   }));

@@ -2256,7 +2256,7 @@ describe('plan 3D', () => {
       const svg = draw(createLayer({ center: { x: 450, y: 450 }, plane: { tilt: 55, heading: 20, sides: 'transparent' }, elements: [point] }));
       return lengthOf(svg.querySelector(`[data-element-id="${point.id}"]`));
     };
-    const spiral = createModifier({ type: 'spiral', n: 16, angleStep: 0.6, radiusStep: 10, linear: true });
+    const spiral = createModifier({ type: 'spiral', n: 16, length: 15, angleStep: 0.6, radiusStep: 10, linear: true });
     expect(visible([spiral, createModifier({ type: 'axial', n: 2 })])).toBeLessThan(visible([spiral]) - 20);
   });
 });

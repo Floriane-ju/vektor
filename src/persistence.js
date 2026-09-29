@@ -1,4 +1,4 @@
-import { clampAxis, clampGrowth, createModifier, MODIFIERS } from './modifiers.js';
+import { clampAxis, clampGrowth, clampLength, createModifier, MODIFIERS } from './modifiers.js';
 import { clampCount, CURVES } from './interpolate.js';
 import {
   ARC_CLOSURES,
@@ -38,7 +38,7 @@ import { clamp } from './math.js';
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@34';
+export const FORMAT = 'vektor/scene@35';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -94,7 +94,9 @@ export const FORMAT = 'vektor/scene@34';
    - `@1` à `@31` ne masquaient pas les formes : toutes visibles ;
    - `@1` à `@32` logeaient une forme dans une autre (`inside`) : le lien est
      oublié, la profondeur réelle du calque 3D en tient lieu ;
-   - `@1` à `@33` ne verrouillaient pas les calques : tous libres. */
+   - `@1` à `@33` ne verrouillaient pas les calques : tous libres ;
+   - `@1` à `@34` allongeaient la spirale d'un pas par copie : longueur relue
+     à copies − 1, même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -130,6 +132,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@31',
   'vektor/scene@32',
   'vektor/scene@33',
+  'vektor/scene@34',
   FORMAT,
 ]);
 
@@ -347,6 +350,8 @@ const readModifier = (raw, legacy, linkable = false) =>
     stepY: num(raw?.stepY, 0),
     angleStep: num(raw?.angleStep, 0.4),
     radiusStep: clampGrowth(num(raw?.radiusStep, 12)),
+    /* Avant `@35`, la spirale couvrait un pas par copie : même dessin. */
+    length: clampLength(num(raw?.length, clampCount(raw?.n) - 1)),
     ...readPivot(raw?.center),
     ...(Number.isFinite(raw?.axis) ? { axis: clampAxis(raw.axis) } : {}),
     ...(raw?.evenSpacing === true ? { evenSpacing: true } : {}),
