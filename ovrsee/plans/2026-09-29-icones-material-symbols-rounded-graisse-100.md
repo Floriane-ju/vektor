@@ -4,7 +4,33 @@
   "title": "Icônes Material Symbols (Rounded, graisse 100)",
   "opened": "2026-09-29",
   "closed": null,
-  "commits": []
+  "commits": [
+    {
+      "sha": "e63a088",
+      "date": "2026-09-29",
+      "files": [
+        "CLAUDE.md",
+        "public/fonts/general-sans.ttf",
+        "public/fonts/material-symbols-rounded.ttf",
+        "src/ui/boolean-section.js",
+        "src/ui/drawing-tabs.js",
+        "src/ui/export-menu.js",
+        "src/ui/fields.js",
+        "src/ui/icons.js",
+        "src/ui/interpolation-section.js",
+        "src/ui/layer-panel.js",
+        "src/ui/list.js",
+        "src/ui/modifier-section.js",
+        "src/ui/settings.js",
+        "src/ui/shape-list.js",
+        "src/ui/shortcuts.js",
+        "src/ui/stroke-card.js",
+        "src/ui/zoom.js",
+        "style.css",
+        "test/style.test.js"
+      ]
+    }
+  ]
 }
 ---
 

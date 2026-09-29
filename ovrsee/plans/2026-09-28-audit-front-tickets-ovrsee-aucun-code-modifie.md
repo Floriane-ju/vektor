@@ -1,9 +1,9 @@
 ---
 {
-  "status": "open",
+  "status": "closed",
   "title": "Audit front — tickets ovrsee (aucun code modifié)",
   "opened": "2026-09-28",
-  "closed": null,
+  "closed": "2026-09-28",
   "commits": [
     {
       "sha": "20ce404",
@@ -155,6 +155,11 @@
     },
     {
       "sha": "bc36ca1",
+      "date": "2026-09-28",
+      "files": []
+    },
+    {
+      "sha": "5f6febe",
       "date": "2026-09-28",
       "files": []
     }

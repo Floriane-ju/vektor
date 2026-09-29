@@ -2,7 +2,7 @@
 {
   "id": "T-0143",
   "titre": "Icônes Material Symbols Rounded (graisse 100)",
-  "colonne": "revue",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": [
     "ui"

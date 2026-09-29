@@ -2,9 +2,11 @@
 {
   "id": "T-0141",
   "titre": "Sélection par plage dans l'arbre (Maj) et ajout à la sélection (⌘)",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
-  "tags": ["ui"],
+  "tags": [
+    "ui"
+  ],
   "cree": "2026-09-29",
   "maj": "2026-09-29",
   "plan": null
