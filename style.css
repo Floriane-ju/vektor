@@ -35,7 +35,8 @@
   --ink: #1b1b1b;       /* texte posé sur un accent */
   --danger: #f5917a;    /* 6.6:1  sur --bg-panel */
   --bg-field-raised: #4a4a4a; /* champ posé sur un champ, survol d'un bouton plein */
-  --white: #ffffff;     /* survol du bouton principal, pictogramme sur l'accent */
+  --white: #ffffff;     /* pictogramme sur l'accent */
+  --text-hover: #dcd9d0; /* survol d'un bouton clair (pressé, principal) */
   --backdrop: rgb(0 0 0 / 0.5);
   --radius-line: 2px;   /* bout d'un trait dessiné en CSS */
   --radius-sm: 6px;     /* touche de clavier */
@@ -302,7 +303,6 @@ input[type="range"] {
 .pill-btn:hover:not(:disabled) { background: var(--bg-field); }
 .pill-btn.is-square { width: var(--control); padding: 0; justify-content: center; }
 .pill-btn.is-primary { padding-right: var(--space-5); }
-.pill-btn.is-primary:hover { background: var(--white); }
 
 /* ---- Onglets de dessins ---- */
 .drawing-tabs { min-width: 0; overflow-x: auto; scrollbar-width: none; }
@@ -347,6 +347,11 @@ input[type="range"] {
 .pill-btn.is-primary,
 .pill-toggle:has(input:checked),
 .segment:has(input:checked) { background: var(--text); color: var(--ink); }
+/* Survol : clair → un cran plus sombre ; au repos → un cran plus clair que son fond. */
+.pill-btn.is-primary:hover,
+.pill-toggle:has(input:checked):hover,
+.segment:has(input:checked):hover { background: var(--text-hover); }
+.segment:hover:not(:has(input:checked, input:disabled)) { background: var(--bg-field-raised); }
 
 .zoom-controls { display: flex; align-items: center; gap: var(--space-2); }
 .zoom-level { min-width: 44px; text-align: center; font: var(--weight-medium) var(--text-sm)/1 var(--font); font-variant-numeric: tabular-nums; }
@@ -1046,4 +1051,5 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 }
 .row-actions,
 .drawing-tab,
-.drawing-tab-close { transition: opacity var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.drawing-tab-close,
+.segment { transition: opacity var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
