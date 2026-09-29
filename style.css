@@ -101,7 +101,7 @@
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-bold: 600;
-  --weight-icon: 200;   /* Material Symbols */
+  --weight-icon: 300;   /* Material Symbols */
   /* Un dessin Material occupe 20 des 24 unités de son cadratin : police
      agrandie d'autant pour que le dessin fasse la taille demandée. */
   --icon-ink: 1.2;
@@ -528,6 +528,9 @@ input.rename-input {
 .tree-item[data-active="true"] > .tree-row .row-actions { opacity: 1; }
 
 .icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: var(--control-xs);
   height: var(--control-xs);
   padding: 0 var(--space-2);

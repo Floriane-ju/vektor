@@ -2,9 +2,11 @@
 {
   "id": "T-0145",
   "titre": "Panneau Paramètres aligné sur son bouton",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "basse",
-  "tags": ["ui"],
+  "tags": [
+    "ui"
+  ],
   "cree": "2026-09-29",
   "maj": "2026-09-29",
   "plan": null
