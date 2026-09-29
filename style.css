@@ -519,13 +519,13 @@ input.rename-input {
 }
 .tree-item[data-template="true"] > .tree-row .tree-name { font-style: italic; opacity: var(--opacity-muted); }
 
-/* Actions de ligne : au survol, au focus et sur la ligne active, jamais
-   ailleurs — même un calque masqué, en 3D ou verrouillé (le nom estompé
-   dit déjà qu'il est masqué ; le survol rend l'œil). */
+/* Actions de ligne : au survol seul, jamais du fait d'être sélectionnée —
+   même un calque masqué, en 3D ou verrouillé (le nom estompé dit déjà qu'il
+   est masqué ; le survol rend l'œil). Au clavier, focus visible dans la
+   ligne ; un clic à la souris n'en laisse pas (:focus-visible). */
 .row-actions { display: flex; gap: 0; opacity: 0; }
 .tree-row:hover .row-actions,
-.tree-row:focus-within .row-actions,
-.tree-item[data-active="true"] > .tree-row .row-actions { opacity: 1; }
+.tree-row:has(:focus-visible) .row-actions { opacity: 1; }
 
 .icon-btn {
   display: inline-flex;
