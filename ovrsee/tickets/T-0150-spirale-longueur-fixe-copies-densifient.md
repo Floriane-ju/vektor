@@ -2,7 +2,7 @@
 {
   "id": "T-0150",
   "titre": "Spirale : longueur fixe, les copies densifient",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["modificateurs"],
   "cree": "2026-09-29",
@@ -17,6 +17,6 @@ En spirale (log et Archimède), augmenter les copies allonge la spirale. On veut
 
 ## Critères d'acceptation
 
-- [ ] Champ « Longueur (pas) » sur les étages spirale/Archimède.
-- [ ] Changer « Copies » ne change pas l'étendue de la spirale, seulement la densité.
-- [ ] Anciens fichiers relus à l'identique (longueur = copies − 1), format bumpé.
+- [x] Champ « Longueur (pas) » sur les étages spirale/Archimède.
+- [x] Changer « Copies » ne change pas l'étendue de la spirale, seulement la densité.
+- [x] Anciens fichiers relus à l'identique (longueur = copies − 1), format bumpé.
