@@ -2,7 +2,7 @@
 {
   "id": "T-0149",
   "titre": "Espacements des champs nombre et menus",
-  "colonne": "en-cours",
+  "colonne": "fait",
   "priorite": "moyenne",
   "tags": ["ui", "design-system"],
   "cree": "2026-09-29",
@@ -17,6 +17,6 @@ La valeur d'un curseur (ex. « Copies 6 ») est alignée à droite et collée au
 
 ## Critères d'acceptation
 
-- [ ] Valeur des champs nombre alignée à gauche, espace entre le texte et les flèches (Chromium ; Firefox sans régression).
-- [ ] Chevron des `select` = icône Material `expand_more`, à `--space-5` du bord droit, dans Chromium et Firefox.
-- [ ] `pnpm test` passe.
+- [x] Valeur des champs nombre alignée à gauche, espace entre le texte et les flèches (Chromium ; Firefox sans régression).
+- [x] Chevron des `select` = icône Material `expand_more`, à `--space-5` du bord droit, dans Chromium et Firefox.
+- [x] `pnpm test` passe.
