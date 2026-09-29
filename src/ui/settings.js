@@ -10,6 +10,7 @@ const GRID_TYPES = { square: 'Carrée', polar: 'Ronde' };
 const BOUNDS = { divisions: [2, 100], circles: [1, 50] };
 /* Plus dézoomée, la grille est trop dense : illisible et lente à dessiner. */
 const GRID_MIN_ZOOM = 0.7;
+const POPOVER_GAP = 8; /* comme la palette du trait */
 
 /* `motion` : animations de l'interface, `null` tant que l'utilisateur n'a pas
    choisi — la préférence du système (`prefers-reduced-motion`) décide alors. */
@@ -218,6 +219,15 @@ export const mountSettings = ({ store, svgRoot, container, view = null }) => {
 
   const open = pillButton(icon('settings', ICON_SIZE.lg), { title: 'Paramètres', label: 'Paramètres', className: 'is-square' });
   open.setAttribute('popovertarget', panel.id);
+
+  /* Au-dessus du bouton, bord droit sur le sien : la barre change de largeur
+     avec le zoom affiché, une position fixe en CSS tomberait à côté. */
+  panel.addEventListener('beforetoggle', (event) => {
+    if (event.newState !== 'open') return;
+    const box = open.getBoundingClientRect();
+    panel.style.bottom = `${innerHeight - box.top + POPOVER_GAP}px`;
+    panel.style.right = `${innerWidth - box.right}px`;
+  });
 
   const separator = document.createElement('span');
   separator.className = 'pill-sep';

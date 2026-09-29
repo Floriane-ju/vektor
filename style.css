@@ -845,7 +845,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 }
 .menu-item:hover { background: var(--bg-field); }
 
-.settings { inset: auto auto var(--menu-offset) var(--float-inset); min-width: 16rem; padding: var(--space-6) var(--space-7); }
+.settings { inset: auto; min-width: 16rem; padding: var(--space-6) var(--space-7); }
 .settings h2 { margin-bottom: var(--space-5); }
 .settings-field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); margin: 0 0 var(--space-4); }
 .settings-field :is(input[type="number"], select) { width: 7rem; }
@@ -1010,7 +1010,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
     display var(--dur) allow-discrete,
     overlay var(--dur) allow-discrete;
 }
-.settings { --pop-from: translateY(6px) scale(var(--scale-pop)); transform-origin: bottom left; }
+.settings { --pop-from: translateY(6px) scale(var(--scale-pop)); transform-origin: bottom right; }
 .menu { transform-origin: top right; }
 :is(.menu, .settings, .stroke-palette):popover-open {
   opacity: 1;
