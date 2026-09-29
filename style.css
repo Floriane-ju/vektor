@@ -14,9 +14,9 @@
 /* Police du texte, livrée : Firefox refuse une police seulement installée sur
    la machine (protection contre le pistage) et retombait sur le repli système. */
 @font-face {
-  font-family: 'General Sans';
-  src: url('/fonts/general-sans.ttf') format('truetype');
-  font-weight: 200 700;
+  font-family: 'IBM Plex Sans';
+  src: url('/fonts/ibm-plex-sans.ttf') format('truetype');
+  font-weight: 100 700;
   font-display: swap;
 }
 
@@ -48,7 +48,7 @@
   --text-md: 14px;      /* corps, titres de section */
   --text-lg: 20px;      /* titre de l'inspecteur */
   --text-xl: 28px;      /* marque */
-  --font: 'General Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --font: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
   /* Espacement : une échelle, rien entre ses crans. */
   --space-1: 2px;
   --space-2: 4px;
