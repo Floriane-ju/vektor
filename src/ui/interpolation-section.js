@@ -11,7 +11,7 @@ import { MODIFIER_LABELS } from '../modifiers.js';
 import { CURVE_LABELS, randomSeed } from '../interpolate.js';
 import { icon, ICON_SIZE } from './icons.js';
 import { iconButton, presence, rebuildWithFocus } from './list.js';
-import { collapsible, countLabel, el, field, input, row, sectionHead, select, textButton } from './fields.js';
+import { collapsible, countLabel, el, field, input, row, sectionHead, select, selectBox, textButton } from './fields.js';
 
 /* Les bornes se saisissent en pourcentage : 1 = 100 %. */
 const PERCENT = 100;
@@ -135,9 +135,9 @@ const curveField = (ctx, interpolation) => {
 const block = (ctx, interpolation, modifiers) => {
   const head = el('div', 'interpolation-head');
   head.append(
-    choice('Propriété interpolée', Object.entries(RANGE_LABELS), interpolation.property, (value) =>
+    selectBox(choice('Propriété interpolée', Object.entries(RANGE_LABELS), interpolation.property, (value) =>
       ctx.apply(updateInterpolation, interpolation.id, { property: value }),
-    ),
+    )),
     iconButton({
       label: `Supprimer l'interpolation ${RANGE_LABELS[interpolation.property]}`,
       icon: 'close',

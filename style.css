@@ -164,6 +164,21 @@ input:is([type="number"], [type="text"]) {
   min-width: 0;
   width: 100%;
 }
+/* Chevron natif remplacé : son retrait au bord ignore `padding` (Chromium,
+   Firefox). Icône posée par `selectBox` (ui/fields.js) ; --space-6 = sa
+   largeur (ICON_SIZE.md). */
+select { appearance: none; padding-right: calc(var(--space-5) * 2 + var(--space-6)); }
+.select-box { position: relative; display: flex; min-width: 0; }
+.select-box > .icon {
+  position: absolute;
+  top: 50%;
+  right: var(--space-5);
+  translate: 0 -50%;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+/* Flèches du champ nombre : jamais collées au texte (Chromium ; Firefox n'expose pas le bouton). */
+input[type="number"]::-webkit-inner-spin-button { margin-inline-start: var(--space-3); }
 
 :is(button, select, input, label, [tabindex]):focus-visible {
   outline: var(--focus-ring);
@@ -610,7 +625,7 @@ input.range-value {
   width: 64px;
   height: var(--control-sm);
   padding: 0 var(--space-4);
-  text-align: right;
+  text-align: left;
   font: var(--weight-bold) var(--text-sm)/1 var(--font);
   font-variant-numeric: tabular-nums;
   background: transparent;
@@ -800,8 +815,8 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 
 .modifier-head,
 .interpolation-head { display: flex; align-items: center; gap: var(--space-3); }
-.modifier-head select,
-.interpolation-head select { flex-grow: 1; }
+.modifier-head .select-box,
+.interpolation-head .select-box { flex-grow: 1; }
 
 
 .unit-input { position: relative; display: flex; align-items: center; }
@@ -856,7 +871,7 @@ input.stroke-width { width: 100px; padding: 0 var(--space-3); text-align: right;
 .settings { inset: auto; min-width: 16rem; padding: var(--space-6) var(--space-7); }
 .settings h2 { margin-bottom: var(--space-5); }
 .settings-field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); margin: 0 0 var(--space-4); }
-.settings-field :is(input[type="number"], select) { width: 7rem; }
+.settings-field :is(input[type="number"], .select-box) { width: 7rem; }
 
 .shortcuts { max-width: 28rem; padding: var(--space-7) var(--space-8); }
 .shortcuts::backdrop { background: var(--backdrop); }

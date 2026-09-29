@@ -1,5 +1,5 @@
 import { icon, ICON_SIZE } from './icons.js';
-import { input, pillButton, select, switchField } from './fields.js';
+import { input, pillButton, select, selectBox, switchField } from './fields.js';
 import { activePlane, getActiveLayer, POLAR_GRID, snapToGrid, snapToPolarGrid, STAGE } from '../scene.js';
 import { planeMatrix, unproject } from '../plane.js';
 import { readSettings, writeSettings } from '../persistence.js';
@@ -121,7 +121,7 @@ export const gridImage = (settings, color, plane = null, view = FLAT) => {
 const settingsField = (labelText, control) => {
   const label = document.createElement('label');
   label.className = 'settings-field';
-  label.append(labelText, control);
+  label.append(labelText, control.localName === 'select' ? selectBox(control) : control);
   return label;
 };
 

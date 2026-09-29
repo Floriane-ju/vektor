@@ -23,6 +23,7 @@ import {
   row,
   sectionHead,
   select,
+  selectBox,
   showValue,
   slider,
   switchField,
@@ -82,7 +83,7 @@ const stageHead = (type, { index, stackSize, suffix, apply }) => {
   const rank = index + 1;
   const head = el('div', 'modifier-head');
   head.append(
-    type,
+    selectBox(type),
     iconButton({
       label: `Monter le modificateur ${rank}`,
       icon: 'up',

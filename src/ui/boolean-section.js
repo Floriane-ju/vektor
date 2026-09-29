@@ -10,7 +10,7 @@ import {
   updateBoolean,
 } from '../scene.js';
 import { iconButton, presence, rebuildWithFocus, shapeName, stableKeys } from './list.js';
-import { addButtonFor, collapsible, countLabel, el, option, sectionHead, segmented } from './fields.js';
+import { addButtonFor, collapsible, countLabel, el, option, sectionHead, segmented, selectBox } from './fields.js';
 
 /* Outil d'une opération : une autre forme du calque. L'outil actuel reste
    offert — il ne ferme pas de boucle, sinon il n'aurait pas été posé. */
@@ -33,7 +33,7 @@ const toolSelect = (apply, layer, element, step, index) => {
 const block = (apply, layer, element, step, index) => {
   const head = el('div', 'modifier-head');
   head.append(
-    toolSelect(apply, layer, element, step, index),
+    selectBox(toolSelect(apply, layer, element, step, index)),
     iconButton({
       label: `Retirer l'opération ${index + 1}`,
       icon: 'close',

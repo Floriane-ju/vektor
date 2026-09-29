@@ -18,7 +18,7 @@ export const field = (labelText, control) => {
   const wrap = el('div', 'field');
   const label = el('label', null, labelText);
   label.htmlFor = control.id;
-  wrap.append(label, control);
+  wrap.append(label, control.localName === 'select' ? selectBox(control) : control);
   return wrap;
 };
 
@@ -55,6 +55,14 @@ export const select = (entries) => {
   node.id = nextId();
   for (const [value, label] of entries) node.append(option(value, label));
   return node;
+};
+
+/* Menu déroulant habillé de son chevron (le natif est retiré, cf. style.css).
+   `field` l'applique seul ; à poser à la main ailleurs. */
+export const selectBox = (node) => {
+  const box = el('span', 'select-box');
+  box.append(node, icon('chevronDown', ICON_SIZE.md));
+  return box;
 };
 
 /**
