@@ -24,6 +24,7 @@ import {
   selectedIds,
   selectElements,
   toggleSelected,
+  selectRange,
   translateElements,
   getRenderedChildren,
   isSuspended,
@@ -765,6 +766,25 @@ describe('formes d’un calque', () => {
     const other = scene.layers[1].elements[0];
     const back = toggleSelected(selectElements(scene, [first.id, second.id]), other.id);
     expect(selectedIds(back)).toEqual([other.id]);
+  });
+
+  it('selectRange ajoute la plage depuis la forme active, qui reste l’ancre', () => {
+    let scene = withTwo();
+    scene = addElement(scene, scene.layers[0].id, 'rect', 0, 0);
+    scene = addElement(scene, scene.layers[0].id, 'rect', 0, 0);
+    const [a, b, c, d] = scene.layers[0].elements.map((element) => element.id);
+    scene = selectElements(scene, [a]);
+    scene = selectRange(scene, c);
+    expect(new Set(selectedIds(scene))).toEqual(new Set([a, b, c]));
+    expect(scene.activeElementId).toBe(a);
+    /* ⌘ ajoute d, puis Maj sur b garde d : la plage s'ajoute à la sélection. */
+    scene = selectRange(toggleSelected(selectElements(scene, [a]), d), b);
+    expect(new Set(selectedIds(scene))).toEqual(new Set([a, b, c, d]));
+    expect(scene.activeElementId).toBe(d);
+    scene = addLayer(scene);
+    scene = addElement(scene, scene.activeLayerId, 'rect', 0, 0);
+    const other = scene.layers[1].elements[0].id;
+    expect(selectedIds(selectRange(selectElements(scene, [a]), other))).toEqual([other]);
   });
 
   it('setStyle règle toute la sélection ; mixedStyle dit ce qui diffère', () => {

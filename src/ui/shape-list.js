@@ -9,6 +9,7 @@ import {
   renameElement,
   selectedIds,
   selectElements,
+  selectRange,
   SHAPES,
   toggleElementVisibility,
   toggleSelected,
@@ -100,10 +101,12 @@ const shapeLine = ({ store, remove }, layer, element, isSelected) => {
   name.textContent = shapeName(layer, element, SHAPES);
   name.dataset.focusKey = `name-${element.id}`;
   name.setAttribute('aria-pressed', String(isSelected));
-  /* Maj+clic ajoute ou retire la forme de la sélection, comme sur le plan. */
-  name.addEventListener('click', (event) =>
-    event.shiftKey ? store.apply(toggleSelected, element.id) : store.apply(selectElements, [element.id]),
-  );
+  /* Comme Figma : Maj+clic ajoute la plage depuis la forme active, ⌘/Ctrl+clic bascule la forme seule. */
+  name.addEventListener('click', (event) => {
+    if (event.shiftKey) store.apply(selectRange, element.id);
+    else if (event.metaKey || event.ctrlKey) store.apply(toggleSelected, element.id);
+    else store.apply(selectElements, [element.id]);
+  });
   /* Vider le champ rend le libellé par défaut, qui suit le rang de la forme. */
   inlineRename(name, {
     label: `Nom de ${name.textContent}`,

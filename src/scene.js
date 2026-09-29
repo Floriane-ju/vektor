@@ -466,6 +466,20 @@ export const toggleSelected = (scene, elementId) => {
   return selectElements(scene, sameLayer ? [...current, elementId] : [elementId]);
 };
 
+/**
+ * Maj+clic dans l'arbre : ajoute à la sélection les formes entre la forme active
+ * (l'ancre, qui reste active) et `elementId` ; d'un autre calque, elle est sélectionnée seule.
+ */
+export const selectRange = (scene, elementId) => {
+  const current = selectedIds(scene);
+  const layer = layerOfElement(scene, elementId);
+  if (!layer || current.length === 0 || layerOfElement(scene, current[0]) !== layer) return selectElements(scene, [elementId]);
+  const ids = layer.elements.map((element) => element.id);
+  const [from, to] = [ids.indexOf(scene.activeElementId), ids.indexOf(elementId)].sort((a, b) => a - b);
+  const others = [...current, ...ids.slice(from, to + 1)].filter((id) => id !== scene.activeElementId);
+  return selectElements(scene, [...others, scene.activeElementId]);
+};
+
 export const translateElements = (scene, ids, dx, dy) =>
   ids.reduce((current, id) => {
     const element = current.layers.flatMap((layer) => layer.elements).find((el) => el.id === id);
