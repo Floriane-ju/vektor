@@ -1269,9 +1269,14 @@ describe('accessibilité au clavier', () => {
     const { mountPropertyPanel } = await import('../src/ui/property-panel.js');
     const { createElement, createLayer, updateModifier } = await import('../src/scene.js');
     const point = createElement('point', 0, 0);
-    const layer = createLayer({ elements: [point], modifiers: [createModifier({ linear: true })] });
+    const layer = createLayer({ elements: [point], modifiers: [createModifier()] });
     const store = createStore({ layers: [layer], activeLayerId: layer.id, activeElementId: point.id });
-    const { shapeDetail } = mountPropertyPanel({ store });
+    const { shapeDetail, layerDetail } = mountPropertyPanel({ store });
+    /* Le calque contient un point : son étage propose aussi de relier. */
+    const layerLink = [...layerDetail.querySelectorAll('.modifier-block .switch-field')].find(
+      (node) => node.textContent === 'Activer les répétitions linéaires',
+    );
+    expect(layerLink.hidden).toBe(false);
     /* Relié, le point prend le style de trait d'une ligne. */
     const strokeHidden = () =>
       [...shapeDetail.querySelectorAll('.switch-field')].find((node) => node.textContent === 'Contour double')
@@ -1279,7 +1284,7 @@ describe('accessibilité au clavier', () => {
 
     /* Plus de case sur le point : c'est l'étage qui relie. */
     expect([...shapeDetail.querySelectorAll('.switch-field')].some((node) => node.textContent === 'Répétition linéaire')).toBe(false);
-    /* La pile du calque ne relie pas. */
+    /* Aucun étage coché : le point reste un point. */
     expect(strokeHidden()).toBe(true);
     shapeDetail.querySelector('[data-focus-key="add-modifier-element"]').click();
     const [element] = store.get().layers[0].elements;

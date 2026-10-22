@@ -38,7 +38,7 @@ import { clamp } from './math.js';
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@35';
+export const FORMAT = 'vektor/scene@36';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -96,7 +96,9 @@ export const FORMAT = 'vektor/scene@35';
      oublié, la profondeur réelle du calque 3D en tient lieu ;
    - `@1` à `@33` ne verrouillaient pas les calques : tous libres ;
    - `@1` à `@34` allongeaient la spirale d'un pas par copie : longueur relue
-     à copies − 1, même dessin. */
+     à copies − 1, même dessin ;
+   - `@25` à `@35` ne reliaient jamais le long des étages du calque : leur
+     `linear` (hérité de `@24`) est ignoré, même dessin. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -133,6 +135,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@32',
   'vektor/scene@33',
   'vektor/scene@34',
+  'vektor/scene@35',
   FORMAT,
 ]);
 
@@ -340,7 +343,7 @@ const readPivot = (raw) =>
   Number.isFinite(raw?.x) && Number.isFinite(raw?.y) ? { center: { x: raw.x, y: raw.y } } : {};
 
 /* `orient` absent d'un fichier courant = réglage par défaut du type. */
-/* `linkable` : étage d'une pile de point, le seul qui puisse relier ses copies. */
+/* `linkable` : étage d'une pile de point, ou du calque depuis `@36` — ceux qui relient des copies. */
 const readModifier = (raw, legacy, linkable = false) =>
   createModifier({
     ...(legacy ? { orient: false } : typeof raw?.orient === 'boolean' ? { orient: raw.orient } : {}),
@@ -363,8 +366,8 @@ const readModifier = (raw, legacy, linkable = false) =>
  * Avant `@5` un calque portait un modificateur unique dans `modifier` : il se
  * relit comme une pile d'un seul élément, ce qui rend le même dessin.
  */
-const readModifiers = (raw, legacy) => {
-  const read = (entry) => readModifier(entry, legacy);
+const readModifiers = (raw, legacy, linkable) => {
+  const read = (entry) => readModifier(entry, legacy, linkable);
   if (Array.isArray(raw.modifiers)) return raw.modifiers.map(read);
   return raw.modifier == null ? [] : [read(raw.modifier)];
 };
@@ -462,10 +465,10 @@ const checkIds = (layers) => {
   }
 };
 
-const readLayer = (raw, index, legacy) => {
+const readLayer = (raw, index, legacy, linkable) => {
   if (raw == null || typeof raw !== 'object') fail(`Calque ${index} : objet attendu.`);
   if (typeof raw.id !== 'string' || raw.id === '') fail(`Calque ${index} : \`id\` manquant.`);
-  const modifiers = readModifiers(raw, legacy);
+  const modifiers = readModifiers(raw, legacy, linkable);
   return createLayer({
     id: raw.id,
     name: readName(raw.name).name ?? `Calque ${index + 1}`,
@@ -503,7 +506,9 @@ export const deserialize = (text) => {
 
   /* Avant `@13`, pas d'orientation des copies. */
   const legacy = raw.format.startsWith('illu/') && Number(raw.format.split('@')[1]) < 13;
-  const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy));
+  /* Depuis `@36`, un étage du calque relie aussi les points. */
+  const linkable = raw.format.startsWith('vektor/') && Number(raw.format.split('@')[1]) >= 36;
+  const layers = raw.layers.map((layer, index) => readLayer(layer, index, legacy, linkable));
   if (new Set(layers.map((layer) => layer.id)).size !== layers.length) {
     fail('Deux calques portent le même identifiant.');
   }

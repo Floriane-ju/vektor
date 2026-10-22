@@ -2266,9 +2266,25 @@ describe('répétition linéaire des points', () => {
     expect(children.map((c) => c.type)).toEqual(['point', 'point', 'point']);
   });
 
-  it('ne relie pas le long des étages du calque', () => {
-    const children = getRenderedChildren(pointLayer([], [createModifier({ n: 3, linear: true })]));
-    expect(children.map((c) => c.type)).toEqual(['point', 'point', 'point']);
+  it('relie aussi le long d’un étage du calque', () => {
+    const children = getRenderedChildren(pointLayer([], [createModifier({ n: 3, stepX: 50, linear: true })]));
+    expect(children).toHaveLength(1);
+    expect(vertices(children[0])).toEqual([[10, 0], [60, 0], [110, 0]]);
+  });
+
+  it('étages du point et du calque reliés : une grille', () => {
+    const children = getRenderedChildren(
+      pointLayer([createModifier({ n: 2, stepX: 50, linear: true })], [createModifier({ n: 3, stepX: 0, stepY: 40, linear: true })]),
+    );
+    /* Trois segments horizontaux (point), deux verticaux (calque). */
+    expect(children).toHaveLength(5);
+    expect(children.map(vertices)).toContainEqual([[60, 0], [60, 40], [60, 80]]);
+  });
+
+  it('un étage du calque relié survit à la sauvegarde', () => {
+    const scene = { ...createScene(), layers: [pointLayer([], [createModifier({ type: 'axial', n: 4, linear: true, smooth: true })])] };
+    const [layer] = deserialize(serialize(scene)).layers;
+    expect(layer.modifiers[0]).toMatchObject({ linear: true, smooth: true });
   });
 
   it('chaque copie du calque porte son propre tracé', () => {
@@ -2378,11 +2394,12 @@ describe('répétition linéaire des points', () => {
     expect(outlinePath(plain).corners).toEqual([0, 1, 2]);
   });
 
-  it('le lissage survit à la sauvegarde, seulement sur un étage de point', () => {
+  it('le lissage survit à la sauvegarde ; un étage de calque d’avant `@36` le perd', () => {
     const scene = { ...createScene(), layers: [pointLayer([createModifier({ linear: true, smooth: true })], [createModifier({ smooth: true })])] };
     const [layer] = deserialize(serialize(scene)).layers;
     expect(layer.elements[0].modifiers[0].smooth).toBe(true);
-    expect(layer.modifiers[0].smooth).toBeUndefined();
+    const raw = { ...JSON.parse(serialize(scene)), format: 'vektor/scene@35' };
+    expect(deserialize(JSON.stringify(raw)).layers[0].modifiers[0].smooth).toBeUndefined();
   });
 });
 
@@ -2606,7 +2623,7 @@ describe('formes nommables', () => {
   });
 
   it('le format est bumpé, l’ancien reste lisible', () => {
-    expect(FORMAT).toBe('vektor/scene@35');
+    expect(FORMAT).toBe('vektor/scene@36');
     const raw = JSON.parse(serialize(withShapes()));
     raw.format = 'vektor/scene@29';
     expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);

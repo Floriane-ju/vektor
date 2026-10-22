@@ -142,8 +142,10 @@ const showStage = (parts, modifier, owner, forElement) => {
   parts.axisField.hidden = !Object.hasOwn(MIRROR_AXIS, modifier.type);
   /* Un pas ne tourne rien, un point tourné reste identique : rien à orienter. */
   parts.orientField.hidden = !ORIENTING.has(modifier.type) || owner.type === 'point';
-  /* Seule la pile d'un point relie ses copies ; celle du calque jamais. */
-  parts.linearField.hidden = !forElement || owner.type !== 'point' || modifier.type === 'none';
+  /* Relier n'a de sens que pour un point : la pile d'un point, ou celle d'un
+     calque qui en contient. */
+  const linkable = forElement ? owner.type === 'point' : owner.elements.some((element) => element.type === 'point');
+  parts.linearField.hidden = !linkable || modifier.type === 'none';
   /* Deux copies (miroir) ne font qu'un segment : rien à courber. */
   parts.smoothField.hidden = parts.linearField.hidden || !modifier.linear || effectiveCount(modifier) < 3;
   parts.ownPivotField.hidden = !PIVOTING.has(modifier.type);

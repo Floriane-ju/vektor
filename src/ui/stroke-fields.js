@@ -82,12 +82,13 @@ export const strokeFields = ({ store, bind, slider }) => {
   const group = el('div', 'group');
   group.append(kind.root, ...dash.nodes, linecap.root, switchField('Contour double', toggle('outlined')), gapField);
 
-  const sync = (element) => {
+  const sync = (element, layer) => {
     const dot = SHAPES[element.type].geometry === 'dot';
     /* Un point n'a pas de remplissage ; relié, il devient des lignes et en
        prend le style de trait. */
     filledField.hidden = dot;
-    group.hidden = dot && !element.modifiers.some((modifier) => modifier.linear && modifier.type !== 'none');
+    const links = (modifiers) => modifiers.some((modifier) => modifier.linear && modifier.type !== 'none');
+    group.hidden = dot && !links(element.modifiers) && !links(layer.modifiers);
     kind.check(dashKind(element.dash));
     linecap.check(element.linecap);
     dash.sync(element);

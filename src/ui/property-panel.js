@@ -90,7 +90,7 @@ const shapeDetail = (store, binder) => {
     modifiers.sync(scene);
     if (!element) return;
     shape.sync(element, layer);
-    stroke.sync(element);
+    stroke.sync(element, layer);
     booleans.sync(layer, element);
     interpolations.sync(element);
     /* Outil booléen : ni trait, ni remplissage ne se voient —

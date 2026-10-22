@@ -78,54 +78,81 @@ const stretch = (element, sx, sy) => {
 export const getRenderedChildren = (layer) => {
   if (layer.elements.length === 0 || isSuspended(layer)) return [];
   const copies = stackCopies(layer.modifiers);
-  const children = [];
-  copies.forEach((indices, i) => {
-    for (const element of layer.elements) {
+  /* Toutes les copies d'abord : un étage du calque relie un point à ses
+     copies des rangs suivants. */
+  const drawn = copies.map((indices, i) => layer.elements.map((element) => ownCopiesOf(layer, element, indices, i, copies.length)));
+  const layerStages = linearStages(layer.modifiers);
+  return copies.flatMap((indices, i) =>
+    layer.elements.flatMap((element, e) => {
+      const own = drawn[i][e];
+      if (element.type !== 'point') return own;
       const ownCopies = stackCopies(element.modifiers);
-      const own = ownCopies.map((ownIndices, j) => {
-        const factors = new Map([
-          ...layer.interpolations.map((it) => [it, rangeFactor(layer, it, indices, i, copies.length)]),
-          ...element.interpolations.map((it) => [it, rangeFactor(element, it, ownIndices, j, ownCopies.length)]),
-        ]);
-        const {
-          rotation: twist = 0,
-          strokeWidth: widthFactor = 1,
-          scaleX = 1,
-          scaleY = 1,
-          color,
-          ...properties
-        } = stackValues(
-          [...factors.keys()],
-          (interpolation) => factors.get(interpolation),
-          RANGE_BOUNDS,
+      const place = (ownIndices, layerIndices = indices) =>
+        applyStack(applyStack(element, element.modifiers, ownIndices, layer.center), layer.modifiers, layerIndices, layer.center);
+      /* Le long d'un étage du calque : une chaîne par copie propre, émise au
+         premier rang de l'étage. */
+      const across = layerStages
+        .filter(({ k }) => indices[k] === 0)
+        .flatMap(({ k, n, stride, wrap, smooth }) =>
+          own.map((point, j) => {
+            const links =
+              smooth && n > 2
+                ? sweep(indices, k, n, wrap, (layerIndices) => place(ownCopies[j], layerIndices))
+                : Array.from({ length: n }, (_, step) => drawn[i + step * stride][e][j]);
+            return chain(point, links, wrap, smooth);
+          }),
         );
-        const local = applyStack(element, element.modifiers, ownIndices, layer.center);
-        const { x, y, angle, flip } = applyStack(local, layer.modifiers, indices, layer.center);
-        /* Orientation de la copie puis rotation propre : `R(a)·S·R(r) = R(a − r)·S`,
-           le reflet inverse le sens de l'angle propre — vrille interpolée comprise,
-           pour qu'un motif miroir vrille en miroir. */
-        const spin = (element.rotation ?? 0) + twist;
-        return {
-          ...element,
-          ...stretch(element, scaleX, scaleY),
-          strokeWidth: element.strokeWidth * widthFactor,
-          stroke: color ?? element.stroke,
-          fill: element.filled ? (color ?? element.stroke) : 'none',
-          x,
-          y,
-          rotation: (angle * 180) / Math.PI + (flip ? -spin : spin),
-          flip,
-          copy: i,
-          own: j,
-          ...properties,
-        };
-      });
-      const place = (ownIndices) =>
-        applyStack(applyStack(element, element.modifiers, ownIndices, layer.center), layer.modifiers, indices, layer.center);
-      children.push(...(element.type === 'point' ? linkPoints(element.modifiers, ownCopies, own, place) : own));
-    }
+      /* Relié par le calque seul, le point ne se dessine plus en points. */
+      const within =
+        layerStages.length > 0 && linearStages(element.modifiers).length === 0
+          ? []
+          : linkPoints(element.modifiers, ownCopies, own, place);
+      return [...within, ...across];
+    }),
+  );
+};
+
+/* Copies propres d'une forme dans la copie `i` du calque, interpolées. */
+const ownCopiesOf = (layer, element, indices, i, total) => {
+  const ownCopies = stackCopies(element.modifiers);
+  return ownCopies.map((ownIndices, j) => {
+    const factors = new Map([
+      ...layer.interpolations.map((it) => [it, rangeFactor(layer, it, indices, i, total)]),
+      ...element.interpolations.map((it) => [it, rangeFactor(element, it, ownIndices, j, ownCopies.length)]),
+    ]);
+    const {
+      rotation: twist = 0,
+      strokeWidth: widthFactor = 1,
+      scaleX = 1,
+      scaleY = 1,
+      color,
+      ...properties
+    } = stackValues(
+      [...factors.keys()],
+      (interpolation) => factors.get(interpolation),
+      RANGE_BOUNDS,
+    );
+    const local = applyStack(element, element.modifiers, ownIndices, layer.center);
+    const { x, y, angle, flip } = applyStack(local, layer.modifiers, indices, layer.center);
+    /* Orientation de la copie puis rotation propre : `R(a)·S·R(r) = R(a − r)·S`,
+       le reflet inverse le sens de l'angle propre — vrille interpolée comprise,
+       pour qu'un motif miroir vrille en miroir. */
+    const spin = (element.rotation ?? 0) + twist;
+    return {
+      ...element,
+      ...stretch(element, scaleX, scaleY),
+      strokeWidth: element.strokeWidth * widthFactor,
+      stroke: color ?? element.stroke,
+      fill: element.filled ? (color ?? element.stroke) : 'none',
+      x,
+      y,
+      rotation: (angle * 180) / Math.PI + (flip ? -spin : spin),
+      flip,
+      copy: i,
+      own: j,
+      ...properties,
+    };
   });
-  return children;
 };
 
 /**
@@ -166,8 +193,8 @@ const chain = (from, links, closed, smooth) => ({
  * Répétition linéaire : portée par l'étage, pas par le point. Un point ne se
  * dessine plus copie par copie ; le long de chaque étage coché de **sa propre** pile, ses copies
  * successives forment un tracé, émis à la première copie de la rangée. Les
- * étages du calque ne relient jamais : chaque copie du calque porte ses
- * propres tracés. Aucun étage coché : les points restent des points.
+ * étages cochés du calque relient de même, copie propre par copie propre
+ * (`getRenderedChildren`). Aucun étage coché : les points restent des points.
  *
  * ponytail: une chaîne n'a qu'une couleur, une opacité, une épaisseur — celles
  * de sa première copie. Un dégradé le long du tracé demanderait de le
