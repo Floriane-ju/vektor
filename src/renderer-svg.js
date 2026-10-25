@@ -18,8 +18,8 @@ export { CHROME, clearHover, elementsInBox, showHover, showOrigin } from './rend
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/* Une copie rendue : rang de la copie du calque, puis de la copie propre de la forme. */
-const copyKey = (id, { copy, own = 0 }) => `${id}:${copy}:${own}`;
+/* Copies d'une forme au même rang de copie du calque : toutes ses copies propres. */
+const copyKey = (id, { copy }) => `${id}:${copy}`;
 
 /**
  * Dessin d'un calque, retenu tant que sa référence ne change pas (les
@@ -48,11 +48,9 @@ const drawLayer = (layer) => {
     ...layer.elements.flatMap((element) => element.booleans.map((step) => step.with)),
     ...layer.elements.filter((element) => element.hidden).map((element) => element.id),
   ]);
-  const byCopy = new Map(children.map((child) => [copyKey(child.id, child), child]));
-  /* Outil de même copie ; répété moins que la forme, sa copie propre 0.
-     ponytail: un outil répété sous une forme qui ne l'est pas n'agit que par
-     sa première copie propre. */
-  const partner = (id, child) => byCopy.get(copyKey(id, child)) ?? byCopy.get(copyKey(id, { ...child, own: 0 }));
+  /* Outil de même copie du calque, par toutes ses copies propres : chaque
+     copie de la forme se combine avec leur union. */
+  const byCopy = Map.groupBy(children, (child) => copyKey(child.id, child));
   const draw = (child) => (planar ? volumes.push(child) : group.append(createNode(child)));
   /* Recoupements creux : les aplats rejoignent un tracé commun, chaque forme
      ne garde que son trait. */
@@ -77,8 +75,8 @@ const drawLayer = (layer) => {
     if (tools.has(child.id)) continue;
     entry.box = entry.box ? union(entry.box, box) : box;
     const steps = child.booleans
-      .map((step) => ({ shape: partner(step.with, child), op: step.op }))
-      .filter((step) => step.shape);
+      .map((step) => ({ shapes: byCopy.get(copyKey(step.with, child)) ?? [], op: step.op }))
+      .filter((step) => step.shapes.length > 0);
     if (steps.length > 0) {
       /* La forme résultante, en vrai contour : en 3D elle prend la profondeur,
          et son contour double fait le tour d'un seul trait. */
@@ -562,12 +560,18 @@ const createBoolean = (child, steps) => {
 
   let region = (fg) => [solid(child, fg)];
   let edges = [edge(child)];
-  for (const { shape, op } of steps) {
+  for (const { shapes, op } of steps) {
     const previous = region;
-    const tool = (fg) => [solid(shape, fg)];
+    const tool = (fg) => shapes.map((shape) => solid(shape, fg));
     const within = maskOf(tool, EDGE_KEEP[op]);
     edges = edges.map((node) => wrap([node], within));
-    edges.push(wrap([edge({ ...shape, dash: child.dash, linecap: child.linecap, outlined: child.outlined, gap: child.gap })], maskOf(previous, TOOL_EDGE_KEEP[op])));
+    /* Bord d'une copie de l'outil : hors des autres copies, sinon il raye leur union.
+       ponytail: n² aplats pour n copies de l'outil ; un masque d'union partagé si ça pèse. */
+    for (const shape of shapes) {
+      const outer = wrap([edge({ ...shape, dash: child.dash, linecap: child.linecap, outlined: child.outlined, gap: child.gap })], maskOf(previous, TOOL_EDGE_KEEP[op]));
+      const others = shapes.filter((other) => other !== shape);
+      edges.push(others.length > 0 ? wrap([outer], maskOf((fg) => others.map((other) => solid(other, fg)), 'out')) : outer);
+    }
     region = {
       union: (fg, bg) => [...previous(fg, bg), ...tool(fg)],
       subtract: (fg, bg) => [...previous(fg, bg), ...tool(bg)],

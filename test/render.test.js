@@ -2484,6 +2484,7 @@ describe('gridImage en plan 3D', () => {
 });
 
 describe('booléens sous répétition de forme', () => {
+  /* Centres des copies de l'outil vus par chaque copie de la forme. */
   const toolCenters = (tool, formeModifiers) => {
     const forme = createElement('rect', 0, 0, {
       modifiers: formeModifiers,
@@ -2491,19 +2492,24 @@ describe('booléens sous répétition de forme', () => {
     });
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     render({ layers: [createLayer({ elements: [tool, forme] })], activeLayerId: null, activeElementId: null }, svg);
-    return [...svg.querySelectorAll(`g[data-element-id="${forme.id}"] > mask ellipse`)].map((node) =>
-      node.getAttribute('cx'),
+    return [...svg.querySelectorAll(`g[data-element-id="${forme.id}"]`)].map((group) =>
+      [...new Set([...group.querySelectorAll(':scope > mask ellipse')].map((node) => node.getAttribute('cx')))].sort(),
     );
   };
   const step = () => [createModifier({ n: 2, stepX: 100 })];
 
-  it('chaque copie propre de la forme prend la copie propre de même rang de l’outil', () => {
+  it('chaque copie propre de la forme prend toutes les copies propres de l’outil', () => {
     const tool = createElement('ellipse', 0, 0, { rx: 40, ry: 40, modifiers: step() });
-    expect(toolCenters(tool, step())).toEqual(['0', '100']);
+    expect(toolCenters(tool, step())).toEqual([['0', '100'], ['0', '100']]);
+  });
+
+  it('un outil répété sous une forme qui ne l’est pas agit par toutes ses copies', () => {
+    const tool = createElement('ellipse', 0, 0, { rx: 40, ry: 40, modifiers: step() });
+    expect(toolCenters(tool, [])).toEqual([['0', '100']]);
   });
 
   it('un outil non répété sert à toutes les copies propres de la forme', () => {
     const tool = createElement('ellipse', 0, 0, { rx: 40, ry: 40 });
-    expect(toolCenters(tool, step())).toEqual(['0', '0']);
+    expect(toolCenters(tool, step())).toEqual([['0'], ['0']]);
   });
 });

@@ -2666,7 +2666,7 @@ describe('booleanPieces : contour double', () => {
   it('bords calculés sur les formes d’origine : pas de boucle au creux de la jonction', () => {
     const a = createElement('ellipse', 0, 0, { rx: 100, ry: 100, outlined: true, gap: 10, strokeWidth: 4 });
     const b = createElement('ellipse', 150, 0, { rx: 100, ry: 100 });
-    const [piece, ...rest] = booleanPieces(a, [{ shape: b, op: 'union' }]);
+    const [piece, ...rest] = booleanPieces(a, [{ shapes: [b], op: 'union' }]);
     expect(rest).toEqual([]);
     const [outer, inner] = piece.rims.map((rim) => rim.points);
     const reach = (4 + 10) / 2;
@@ -2677,6 +2677,12 @@ describe('booleanPieces : contour double', () => {
     expect(Math.max(...inner.map((p) => Math.min(gap(p, a), gap(p, b))))).toBeLessThan(-reach * 0.9);
     /* Jonctions = coins, pas les sommets des cercles échantillonnés. */
     expect(piece.rims.map((rim) => rim.corners.length)).toEqual([2, 2]);
+  });
+
+  it('l’outil d’un pas = l’union de ses copies : intersection avec deux copies disjointes', () => {
+    const host = createElement('rect', 0, 0, { rx: 100, ry: 20 });
+    const copies = [-60, 60].map((x) => createElement('rect', x, 0, { rx: 20, ry: 20 }));
+    expect(booleanPieces(host, [{ shapes: copies, op: 'intersect' }])).toHaveLength(2);
   });
 });
 

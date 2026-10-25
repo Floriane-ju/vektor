@@ -166,29 +166,34 @@ const pointKey = (p) => `${Math.round(p.x * 1e6) + 0},${Math.round(p.y * 1e6) + 
  * trou comme bord intérieur d'un anneau (`planeDouble`) si le besoin vient.
  */
 export const booleanPieces = (child, steps) => {
-  const outlines = [child, ...steps.map((step) => step.shape)].map(outlinePath);
-  if (outlines.some((outline) => !outline.closed || outline.points.length < 3)) return null;
+  const host = outlinePath(child);
+  const tools = steps.map((step) => step.shapes.map(outlinePath));
+  if ([host, ...tools.flat()].some((outline) => !outline.closed || outline.points.length < 3)) return null;
   const scale = child.scale ?? 1;
   const gap = (child.gap ?? 0) * scale;
   /* Bords du contour double : chaque forme décalée, puis le même booléen —
      l'outil d'une soustraction à rebours. Décaler le contour fusionné
      ferait une boucle ou une pointe d'onglet au creux des jonctions. */
   const reach = child.outlined && child.strokeWidth > 0 && gap > 0 ? (child.strokeWidth + gap) / 2 : 0;
-  const grown = (distance) =>
-    outlines.map((outline, i) => ({
-      ...outline,
-      points: offsetPolygon(outline.points, i > 0 && steps[i - 1].op === 'subtract' ? -distance : distance),
-    }));
-  const levels = reach ? [outlines, grown(reach), grown(-reach)] : [outlines];
+  const offset = (outline, distance) => ({ ...outline, points: offsetPolygon(outline.points, distance) });
+  const grown = (distance) => ({
+    host: offset(host, distance),
+    tools: tools.map((outlines, i) => outlines.map((outline) => offset(outline, steps[i].op === 'subtract' ? -distance : distance))),
+  });
+  const levels = reach ? [{ host, tools }, grown(reach), grown(-reach)] : [{ host, tools }];
   const smooth = new Set(
-    levels.flat().flatMap(({ points, corners }) => {
+    levels.flatMap((level) => [level.host, ...level.tools.flat()]).flatMap(({ points, corners }) => {
       const sharp = new Set(corners);
       return points.filter((_, i) => !sharp.has(i)).map(pointKey);
     }),
   );
   const ring = ({ points }) => [points.map((p) => [p.x, p.y])];
+  /* L'outil d'un pas = l'union de ses copies propres. */
   const combine = (level) =>
-    steps.reduce((region, step, i) => polygonClipping[CLIP[step.op]](region, ring(level[i + 1])), [ring(level[0])]);
+    steps.reduce(
+      (region, step, i) => polygonClipping[CLIP[step.op]](region, polygonClipping.union(...level.tools[i].map(ring))),
+      [ring(level.host)],
+    );
   const [result, ...edges] = levels.map(combine);
   if (result.some((polygon) => polygon.length > 1)) return null;
   const contour = ([outer]) => {
