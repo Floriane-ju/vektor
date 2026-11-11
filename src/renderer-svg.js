@@ -7,7 +7,7 @@ import {
   SHAPES,
   STAGE,
 } from './scene.js';
-import { booleanPieces, extrusionOf, outlinePath, placer, planeBand, planeDouble, planeMatrix, polygonVertices, project, shifted } from './plane.js';
+import { booleanPieces, extrusionOf, hasProfile, outlinePath, placer, planeBand, planeDouble, planeMatrix, polygonVertices, project, shifted } from './plane.js';
 import { boundsOf, radians, wrapAngle } from './math.js';
 import { createPlaneDouble, drawPlane, occlude } from './renderer-plane.js';
 import { clearHover, createGuides, createHandles, createSelection, createTransformHandles, sourceBounds } from './renderer-screen.js';
@@ -311,7 +311,8 @@ const createEvenOdd = (layer, holes, fill) => {
 export const createNode = (child) => {
   const double = child.matrix ? planeDouble(child) : null;
   if (double) return createPlaneDouble(child, double);
-  const band = child.matrix ? planeBand(child) : null;
+  /* Profil : l'écart varie, plus de trait évidé possible — deux traits, en 2D aussi. */
+  const band = child.matrix || hasProfile(child) ? planeBand(child) : null;
   if (band) return createPlaneDouble(child, band, false);
   const scale = child.scale ?? 1;
   const rx = clampExtent(child.type, child.rx * scale);

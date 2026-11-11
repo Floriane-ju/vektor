@@ -9,6 +9,7 @@ import {
   clampDash,
   clampExtent,
   clampGap,
+  clampProfile,
   clampLinecap,
   clampInner,
   clampSides,
@@ -38,7 +39,7 @@ import { clamp } from './math.js';
    relire les anciens formats. Même raison pour le préfixe `illu` : c'est
    l'ancien nom de Vektor. */
 const STORAGE_KEY = 'illu:scene:v1';
-export const FORMAT = 'vektor/scene@36';
+export const FORMAT = 'vektor/scene@37';
 
 /* Les formats antérieurs restent lisibles :
    - `@1` décrivait la forme par un `radius` unique, avant le rectangle ;
@@ -98,7 +99,8 @@ export const FORMAT = 'vektor/scene@36';
    - `@1` à `@34` allongeaient la spirale d'un pas par copie : longueur relue
      à copies − 1, même dessin ;
    - `@25` à `@35` ne reliaient jamais le long des étages du calque : leur
-     `linear` (hérité de `@24`) est ignoré, même dessin. */
+     `linear` (hérité de `@24`) est ignoré, même dessin ;
+   - `@1` à `@36` n'avaient pas de profil de contour double : uniforme. */
 const READABLE_FORMATS = new Set([
   'illu/scene@1',
   'illu/scene@2',
@@ -136,6 +138,7 @@ const READABLE_FORMATS = new Set([
   'vektor/scene@33',
   'vektor/scene@34',
   'vektor/scene@35',
+  'vektor/scene@36',
   FORMAT,
 ]);
 
@@ -313,6 +316,7 @@ const readElement = (input, style) => {
     linecap: clampLinecap(raw.linecap),
     outlined: raw.outlined === true,
     gap: clampGap(num(raw.gap, DEFAULT_OUTLINE_GAP)),
+    ...(clampProfile(raw.profile) ? { profile: clampProfile(raw.profile) } : {}),
     booleans: readBooleans(raw.booleans),
     height: clampHeight(num(raw.height, 0)),
     opaque: raw.opaque !== false,

@@ -1,4 +1,16 @@
-import { clampDash, clampGap, clampLinecap, DASH_PRESETS, getActiveElement, LINECAPS, SHAPES, updateElement } from '../scene.js';
+import {
+  clampDash,
+  clampGap,
+  clampLinecap,
+  clampProfile,
+  DASH_PRESETS,
+  getActiveElement,
+  isClosedShape,
+  LINECAPS,
+  OUTLINE_PROFILES,
+  SHAPES,
+  updateElement,
+} from '../scene.js';
 import { el, field, input, row, segmented, switchField } from './fields.js';
 
 /* Bornes du curseur de tirets. Le champ numérique voisin accepte au-delà : le
@@ -79,8 +91,10 @@ export const strokeFields = ({ store, bind, slider }) => {
       (element, value) => store.apply(updateElement, element.id, { gap: clampGap(value) }),
     ),
   );
+  /* Écart le long d'un tracé ouvert ; une forme fermée n'a ni début ni fin. */
+  const profile = segmented('Profil', Object.entries(OUTLINE_PROFILES), (value) => patch({ profile: clampProfile(value) }));
   const group = el('div', 'group');
-  group.append(kind.root, ...dash.nodes, linecap.root, switchField('Contour double', toggle('outlined')), gapField);
+  group.append(kind.root, ...dash.nodes, linecap.root, switchField('Contour double', toggle('outlined')), gapField, profile.root);
 
   const sync = (element, layer) => {
     const dot = SHAPES[element.type].geometry === 'dot';
@@ -93,6 +107,8 @@ export const strokeFields = ({ store, bind, slider }) => {
     linecap.check(element.linecap);
     dash.sync(element);
     gapField.hidden = !element.outlined;
+    profile.root.hidden = !element.outlined || isClosedShape(element);
+    profile.check(element.profile ?? 'uniform');
   };
   return { nodes: [filledField, group], sync };
 };

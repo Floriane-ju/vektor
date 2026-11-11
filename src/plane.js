@@ -1,5 +1,5 @@
 import polygonClipping from 'polygon-clipping';
-import { clampExtent, SHAPES, STAGE } from './scene.js';
+import { clampExtent, profileAt, SHAPES, STAGE } from './scene.js';
 import { radians, wrapAngle } from './math.js';
 
 /**
@@ -96,6 +96,40 @@ const every = (points) => points.map((_, i) => i);
  * une courbe échantillonnée n'en a pas, seule sa silhouette en montre.
  */
 export const outlinePath = (child) => {
+  const outline = baseOutline(child);
+  return hasProfile(child) && !outline.closed && outline.points.length > 1 ? densify(outline) : outline;
+};
+
+/* Contour double à profil (écart variable le long du tracé). */
+export const hasProfile = (child) => Boolean(child.outlined && child.profile);
+
+/* Sommets par longueur de tracé d'un profil : assez pour que l'écart varie en
+   douceur, même sur une ligne de deux sommets. */
+const PROFILE_SAMPLES = 64;
+
+/* Même tracé ouvert, chaque segment recoupé en pas d'au plus 1/PROFILE_SAMPLES
+   de la longueur totale ; les coins suivent leurs sommets. */
+const densify = ({ points, closed, corners }) => {
+  const total = lengths(points).at(-1) || 1;
+  const rank = [0];
+  const out = [points[0]];
+  for (let i = 1; i < points.length; i++) {
+    const [a, b] = [points[i - 1], points[i]];
+    const steps = Math.max(1, Math.ceil((Math.hypot(b.x - a.x, b.y - a.y) / total) * PROFILE_SAMPLES));
+    for (let k = 1; k <= steps; k++) out.push({ x: a.x + ((b.x - a.x) * k) / steps, y: a.y + ((b.y - a.y) * k) / steps });
+    rank.push(out.length - 1);
+  }
+  return { points: out, closed, corners: corners.map((i) => rank[i]) };
+};
+
+/* Longueur cumulée du tracé à chaque sommet. */
+const lengths = (points) => {
+  const along = [0];
+  for (let i = 1; i < points.length; i++) along.push(along[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+  return along;
+};
+
+const baseOutline = (child) => {
   const scale = child.scale ?? 1;
   const rx = clampExtent(child.type, child.rx * scale);
   const ry = clampExtent(child.type, child.ry * scale);
@@ -280,7 +314,7 @@ export const offsetPolygon = (points, distance, closed = true) => {
     const sum = { x: before.x + after.x, y: before.y + after.y };
     const length = Math.hypot(sum.x, sum.y) || 1;
     const miter = { x: sum.x / length, y: sum.y / length };
-    const reach = distance / Math.max(miter.x * after.x + miter.y * after.y, 1 / MITER_LIMIT);
+    const reach = (Array.isArray(distance) ? distance[i] : distance) / Math.max(miter.x * after.x + miter.y * after.y, 1 / MITER_LIMIT);
     return { x: p.x + miter.x * reach, y: p.y + miter.y * reach };
   });
 };
@@ -377,7 +411,11 @@ export const planeBand = (child) => {
   const band = child.outlined && !closed && points.length > 1 && child.stroke !== 'none' && child.strokeWidth > 0 && gap > 0;
   if (!band) return null;
   const offset = (child.strokeWidth + gap) / 2;
-  return [offset, -offset].map((distance) => untangle(offsetPolygon(points, distance, false), points, distance));
+  /* L'écart de chaque sommet suit sa place le long du tracé (profil). */
+  const along = lengths(points);
+  const total = along.at(-1) || 1;
+  const reach = along.map((length) => (child.strokeWidth + gap * profileAt(child.profile, length / total)) / 2);
+  return [reach, reach.map((d) => -d)].map((distance) => untangle(offsetPolygon(points, distance, false), points, offset));
 };
 
 /**

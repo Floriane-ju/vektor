@@ -302,3 +302,11 @@ export const clampLinecap = (value) => (Object.hasOwn(LINECAPS, value) ? value :
 export const DEFAULT_OUTLINE_GAP = 1.5;
 const MAX_OUTLINE_GAP = 100;
 export const clampGap = (value) => clamp(Number.isFinite(value) ? value : DEFAULT_OUTLINE_GAP, 0, MAX_OUTLINE_GAP);
+
+/* Profil d'un contour double ouvert : l'écart varie le long du tracé, les deux
+   traits gardent leur épaisseur. `element.profile` absent = uniforme. */
+export const OUTLINE_PROFILES = { uniform: 'Uniforme', lens: 'Fuseau' };
+export const clampProfile = (value) => (Object.hasOwn(OUTLINE_PROFILES, value) && value !== 'uniform' ? value : undefined);
+/* Facteur de l'écart à la fraction `t` ∈ [0, 1] de la longueur du tracé ;
+   fuseau : nul aux bouts (les traits se touchent), plein au milieu. */
+export const profileAt = (profile, t) => (profile === 'lens' ? Math.sin(Math.PI * t) : 1);

@@ -84,3 +84,16 @@ describe('lignes cachées', () => {
     expect(ids.lastIndexOf(far.id)).toBeLessThan(ids.indexOf(near.id));
   });
 });
+
+describe('fuseau extrudé', () => {
+  it('une bande en fuseau garde ses arêtes de flanc aux bouts, sur les deux bords', () => {
+    const line = (profile) => createElement('line', 450, 450, { rx: 100, ry: 0, outlined: true, gap: 20, strokeWidth: 4, height: 40, profile });
+    const flanks = (profile) => meshOf(childrenOf([line(profile)])[0]).chains.filter((chain) => chain.kind === 'flank');
+    const ends = (chains) => chains.map(({ points: [p] }) => p);
+    const [lens, uniform] = [flanks('lens'), flanks(undefined)];
+    expect(lens.length).toBeGreaterThanOrEqual(4);
+    /* Aux bouts, l'écart se ferme : les deux bords d'un bout sont plus proches qu'en uniforme. */
+    const span = (points) => Math.max(...points.map((p) => p.y)) - Math.min(...points.map((p) => p.y));
+    expect(span(ends(lens))).toBeLessThanOrEqual(span(ends(uniform)) + 1e-6);
+  });
+});

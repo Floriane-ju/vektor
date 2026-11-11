@@ -1731,6 +1731,19 @@ describe('style de trait', () => {
     expect(other.querySelector('mask').id).not.toBe(double.querySelector('mask').id);
   });
 
+  it('un contour double en fuseau se dessine en deux traits, sans masque ; fermé, il reste évidé', () => {
+    const svg = stage();
+    const line = createElement('line', 0, 0, { rx: 50, ry: 0, strokeWidth: 2, gap: 10, outlined: true, profile: 'lens' });
+    const rect = createElement('rect', 200, 0, { outlined: true, profile: 'lens' });
+    render({ layers: [createLayer({ elements: [line, rect] })] }, svg);
+    const group = svg.querySelector(`g[data-element-id="${line.id}"]`);
+    const edges = group.querySelectorAll('polyline');
+    expect(edges).toHaveLength(2);
+    expect(edges[0].getAttribute('stroke-width')).toBe('2');
+    expect(group.querySelector('mask')).toBeNull();
+    expect(svg.querySelector(`g[data-element-id="${rect.id}"]`).getAttribute('mask')).toMatch(/^url/);
+  });
+
   it('le point ignore le contour double', () => {
     const svg = stage();
     render({ layers: [createLayer({ elements: [createElement('point', 0, 0, { outlined: true })] })] }, svg);

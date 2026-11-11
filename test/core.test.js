@@ -1681,6 +1681,16 @@ describe('rotation et épaisseur interpolées', () => {
     expect(deserialize(old).layers[0].elements[0].outlined).toBe(false);
   });
 
+  it('le profil du contour double se sauvegarde ; inconnu ou absent (`@36`), uniforme', () => {
+    const scene = { layers: [createLayer({ elements: [createElement('line', 0, 0, { outlined: true, profile: 'lens' })] })] };
+    expect(deserialize(serialize(scene)).layers[0].elements[0].profile).toBe('lens');
+    const wild = JSON.stringify({
+      format: 'vektor/scene@36',
+      layers: [{ id: 'L1', elements: [{ id: 'E1', type: 'line', outlined: true, profile: 'zigzag' }] }],
+    });
+    expect(deserialize(wild).layers[0].elements[0]).not.toHaveProperty('profile');
+  });
+
   it('l’opacité d’un volume se sauvegarde ; absente (`@30`), la forme est opaque', () => {
     const scene = { layers: [createLayer({ elements: [createElement('rect', 0, 0, { height: 20, opaque: false })] })] };
     expect(deserialize(serialize(scene)).layers[0].elements[0].opaque).toBe(false);
@@ -2623,7 +2633,7 @@ describe('formes nommables', () => {
   });
 
   it('le format est bumpé, l’ancien reste lisible', () => {
-    expect(FORMAT).toBe('vektor/scene@36');
+    expect(FORMAT).toBe('vektor/scene@37');
     const raw = JSON.parse(serialize(withShapes()));
     raw.format = 'vektor/scene@29';
     expect(deserialize(JSON.stringify(raw)).layers[0].elements).toHaveLength(2);
@@ -2715,5 +2725,27 @@ describe('nom des nouveaux calques', () => {
     expect(scene.layers.map((layer) => layer.name)).toEqual(['Calque 1', 'Calque 2']);
     const renamed = { ...scene, layers: [{ ...scene.layers[0], name: 'Fond' }, { ...scene.layers[1], name: 'Calque 7' }] };
     expect(addLayer(renamed).layers.at(-1).name).toBe('Calque 8');
+  });
+});
+
+import { planeBand } from '../src/plane.js';
+
+describe('profil du contour double', () => {
+  const line = (profile) => ({ ...createElement('line', 0, 0, { rx: 50, ry: 0, outlined: true, gap: 10, strokeWidth: 2, profile }), scale: 1 });
+  const spread = ([outer, inner], k) => Math.hypot(outer[k].x - inner[k].x, outer[k].y - inner[k].y);
+
+  it('fuseau : les traits se touchent aux bouts, écart plein au milieu', () => {
+    const band = planeBand(line('lens'));
+    const n = band[0].length;
+    expect(n).toBeGreaterThan(2);
+    expect(spread(band, 0)).toBeCloseTo(2);
+    expect(spread(band, n - 1)).toBeCloseTo(2);
+    expect(spread(band, (n - 1) / 2)).toBeCloseTo(12);
+  });
+
+  it('uniforme : écart constant, deux sommets', () => {
+    const band = planeBand(line(undefined));
+    expect(band[0]).toHaveLength(2);
+    expect(spread(band, 0)).toBeCloseTo(12);
   });
 });
