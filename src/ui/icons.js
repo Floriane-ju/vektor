@@ -36,6 +36,8 @@ const SYMBOLS = {
   duplicate: 'content_copy',
   settings: 'settings',
   help: 'help',
+  /* Faux curseur du glisser des champs numériques. */
+  scrub: 'arrow_range',
 };
 
 /* Tailles d'icône, en pixels, 16 au minimum : chevrons, boutons de ligne et

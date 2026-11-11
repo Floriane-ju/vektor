@@ -107,6 +107,7 @@
      agrandie d'autant pour que le dessin fasse la taille demandée. */
   --icon-ink: 1.2;
   --z-float: 1;
+  --z-cursor: 2;          /* faux curseur du glisser des champs numériques */
   color-scheme: dark;
 }
 
@@ -189,6 +190,16 @@ input[type="number"]::-webkit-inner-spin-button { margin-inline-start: var(--spa
 
 /* Glisser horizontal pour régler la valeur (ui/scrub.js) ; focalisé, on tape. */
 input[type="number"]:not(:focus, :disabled) { cursor: ew-resize; }
+/* Remplace le curseur pendant le verrou du pointeur (`ui/scrub.js`) ; centré
+   sur la position, posée en `translate` par le script. */
+.scrub-ghost {
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: var(--z-cursor);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  color: var(--text);
+}
 
 input[type="range"] {
   width: 100%;

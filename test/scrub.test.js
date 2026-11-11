@@ -3,7 +3,7 @@ import { expect, it } from 'vitest';
 import { createStore } from '../src/store.js';
 import { addElement, createScene, getActiveElement, updateElement } from '../src/scene.js';
 import { mountHistory } from '../src/ui/history.js';
-import { mountScrub, scrubValue } from '../src/ui/scrub.js';
+import { mountScrub, scrubValue, wrap } from '../src/ui/scrub.js';
 
 const numberInput = (attrs) => Object.assign(document.createElement('input'), { type: 'number', ...attrs });
 
@@ -38,4 +38,39 @@ it('un glissement entier = un seul pas d’annulation', () => {
   expect(width()).toBe(4);
   store.undo();
   expect(width()).toBe(before);
+});
+
+it('repasse de l’autre côté de l’écran', () => {
+  expect(wrap(1010, 1000)).toBe(10);
+  expect(wrap(-10, 1000)).toBe(990);
+  expect(wrap(500, 1000)).toBe(500);
+});
+
+it('pointeur verrouillé : la valeur suit movementX, le faux curseur fait le tour', () => {
+  mountScrub();
+  const input = numberInput({ step: '1', value: '0' });
+  document.body.append(input);
+  let lockedTo = null;
+  input.requestPointerLock = () => {
+    lockedTo = input;
+  };
+  Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: () => lockedTo });
+  document.exitPointerLock = () => {
+    lockedTo = null;
+  };
+  const fire = (type, init) => input.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, ...init }));
+
+  fire('pointerdown', { clientX: window.innerWidth - 4, clientY: 10 });
+  fire('pointermove', { clientX: window.innerWidth, clientY: 10, movementX: 4 }); // seuil franchi : verrou
+  expect(lockedTo).toBe(input);
+  for (let i = 0; i < 5; i += 1) fire('pointermove', { movementX: 4, movementY: 0 });
+  expect(input.value).toBe('6'); // (4 + 20) / 4
+  const ghost = document.querySelector('.scrub-ghost');
+  expect(ghost).not.toBeNull();
+  expect(parseFloat(ghost.style.translate)).toBeLessThan(window.innerWidth / 2);
+
+  fire('pointerup', {});
+  expect(lockedTo).toBeNull();
+  expect(document.querySelector('.scrub-ghost')).toBeNull();
+  delete document.pointerLockElement;
 });
