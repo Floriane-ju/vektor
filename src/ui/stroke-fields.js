@@ -16,6 +16,7 @@ import { el, field, input, row, segmented, switchField } from './fields.js';
 /* Bornes du curseur de tirets. Le champ numérique voisin accepte au-delà : le
    curseur couvre l'usage courant sans plafonner le modèle. */
 const DASH_SLIDER = { min: '0.5', max: '16', step: '0.5' };
+const DOT_SLIDER = { min: '1', max: '16', step: '0.5' };
 
 /* Le type de motif se lit sur le tableau de tirets — vide, plein ; un premier
    tiret nul, des points ; sinon des tirets, réglés par tiret et espace. */
@@ -49,11 +50,20 @@ const dashFields = (store, bind, slider) => {
       { event: 'change' },
     );
   const pairRow = row(field('Tiret (× ép.)', part(0)), field('Espace (× ép.)', part(1)));
+  /* Pas d'un point au suivant, centre à centre : 1 = points jointifs. */
+  const spacing = slider(
+    'Espacement des points — × épaisseur',
+    DOT_SLIDER,
+    (element) => element.dash[1] ?? 2,
+    (element, value) => store.apply(updateElement, element.id, { dash: clampDash([0, Math.max(0, value)]) }),
+  );
   const sync = (element) => {
-    length.hidden = dashKind(element.dash) !== 'dashed';
+    const kind = dashKind(element.dash);
+    length.hidden = kind !== 'dashed';
     pairRow.hidden = length.hidden;
+    spacing.hidden = kind !== 'dotted';
   };
-  return { nodes: [length, pairRow], sync };
+  return { nodes: [length, pairRow, spacing], sync };
 };
 
 /**
